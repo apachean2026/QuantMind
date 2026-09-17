@@ -31,10 +31,10 @@ const DEFAULT_LIVE_TRADE_CONFIG: LiveTradeConfig = {
   rebalance_days: 3,
   schedule_type: 'interval',
   trade_weekdays: [],
-  // 与后端默认一致：下午盘末调仓，避免「改成下午时间却仍勾着上午」被拒
-  enabled_sessions: ['PM'],
-  sell_time: '14:30',
-  buy_time: '14:45',
+  // 默认上午开盘附近：先卖后买
+  enabled_sessions: ['AM'],
+  sell_time: '09:30',
+  buy_time: '09:35',
   sell_first: true,
   order_type: 'MARKET',
   max_price_deviation: 0.02,

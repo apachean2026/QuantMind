@@ -5,7 +5,7 @@ import {
   LayoutGrid, ArrowRight, Activity
 } from 'lucide-react';
 import {
-  Button, Input, Select, DatePicker, message, Spin, Tooltip, Tag, Tabs, Badge, Card, Table, Typography
+  Button, Input, Select, DatePicker, message, Spin, Tooltip, Tag, Tabs, Badge, Card, Table, Typography, Empty
 } from 'antd';
 import dayjs, { Dayjs } from 'dayjs';
 import { clsx } from 'clsx';
@@ -110,6 +110,7 @@ export const InferenceCenterPage: React.FC = () => {
   const [consensusModelIds, setConsensusModelIds] = useState<string[]>([]);
   const [singleStockLoading, setSingleStockLoading] = useState(false);
   const [availableModels, setAvailableModels] = useState<ModelCardOption[]>([]);
+  const [individualModelsLoading, setIndividualModelsLoading] = useState(false);
   const [kline, setKline] = useState<KlineItem[]>([]);
   const [prediction, setPrediction] = useState<SingleStockPredictionResponse | null>(null);
   // 目标代码联想搜索
@@ -400,6 +401,9 @@ export const InferenceCenterPage: React.FC = () => {
   // ─────────────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
+    setIndividualModelsLoading(true);
+    setAvailableModels([]);
+    setSingleStockModelId('');
     inferenceCenterService
       .getAvailableModels(currentMarket)
       .then((list) => {
@@ -424,17 +428,24 @@ export const InferenceCenterPage: React.FC = () => {
           };
         });
         setAvailableModels(liveModels);
-        if (liveModels.length > 0 && !singleStockModelId) {
+        if (liveModels.length > 0) {
           setSingleStockModelId(liveModels[0].modelId);
         }
       })
       .catch((err) => {
         console.warn('获取个股推理模型列表失败:', err);
+        if (!cancelled) {
+          setAvailableModels([]);
+          setSingleStockModelId('');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIndividualModelsLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [currentMarket, singleStockModelId]);
+  }, [currentMarket]);
 
   const handleRunSingleStockInference = useCallback(async (
     targetSymbol?: string,
@@ -523,7 +534,7 @@ export const InferenceCenterPage: React.FC = () => {
             <div className="flex items-center gap-2">
               <h1 className="text-base font-black text-slate-800 m-0 tracking-tight">模型推理中心</h1>
               <Tag color="blue" className="rounded-full text-xs font-bold border-0 px-2 py-0">
-                {currentMarket === 'CN' ? 'A股市场' : currentMarket}
+                {marketConfig.label}市场
               </Tag>
             </div>
             <p className="text-xs text-slate-700 m-0">生产级截面批量打分 · 单标的特征归因与共识走势预测</p>
@@ -574,9 +585,12 @@ export const InferenceCenterPage: React.FC = () => {
               </span>
               <div className="flex items-center bg-white border border-slate-200 rounded-xl px-2 h-9 shadow-sm">
                 <Select
-                  value={selectedModelId}
+                  value={selectedModelId || undefined}
+                  placeholder={modelsLoading ? '加载中…' : `暂无${marketConfig.label}模型`}
                   onChange={setSelectedModelId}
                   loading={modelsLoading}
+                  allowClear={false}
+                  notFoundContent={modelsLoading ? <Spin size="small" /> : `当前市场暂无可用模型`}
                   variant="borderless"
                   className="!w-80 [&_.ant-select-selection-item]:text-[13px] [&_.ant-select-selection-item]:font-bold [&_.ant-select-selection-item]:text-slate-800"
                   options={registeredModels.map((m) => ({
@@ -674,9 +688,40 @@ export const InferenceCenterPage: React.FC = () => {
 
           {/* 截面主体展示区 */}
           <div className="flex-1 min-h-0 p-6 overflow-y-auto custom-scrollbar">
-            {!selectedModel ? (
+            {modelsLoading ? (
               <div className="flex h-full items-center justify-center">
-                <Spin />
+                <Spin tip="正在加载推理模型…" />
+              </div>
+            ) : !selectedModel ? (
+              <div className="flex h-full flex-col items-center justify-center gap-4 text-center px-6">
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description={
+                    <div className="space-y-1">
+                      <p className="text-sm font-bold text-slate-600 m-0">
+                        当前市场暂无可用模型（{marketConfig.label}）
+                      </p>
+                      <p className="text-xs text-slate-400 m-0">
+                        请先在本市场训练/注册模型，或切换回已有模型的市场
+                      </p>
+                    </div>
+                  }
+                />
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="primary"
+                    className="rounded-xl font-bold text-xs"
+                    onClick={() => navigate('/model-training')}
+                  >
+                    去训练模型
+                  </Button>
+                  <Button
+                    className="rounded-xl font-bold text-xs"
+                    onClick={() => navigate('/model-hub')}
+                  >
+                    模型广场
+                  </Button>
+                </div>
               </div>
             ) : crossSectionMode === 'single' ? (
               <InferenceCenterPanel
@@ -720,7 +765,7 @@ export const InferenceCenterPage: React.FC = () => {
               open={inferPoolPickerOpen}
               onClose={() => setInferPoolPickerOpen(false)}
               selectedPoolId={inferPoolId}
-              market="CN"
+              market={currentMarket}
               title="推理股票池"
               onSelect={(pool: StockPoolOption) => {
                 setInferPoolRef(`pool:${pool.code}`);
@@ -877,7 +922,31 @@ export const InferenceCenterPage: React.FC = () => {
                 </div>
 
                 <div className="flex flex-col gap-2 flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-0.5">
-                  {filteredSingleModels.map((m) => {
+                  {individualModelsLoading ? (
+                    <div className="flex flex-1 items-center justify-center py-10">
+                      <Spin size="small" />
+                    </div>
+                  ) : filteredSingleModels.length === 0 ? (
+                    <div className="flex flex-1 flex-col items-center justify-center gap-2 py-8 px-2 text-center">
+                      <Empty
+                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+                        description={
+                          <span className="text-xs text-slate-500">
+                            当前市场暂无可用模型（{marketConfig.label}）
+                          </span>
+                        }
+                      />
+                      <Button
+                        size="small"
+                        type="link"
+                        className="text-xs font-bold"
+                        onClick={() => navigate('/model-training')}
+                      >
+                        去训练模型
+                      </Button>
+                    </div>
+                  ) : (
+                  filteredSingleModels.map((m) => {
                     const isSelected = singleStockModelId === m.modelId;
                     return (
                       <div
@@ -903,7 +972,8 @@ export const InferenceCenterPage: React.FC = () => {
                         </div>
                       </div>
                     );
-                  })}
+                  })
+                  )}
                 </div>
               </div>
             </div>
@@ -914,6 +984,7 @@ export const InferenceCenterPage: React.FC = () => {
                 block
                 icon={<Play size={15} fill="currentColor" />}
                 loading={singleStockLoading}
+                disabled={!singleStockModelId || individualModelsLoading}
                 onClick={() => handleRunSingleStockInference()}
                 style={{
                   height: 40,
