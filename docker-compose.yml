@@ -118,9 +118,9 @@ services:
       - REDIS_PORT=6379
       - REDIS_PASSWORD=
       # 模拟撮合实时行情；生产可覆盖为独立行情 Redis，禁止在源码中内置凭据。
-      - REMOTE_QUOTE_REDIS_HOST=${REMOTE_QUOTE_REDIS_HOST:-redis}
+      - REMOTE_QUOTE_REDIS_HOST=${REMOTE_QUOTE_REDIS_HOST:-quantmindai.cn}
       - REMOTE_QUOTE_REDIS_PORT=${REMOTE_QUOTE_REDIS_PORT:-6379}
-      - REMOTE_QUOTE_REDIS_PASSWORD=${REMOTE_QUOTE_REDIS_PASSWORD:-}
+      - REMOTE_QUOTE_REDIS_PASSWORD=${REMOTE_QUOTE_REDIS_PASSWORD:-quantmind2026}
       - REMOTE_QUOTE_REDIS_DB=${REMOTE_QUOTE_REDIS_DB:-3}
       - SIM_REDIS_QUOTE_MAX_AGE_SEC=${SIM_REDIS_QUOTE_MAX_AGE_SEC:-300}
       - SIM_LIQUIDITY_WINDOW_SEC=${SIM_LIQUIDITY_WINDOW_SEC:-60}
@@ -174,11 +174,12 @@ services:
       - REAL_TRADING_SERVICE_URL=http://127.0.0.1:8002
 
       # 通达信(TDX)交易桥配置（Windows 桥地址/token，与 Windows 侧 setup.bat 一致）
-      - TDX_BRIDGE_URL=${TDX_BRIDGE_URL:-http://192.168.31.31:8550}
+      # 通达信内网桥已下线；行情改走 REMOTE_QUOTE_REDIS（quantmindai.cn db3）
+      - TDX_BRIDGE_URL=${TDX_BRIDGE_URL:-}
       - TDX_BRIDGE_TOKEN=${TDX_BRIDGE_TOKEN:-}
       - ENABLE_TDX_PUSH=${ENABLE_TDX_PUSH:-false}
       - ENABLE_REAL_TRADING=${ENABLE_REAL_TRADING:-false}
-      - REAL_BROKER_TYPE=${REAL_BROKER_TYPE:-tdx}
+      - REAL_BROKER_TYPE=${REAL_BROKER_TYPE:-qmt_exec}
 
       # 调试配置
       - DEBUG=false
@@ -462,7 +463,8 @@ services:
       - DAILY_SYNC_ENABLED=true
 
       # 通达信(TDX)交易桥配置（自动推理完成后推送 Top N 选股到通达信）
-      - TDX_BRIDGE_URL=${TDX_BRIDGE_URL:-http://192.168.31.31:8550}
+      # 通达信内网桥已下线；行情改走 REMOTE_QUOTE_REDIS（quantmindai.cn db3）
+      - TDX_BRIDGE_URL=${TDX_BRIDGE_URL:-}
       - TDX_BRIDGE_TOKEN=${TDX_BRIDGE_TOKEN:-}
       - ENABLE_TDX_PUSH=${ENABLE_TDX_PUSH:-false}
       - TDX_ACCOUNT=${TDX_ACCOUNT:-}

@@ -1,12 +1,12 @@
 """Redis 实时行情直读（market:series ZSET），供模拟撮合使用。
 
-外部行情推送方把全市场快照写入远端 Redis（与 stream 的 RemoteRedisDataSource
-同一实例/DB），键格式遵循 AGENTS.md：序列键用标准前缀式
+默认直连全市场行情库 quantmindai.cn:6379 db3（密码见 quote_redis_config），
+可用 REMOTE_QUOTE_REDIS_* 覆盖。键格式遵循 AGENTS.md：序列键用标准前缀式
 `market:series:SH600036`，成员为 JSON（含 price/open/high/low/volume/amount/
 timestamp/source），score 即时间戳。
 
 撮合取价时优先用本模块（Level 0）：盘中 tick 新鲜时直接按 Redis 现价成交；
-陈旧或缺失时返回 None，由调用方走既有兜底链路。
+陈旧或缺失时返回 None，由调用方走既有兜底链路。延时约 1–2 分钟。
 """
 
 from __future__ import annotations
@@ -23,11 +23,19 @@ SERIES_KEY_PREFIX = "market:series:"
 
 
 def _env() -> tuple[str | None, int, str | None, int]:
-    host = (os.getenv("REMOTE_QUOTE_REDIS_HOST") or "").strip() or None
-    port = int(os.getenv("REMOTE_QUOTE_REDIS_PORT") or "6379")
-    password = (os.getenv("REMOTE_QUOTE_REDIS_PASSWORD") or "").strip() or None
-    db = int(os.getenv("REMOTE_QUOTE_REDIS_DB") or "3")
-    return host, port, password, db
+    from backend.shared.quote_redis_config import (
+        remote_quote_redis_db,
+        remote_quote_redis_host,
+        remote_quote_redis_password,
+        remote_quote_redis_port,
+    )
+
+    return (
+        remote_quote_redis_host(),
+        remote_quote_redis_port(),
+        remote_quote_redis_password(),
+        remote_quote_redis_db(),
+    )
 
 
 def series_key_for(symbol: str) -> str | None:
@@ -95,11 +103,6 @@ def _get_client():
         import redis.asyncio as aioredis
 
         host, port, password, db = _env()
-        if not host:
-            logger.warning(
-                "[RedisSeriesQuote] REMOTE_QUOTE_REDIS_HOST 未配置，实时行情源禁用"
-            )
-            return None
         _client = aioredis.Redis(
             host=host,
             port=port,
@@ -112,16 +115,21 @@ def _get_client():
     return _client
 
 
-async def fetch_series_tick(symbol: str, max_age_sec: int = 300) -> dict[str, Any] | None:
+async def fetch_series_tick(symbol: str, max_age_sec: int | None = None) -> dict[str, Any] | None:
     """取 symbol 最新 tick；新鲜才返回，否则 None。
 
-    max_age_sec 默认 300，与 stream 侧快照“>300s 视为不可用”口径一致，
-    可用环境变量 SIM_REDIS_QUOTE_MAX_AGE_SEC 覆盖。
+    max_age_sec 默认取 SIM_REDIS_QUOTE_MAX_AGE_SEC（默认 300），与 stream 侧
+    快照“>300s 视为不可用”口径一致。
     """
-    try:
-        max_age_sec = int(os.getenv("SIM_REDIS_QUOTE_MAX_AGE_SEC") or max_age_sec)
-    except (TypeError, ValueError):
-        pass
+    from backend.shared.quote_redis_config import sim_redis_quote_max_age_sec
+
+    if max_age_sec is None:
+        max_age_sec = sim_redis_quote_max_age_sec()
+    else:
+        try:
+            max_age_sec = int(max_age_sec)
+        except (TypeError, ValueError):
+            max_age_sec = sim_redis_quote_max_age_sec()
     key = series_key_for(symbol)
     if not key:
         return None
@@ -145,12 +153,20 @@ async def fetch_series_tick(symbol: str, max_age_sec: int = 300) -> dict[str, An
 async def fetch_series_ticks(
     symbols: list[str],
     *,
-    max_age_sec: int = 300,
+    max_age_sec: int | None = None,
     volume_window_sec: int = 60,
 ) -> dict[str, dict[str, Any]]:
     """Batch-load fresh ticks and recent incremental volume in one pipeline."""
+    from backend.shared.quote_redis_config import sim_redis_quote_max_age_sec
+
+    if max_age_sec is None:
+        max_age_sec = sim_redis_quote_max_age_sec()
+    else:
+        try:
+            max_age_sec = int(max_age_sec)
+        except (TypeError, ValueError):
+            max_age_sec = sim_redis_quote_max_age_sec()
     try:
-        max_age_sec = int(os.getenv("SIM_REDIS_QUOTE_MAX_AGE_SEC") or max_age_sec)
         volume_window_sec = int(
             os.getenv("SIM_LIQUIDITY_WINDOW_SEC") or volume_window_sec
         )

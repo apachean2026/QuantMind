@@ -55,9 +55,6 @@ async def lifespan(app: FastAPI):
     qmt_account_sync_task = None
     qmt_exec_poller_task = None
     mirror_queue_drainer_task = None
-    tdx_quote_feed_task = None
-    tdx_l2_capture_task = None
-    tdx_l2_realtime_task = None
     t1_unlock_task = None
     simulation_pending_order_task = None
     corp_action_task = None
@@ -167,12 +164,6 @@ async def lifespan(app: FastAPI):
             run_mirror_queue_drainer(),
             name="mirror-queue-drainer",
         )
-        from backend.services.live_trading.services.tdx_quote_feed import run_tdx_quote_feed_task
-
-        tdx_quote_feed_task = asyncio.create_task(
-            run_tdx_quote_feed_task(),
-            name="tdx-quote-feed",
-        )
         from backend.services.simulation.services.simulation_t1_unlock_task import (
             run_simulation_t1_unlock_task,
         )
@@ -281,15 +272,6 @@ async def lifespan(app: FastAPI):
             logger.error(
                 "trade strategy monitor pusher start failed: %s", e, exc_info=True
             )
-        from backend.services.live_trading.services.tdx_l2_capture_task import run_tdx_l2_capture_task
-        from backend.services.live_trading.services.tdx_l2_realtime import run_tdx_l2_realtime_task
-
-        tdx_l2_capture_task = asyncio.create_task(
-            run_tdx_l2_capture_task(), name="tdx-l2-capture"
-        )
-        tdx_l2_realtime_task = asyncio.create_task(
-            run_tdx_l2_realtime_task(), name="tdx-l2-realtime"
-        )
     except Exception as e:
         app.state.startup_healthy = False
         logger.error("trade background scanners start failed: %s", e, exc_info=True)
@@ -382,7 +364,7 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning("trade risk trigger scanner stop failed: %s", e)
 
-    for task in (scanner_task, margin_task, snapshot_task, ledger_settlement_task, manual_execution_task, sandbox_signal_task, tdx_account_sync_task, qmt_account_sync_task, qmt_exec_poller_task, mirror_queue_drainer_task, tdx_quote_feed_task, tdx_l2_capture_task, tdx_l2_realtime_task, t1_unlock_task, simulation_pending_order_task, corp_action_task, simulation_eod_task):
+    for task in (scanner_task, margin_task, snapshot_task, ledger_settlement_task, manual_execution_task, sandbox_signal_task, tdx_account_sync_task, qmt_account_sync_task, qmt_exec_poller_task, mirror_queue_drainer_task, t1_unlock_task, simulation_pending_order_task, corp_action_task, simulation_eod_task):
         if task is None:
             continue
         task.cancel()
@@ -497,14 +479,10 @@ app.include_router(internal_strategy.router)
 app.include_router(replay_router)
 
 from backend.services.trade.routers.tdx_config import router as tdx_config_router
-from backend.services.trade.routers.tdx_quote_feed import router as tdx_quote_feed_router
-from backend.services.trade.routers.tdx_l2 import router as tdx_l2_router
 from backend.services.trade.routers.broker_config import router as broker_config_router
 from backend.services.trade.routers.qmt_mirror import router as qmt_mirror_router
 
 app.include_router(tdx_config_router, prefix="/api/v1", tags=["TDX-Bridge"])
-app.include_router(tdx_quote_feed_router, prefix="/api/v1", tags=["TDX-Bridge"])
-app.include_router(tdx_l2_router, prefix="/api/v1", tags=["TDX-L2"])
 app.include_router(broker_config_router, prefix="/api/v1", tags=["Broker-Config"])
 app.include_router(qmt_mirror_router, prefix="/api/v1", tags=["QMT-Mirror"])
 

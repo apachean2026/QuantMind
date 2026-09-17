@@ -29,19 +29,18 @@ class RemoteRedisDataSource(DataSourceAdapter):
     """
 
     def __init__(self):
-        # 行情 Redis 必须显式配置；未配置远端时仅回退部署内 Redis。
-        self._host = (
-            os.getenv("REMOTE_QUOTE_REDIS_HOST")
-            or os.getenv("REDIS_HOST")
-            or "redis"
-        ).strip()
-        self._port = int(os.getenv("REMOTE_QUOTE_REDIS_PORT") or "6379")
-        self._password = (
-            os.getenv("REMOTE_QUOTE_REDIS_PASSWORD")
-            or os.getenv("REDIS_PASSWORD")
-            or ""
-        ).strip() or None
-        self._db = int(os.getenv("REMOTE_QUOTE_REDIS_DB") or "3")
+        from backend.shared.quote_redis_config import (
+            remote_quote_redis_db,
+            remote_quote_redis_host,
+            remote_quote_redis_password,
+            remote_quote_redis_port,
+        )
+
+        # 默认全市场行情库 quantmindai.cn db3；可用 REMOTE_QUOTE_REDIS_* 覆盖。
+        self._host = remote_quote_redis_host()
+        self._port = remote_quote_redis_port()
+        self._password = remote_quote_redis_password()
+        self._db = remote_quote_redis_db()
         self._client: aioredis.Redis | None = None
 
     def _get_client(self) -> aioredis.Redis:

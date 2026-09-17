@@ -68,18 +68,37 @@ def _get_env_with_root_fallback(key: str, default: str = "") -> str:
 
 def _get_stream_series_redis_client():
     # 与 live_trading.real_trading_utils 对齐：优先直连远端行情 Redis
-    # （REMOTE_QUOTE_REDIS_*，与 stream quote->series 写入端一致）。
+    # （默认 quantmindai.cn db3，与模拟撮合同源）。
     # 此函数当前无调用方，保留仅为避免外部导入 break。
+    from backend.shared.quote_redis_config import (
+        DEFAULT_REMOTE_QUOTE_REDIS_DB,
+        DEFAULT_REMOTE_QUOTE_REDIS_HOST,
+        DEFAULT_REMOTE_QUOTE_REDIS_PASSWORD,
+        DEFAULT_REMOTE_QUOTE_REDIS_PORT,
+    )
+
     host = _get_env_with_root_fallback(
         "REMOTE_QUOTE_REDIS_HOST",
-        _get_env_with_root_fallback("REDIS_HOST", "redis"),
+        DEFAULT_REMOTE_QUOTE_REDIS_HOST,
     )
-    port = int(_get_env_with_root_fallback("REMOTE_QUOTE_REDIS_PORT", "6379") or "6379")
-    password = _get_env_with_root_fallback(
-        "REMOTE_QUOTE_REDIS_PASSWORD",
-        _get_env_with_root_fallback("REDIS_PASSWORD", ""),
-    ) or None
-    db = int(_get_env_with_root_fallback("REMOTE_QUOTE_REDIS_DB", "3") or "3")
+    port = int(
+        _get_env_with_root_fallback(
+            "REMOTE_QUOTE_REDIS_PORT",
+            str(DEFAULT_REMOTE_QUOTE_REDIS_PORT),
+        )
+        or str(DEFAULT_REMOTE_QUOTE_REDIS_PORT)
+    )
+    if "REMOTE_QUOTE_REDIS_PASSWORD" in os.environ:
+        password = _get_env_with_root_fallback("REMOTE_QUOTE_REDIS_PASSWORD", "") or None
+    else:
+        password = DEFAULT_REMOTE_QUOTE_REDIS_PASSWORD
+    db = int(
+        _get_env_with_root_fallback(
+            "REMOTE_QUOTE_REDIS_DB",
+            str(DEFAULT_REMOTE_QUOTE_REDIS_DB),
+        )
+        or str(DEFAULT_REMOTE_QUOTE_REDIS_DB)
+    )
     client = redis_lib.Redis(
         host=host,
         port=port,

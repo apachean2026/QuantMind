@@ -1993,16 +1993,22 @@ class InferenceScriptRunner:
         # ── Step 2: 批量写入信号评分（含 signal_side 和 expected_price）──────────
         import redis as redis_lib
 
-        redis_host = os.getenv("REMOTE_QUOTE_REDIS_HOST", "redis")
-        redis_port = int(os.getenv("REMOTE_QUOTE_REDIS_PORT", "6379"))
-        redis_password = os.getenv(
-            "REMOTE_QUOTE_REDIS_PASSWORD", ""
-        ) or None
+        from backend.shared.quote_redis_config import (
+            remote_quote_redis_db,
+            remote_quote_redis_host,
+            remote_quote_redis_password,
+            remote_quote_redis_port,
+        )
+
+        redis_host = remote_quote_redis_host()
+        redis_port = remote_quote_redis_port()
+        redis_password = remote_quote_redis_password()
         try:
             quote_redis = redis_lib.Redis(
                 host=redis_host,
                 port=redis_port,
                 password=redis_password,
+                db=remote_quote_redis_db(),
                 decode_responses=True,
                 socket_timeout=2,
             )

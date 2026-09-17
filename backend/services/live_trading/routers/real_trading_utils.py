@@ -1115,21 +1115,39 @@ def _resolve_runner_image_for_mode() -> tuple[str, str]:
 
 
 def _get_remote_quote_redis_config() -> tuple[str, int, str | None, int]:
-    """远端行情快照 Redis 配置（与 stream 写入端 RemoteRedisDataSource 对齐）。
+    """远端行情快照 Redis 配置（与 stream / 模拟撮合对齐）。
 
-    优先级：REMOTE_QUOTE_REDIS_* 环境变量（含项目根 .env 兜底），
-    未配置时仅回退部署内 Redis，不内置公网地址或凭据。
+    默认写死全市场库 quantmindai.cn db3；可用 REMOTE_QUOTE_REDIS_* 覆盖。
     """
+    from backend.shared.quote_redis_config import (
+        DEFAULT_REMOTE_QUOTE_REDIS_DB,
+        DEFAULT_REMOTE_QUOTE_REDIS_HOST,
+        DEFAULT_REMOTE_QUOTE_REDIS_PASSWORD,
+        DEFAULT_REMOTE_QUOTE_REDIS_PORT,
+    )
+
     host = _get_env_with_root_fallback(
         "REMOTE_QUOTE_REDIS_HOST",
-        _get_env_with_root_fallback("REDIS_HOST", "redis"),
+        DEFAULT_REMOTE_QUOTE_REDIS_HOST,
     )
-    port = int(_get_env_with_root_fallback("REMOTE_QUOTE_REDIS_PORT", "6379") or "6379")
-    password = _get_env_with_root_fallback(
-        "REMOTE_QUOTE_REDIS_PASSWORD",
-        _get_env_with_root_fallback("REDIS_PASSWORD", ""),
-    ) or None
-    db = int(_get_env_with_root_fallback("REMOTE_QUOTE_REDIS_DB", "3") or "3")
+    port = int(
+        _get_env_with_root_fallback(
+            "REMOTE_QUOTE_REDIS_PORT",
+            str(DEFAULT_REMOTE_QUOTE_REDIS_PORT),
+        )
+        or str(DEFAULT_REMOTE_QUOTE_REDIS_PORT)
+    )
+    if "REMOTE_QUOTE_REDIS_PASSWORD" in os.environ:
+        password = _get_env_with_root_fallback("REMOTE_QUOTE_REDIS_PASSWORD", "") or None
+    else:
+        password = DEFAULT_REMOTE_QUOTE_REDIS_PASSWORD
+    db = int(
+        _get_env_with_root_fallback(
+            "REMOTE_QUOTE_REDIS_DB",
+            str(DEFAULT_REMOTE_QUOTE_REDIS_DB),
+        )
+        or str(DEFAULT_REMOTE_QUOTE_REDIS_DB)
+    )
     return host, port, password, db
 
 
