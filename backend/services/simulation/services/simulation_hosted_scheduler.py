@@ -554,7 +554,9 @@ class SimulationHostedScheduler:
             user_id=user_id,
             strategy_id=strategy_id,
             schedule_type=str(live_trade_config.get("schedule_type") or "interval"),
-            planned_run_at=now.astimezone(_SH_TZ).replace(microsecond=0),
+            # TIMESTAMP WITHOUT TIME ZONE：必须写 naive 上海墙钟，否则 asyncpg 报
+            # offset-naive/aware 混算，整轮托管调仓会被 skip。
+            planned_run_at=now.astimezone(_SH_TZ).replace(microsecond=0, tzinfo=None),
             window_seconds=max(
                 30, _to_int(live_trade_config.get("trigger_window_seconds"), 90)
             ),
