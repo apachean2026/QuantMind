@@ -111,6 +111,76 @@ def _resolve_market_factor_data_dir(meta: dict) -> str:
     except Exception:  # noqa: BLE001
         return _resolve_quantdb_data_dir()
 
+
+def _load_close_price_map(trade_date: str) -> dict[str, float]:
+    """从 QuantDB 日线 parquet 一次加载当日收盘价。
+
+    返回 {纯数字代码: close}，与 engine_signal_scores.symbol 口径一致。
+    历史补全 / 批量推理均应走本地 parquet，禁止逐股打远程行情 Redis。
+    失败返回空 dict（expected_price 置空，不拖垮写库）。
+    """
+    try:
+        import pandas as pd
+
+        day = date.fromisoformat(str(trade_date)[:10])
+        dt = day.strftime("%Y%m%d")
+        base = Path(_resolve_quantdb_data_dir())
+        frame = None
+        # 交易参考价优先不复权；分区缺失时退回前复权
+        for sub in ("daily_unadjusted", "daily_forward"):
+            part = base / "1_kline_data" / sub / f"dt={dt}"
+            if not part.is_dir():
+                continue
+            files = sorted(part.glob("*.parquet"))
+            if not files:
+                continue
+            chunks: list[Any] = []
+            for pf in files:
+                try:
+                    chunks.append(pd.read_parquet(pf, columns=["symbol", "close"]))
+                except Exception:
+                    try:
+                        chunk = pd.read_parquet(pf)
+                        if {"symbol", "close"}.issubset(chunk.columns):
+                            chunks.append(chunk[["symbol", "close"]])
+                    except Exception:
+                        continue
+            if chunks:
+                frame = pd.concat(chunks, ignore_index=True)
+                break
+        if frame is None or frame.empty:
+            return {}
+        out: dict[str, float] = {}
+        for raw_sym, close in zip(
+            frame["symbol"].astype(str), frame["close"], strict=False
+        ):
+            try:
+                px = float(close)
+            except (TypeError, ValueError):
+                continue
+            if not (px > 0) or px != px:  # NaN
+                continue
+            try:
+                prefix = StockCodeUtil.to_prefix(raw_sym)
+            except Exception:
+                prefix = str(raw_sym).strip().upper()
+            digits = re.sub(r"\D", "", prefix)
+            if digits:
+                out[digits] = px
+        logger.info(
+            "[InferenceScriptRunner] QuantDB 收盘价已加载: date=%s, n=%d",
+            str(trade_date)[:10],
+            len(out),
+        )
+        return out
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "[InferenceScriptRunner] QuantDB 收盘价加载失败"
+            "（expected_price 将为空）: %s",
+            exc,
+        )
+        return {}
+
 _PARQUET_TEMPLATE_MARKERS = (
     "QuantMind Parquet 数据源推理脚本 (inference.py 模板)",
     "QuantMind Parquet 数据源推理脚本\n=================================\n由训练流水线自动生成",
@@ -1991,36 +2061,11 @@ class InferenceScriptRunner:
         )
 
         # ── Step 2: 批量写入信号评分（含 signal_side 和 expected_price）──────────
-        import redis as redis_lib
-
-        from backend.shared.quote_redis_config import (
-            remote_quote_redis_db,
-            remote_quote_redis_host,
-            remote_quote_redis_password,
-            remote_quote_redis_port,
-        )
-
-        redis_host = remote_quote_redis_host()
-        redis_port = remote_quote_redis_port()
-        redis_password = remote_quote_redis_password()
-        try:
-            quote_redis = redis_lib.Redis(
-                host=redis_host,
-                port=redis_port,
-                password=redis_password,
-                db=remote_quote_redis_db(),
-                decode_responses=True,
-                socket_timeout=2,
-            )
-            quote_redis.ping()
-            logger.info(
-                f"[InferenceScriptRunner] 已连接行情 Redis: {redis_host}:{redis_port}"
-            )
-        except Exception as redis_err:
-            logger.warning(
-                f"[InferenceScriptRunner] 无法连接行情 Redis: {redis_err}, 价格将缺失"
-            )
-            quote_redis = None
+        # expected_price 一律从 QuantDB 日线 parquet 按推理数据日取收盘价：
+        # 历史补全与当日推理同源、一次加载；禁止对 ~5000 股逐个打远程行情 Redis
+        # （此前单日写库因此卡在 5–7 分钟）。
+        _ = raw_symbols  # 保留签名兼容；价格已不再依赖 Redis 前缀键
+        price_map = _load_close_price_map(inference_date)
 
         score_sql = text("""
             INSERT INTO engine_signal_scores (
@@ -2044,43 +2089,26 @@ class InferenceScriptRunner:
         has_consensus = consensus_list is not None and len(consensus_list) == len(symbols)
         has_zfusion = zfusion_list is not None and len(zfusion_list) == len(symbols)
         has_detail = detail_list is not None and len(detail_list) == len(symbols)
+        score_rows: list[dict[str, Any]] = []
+        price_by_sym: dict[str, float | None] = {}
         for idx, (sym, score) in enumerate(zip(symbols, scores, strict=True)):
-            expected_price = None
             signal_side = signal_sides[idx]
-            # 构建 quality JSONB
             quality_parts = {"consensus": consensus_list[idx]} if has_consensus else {}
             if has_zfusion:
                 quality_parts["zfusion"] = round(zfusion_list[idx], 6)
             if has_detail:
                 quality_parts["detail"] = detail_list[idx]
-            if confidence_list is not None and idx < len(confidence_list) and confidence_list[idx] is not None:
+            if (
+                confidence_list is not None
+                and idx < len(confidence_list)
+                and confidence_list[idx] is not None
+            ):
                 quality_parts["confidence"] = round(float(confidence_list[idx]), 4)
             quality = json.dumps(quality_parts) if quality_parts else None
-            if quote_redis:
-                try:
-                    # symbols 已归一为纯数字，行情 Redis 查价需要原始
-                    # 市场前缀定位（stock:{code}.SH），raw_symbols 兜底原样
-                    raw_sym0 = raw_symbols[idx] if raw_symbols else sym
-                    raw_sym = (
-                        raw_sym0.replace("SH", "").replace("SZ", "").replace("BJ", "")
-                    )
-                    if raw_sym0.startswith("SH"):
-                        redis_key = f"stock:{raw_sym}.SH"
-                    elif raw_sym0.startswith("SZ"):
-                        redis_key = f"stock:{raw_sym}.SZ"
-                    elif raw_sym0.startswith("BJ") or raw_sym.startswith("920"):
-                        redis_key = f"stock:{raw_sym}.BJ"
-                    else:
-                        redis_key = f"stock:{raw_sym0}"
-                    now_price = quote_redis.hget(redis_key, "Now")
-                    if now_price:
-                        expected_price = float(now_price)
-                except Exception as e:
-                    logger.debug(
-                        f"[InferenceScriptRunner] 获取 {sym} 价格失败: {e}"
-                    )
-            db.execute(
-                score_sql,
+            digits = re.sub(r"\D", "", str(sym))
+            expected_price = price_map.get(digits) if digits else None
+            price_by_sym[str(sym)] = expected_price
+            score_rows.append(
                 {
                     "run_id": run_id,
                     "tenant_id": tenant_id,
@@ -2092,13 +2120,10 @@ class InferenceScriptRunner:
                     "signal_side": signal_side,
                     "expected_price": expected_price,
                     "quality": quality,
-                },
+                }
             )
-        if quote_redis:
-            try:
-                quote_redis.close()
-            except Exception:
-                pass
+        if score_rows:
+            db.execute(score_sql, score_rows)
 
         # ── Step 3: 写入投研平台候选池快照 ────────────────────────────────
         db.execute(
@@ -2150,6 +2175,7 @@ class InferenceScriptRunner:
                 confidence_level = EXCLUDED.confidence_level,
                 updated_at = NOW()
         """)
+        candidate_rows: list[dict[str, Any]] = []
         for idx, (sym, score) in enumerate(zip(symbols, scores, strict=True)):
             signal_side = signal_sides[idx]
             if signal_side == "BUY":
@@ -2158,42 +2184,25 @@ class InferenceScriptRunner:
                 confidence_level = "watch"
             else:
                 confidence_level = "medium"
-            # 获取 expected_price（从之前 Redis 查询的结果）
-            expected_price_val = None
-            if quote_redis:
-                try:
-                    raw_sym = sym.replace("SH", "").replace("SZ", "").replace("BJ", "")
-                    if sym.startswith("SH"):
-                        redis_key = f"stock:{raw_sym}.SH"
-                    elif sym.startswith("SZ"):
-                        redis_key = f"stock:{raw_sym}.SZ"
-                    elif sym.startswith("BJ") or sym.startswith("920"):
-                        redis_key = f"stock:{raw_sym}.BJ"
-                    else:
-                        redis_key = f"stock:{sym}"
-                    now_price = quote_redis.hget(redis_key, "Now")
-                    if now_price:
-                        expected_price_val = float(now_price)
-                except Exception:
-                    pass
-            db.execute(
-                candidate_sql,
+            candidate_rows.append(
                 {
                     "tenant_id": tenant_id,
                     "user_id": user_id,
                     "run_id": run_id,
                     "model_id": model_name,
-                    "data_trade_date": inference_date,  # 推理日期（数据截止日期）
+                    "data_trade_date": inference_date,
                     "prediction_trade_date": prediction_trade_date,
                     "symbol": sym,
                     "fusion_score": score,
                     "score_rank": rank_map.get(sym, 999999),
                     "signal_side": signal_side,
-                    "expected_price": expected_price_val,
+                    "expected_price": price_by_sym.get(str(sym)),
                     "universe_tag": "默认候选池",
                     "confidence_level": confidence_level,
-                },
+                }
             )
+        if candidate_rows:
+            db.execute(candidate_sql, candidate_rows)
         logger.info(
             f"[InferenceScriptRunner] 写入 {len(signals)} 条投研候选池快照, run_id={run_id}"
         )
