@@ -19,7 +19,6 @@ export const DEFAULT_RESEARCH_FILTERS: ResearchFiltersState = {
   // Core
   minScore: -1.0,
   excludeSt: false,
-  highConfidenceOnly: false,
   // Market & Liquidity
   amountRange: [0, 100000],
   turnoverRange: [0, 100],
@@ -61,7 +60,6 @@ export const DEFAULT_RESEARCH_FILTERS: ResearchFiltersState = {
   selectedIndices: [],
   marketType: 'all',
   // Meta
-  volumeTrendOnly: false,
   advancedFiltersEnabled: false,
 };
 

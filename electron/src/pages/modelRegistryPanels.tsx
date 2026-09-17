@@ -905,6 +905,8 @@ export const InferenceCenterPanel: React.FC<{
   }, [lastRun?.run_id, lastRun?.status]);
 
   const topRankings = rankingResult?.rankings?.slice(0, 200) ?? [];
+  // 固定视口只露出 10 行，其余仍内部滚动（不随左侧栏被拉高）
+  const rankingPanelHeight = 12 * 2 + 28 + 10 * 32 + 9 * 4;
 
   return (
     <div className="pt-0 pb-10">
@@ -1068,11 +1070,11 @@ export const InferenceCenterPanel: React.FC<{
                                     latestInferenceRun.prediction_trade_date >= todayStr;
 
                    return isEffective ? (
-                      <div className="bg-white/60 rounded-xl p-3 pb-8 border border-emerald-100/30 relative">
-                          <Text className="text-xs font-mono font-bold text-slate-800 break-all leading-tight block mb-2">
+                      <div className="bg-white/60 rounded-xl p-3 border border-emerald-100/30">
+                          <Text className="text-xs font-mono font-bold text-slate-800 break-all leading-tight block">
                              {latestInferenceRun.run_id.slice(0, 24)}...
                           </Text>
-                          <div className="absolute bottom-2 left-3 right-3 flex items-center justify-between">
+                          <div className="mt-2 flex items-center justify-between">
                             <Tag className="m-0 bg-emerald-500 text-white border-0 text-xs font-bold px-1.5 leading-none py-0.5">{latestInferenceRun.prediction_trade_date}</Tag>
                             <Text className="text-xs text-slate-500 font-mono leading-none">{dayjs(latestInferenceRun.updated_at).format('HH:mm')}</Text>
                           </div>
@@ -1088,14 +1090,17 @@ export const InferenceCenterPanel: React.FC<{
               </Spin>
            </div>
 
-            {/* 本次推理排名 - 固定高度 420px + 内部滚动，展示前200 */}
-            <div className="glass-panel rounded-2xl p-4 border border-slate-100/50 bg-white flex flex-col overflow-hidden shrink-0" style={{ height: 420 }}>
-               <div className="flex items-center justify-between mb-3 shrink-0">
+            {/* 本次推理排名：固定高度露出 10 只，其余滚动 */}
+            <div
+              className="glass-panel rounded-2xl p-3 border border-slate-100/50 bg-white flex flex-col overflow-hidden shrink-0"
+              style={{ height: rankingPanelHeight }}
+            >
+               <div className="flex items-center justify-between mb-2 shrink-0">
                   <Text className="text-xs font-bold text-slate-500">本次推理排名</Text>
                   {rankingLoading && <Spin size="small" />}
                   {!rankingLoading && rankingResult && (
                     <Tag className="m-0 border-0 text-xs font-bold px-2 rounded-md bg-blue-50 text-blue-600">
-                     {rankingResult.target_date} · {rankingResult.rankings.length} 只 · 显示前200
+                     {rankingResult.target_date} · {rankingResult.rankings.length} 只
                    </Tag>
                  )}
                </div>
@@ -1109,7 +1114,7 @@ export const InferenceCenterPanel: React.FC<{
                     {topRankings.map((r) => (
                       <div
                         key={r.code}
-                        className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-50/70 border border-slate-100/60 hover:bg-blue-50/40 transition-colors whitespace-nowrap overflow-hidden"
+                        className="flex h-8 items-center gap-2 px-2 rounded-lg bg-slate-50/70 border border-slate-100/60 hover:bg-blue-50/40 transition-colors whitespace-nowrap overflow-hidden"
                       >
                         <span className={clsx(
                           'w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold shrink-0',
@@ -1142,7 +1147,7 @@ export const InferenceCenterPanel: React.FC<{
               )}
            </div>
 
-            <div className="glass-panel rounded-2xl p-4 border border-slate-100/50 flex items-center justify-between">
+            <div className="glass-panel rounded-2xl p-4 border border-slate-100/50 flex items-center justify-between shrink-0">
                <div className="flex items-center gap-3">
                  <RefreshCw size={14} className={clsx("text-blue-500", autoSettings?.enabled && "animate-spin-slow")} />
                  <div>

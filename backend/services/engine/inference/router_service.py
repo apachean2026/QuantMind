@@ -73,9 +73,9 @@ def _get_model_data_dir(model_dir: Path) -> str:
             data_source = str(meta.get("data_source", "")).lower()
             if data_source == "quantdb_factors":
                 from backend.services.engine.inference.script_runner import (
-                    _resolve_quantdb_data_dir,
+                    _resolve_market_factor_data_dir,
                 )
-                return _resolve_quantdb_data_dir()
+                return _resolve_market_factor_data_dir(meta)
             if data_source == "qlib":
                 from backend.shared.qlib_paths import resolve_qlib_provider_uri
                 return resolve_qlib_provider_uri()

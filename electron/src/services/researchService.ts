@@ -59,8 +59,6 @@ export interface ResearchOverviewQuery {
   maxTurnoverRate?: number;
   minAmount?: number;
   maxAmount?: number;
-  volumeTrendOnly?: boolean;
-  highConfidenceOnly?: boolean;
   sectors?: string[];
   concepts?: string[];
   indices?: string[];
@@ -165,8 +163,6 @@ class ResearchService {
     append('max_turnover_rate', query.maxTurnoverRate);
     append('min_amount', query.minAmount);
     append('max_amount', query.maxAmount);
-    append('volume_trend_only', query.volumeTrendOnly);
-    append('high_confidence_only', query.highConfidenceOnly);
     append('sort_by', query.sortBy);
     append('limit', query.limit);
     append('offset', query.offset);

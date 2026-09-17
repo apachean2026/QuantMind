@@ -1095,12 +1095,6 @@ export const ResearchPlatformPage: React.FC = () => {
       // --- 核心阈值 ---
       if (safeNum(item.score, 0) < appliedFilters.minScore) return;
 
-      // --- 高置信标的 ---
-      if (appliedFilters.highConfidenceOnly && item.confidence !== 'high') return;
-
-      // --- 量能持续放大 ---
-      if (appliedFilters.volumeTrendOnly && !item.volumeTrend5d) return;
-
       // --- 剔除 ST / 退市：多维校验 ---
       if (appliedFilters.excludeSt) {
         const upperName = (item.name || '').toUpperCase();
@@ -1577,8 +1571,6 @@ export const ResearchPlatformPage: React.FC = () => {
       summary.push(`模型分数 ≥ ${appliedFilters.minScore.toFixed(2)}`);
     }
     if (appliedFilters.excludeSt) summary.push('剔除 ST / 退市');
-    if (appliedFilters.highConfidenceOnly) summary.push('仅保留高置信标的');
-    if (appliedFilters.volumeTrendOnly) summary.push('近 5 日量能持续放大');
     if (appliedFilters.volRatio5Range > 0) summary.push(`5日量比 ≥ ${appliedFilters.volRatio5Range}`);
     if (appliedFilters.volRatio20Range > 0) summary.push(`20日量比 ≥ ${appliedFilters.volRatio20Range}`);
     if (appliedFilters.selectedSectors.length) summary.push(`行业：${appliedFilters.selectedSectors.length} 个选中`);
@@ -1708,22 +1700,6 @@ export const ResearchPlatformPage: React.FC = () => {
                 size="small"
                 checked={draftFilters.excludeSt}
                 onChange={(checked) => setFilterField('excludeSt', checked)}
-              />
-            </div>
-            <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/50 px-3 py-1.5">
-              <span className="text-[11px] font-bold text-slate-500">仅高置信标的</span>
-              <Switch
-                size="small"
-                checked={draftFilters.highConfidenceOnly}
-                onChange={(checked) => setFilterField('highConfidenceOnly', checked)}
-              />
-            </div>
-            <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/50 px-3 py-1.5">
-              <span className="text-[11px] font-bold text-slate-500">近 5 日量能放大</span>
-              <Switch
-                size="small"
-                checked={draftFilters.volumeTrendOnly}
-                onChange={(checked) => setFilterField('volumeTrendOnly', checked)}
               />
             </div>
           </>

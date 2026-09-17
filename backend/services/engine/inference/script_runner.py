@@ -95,7 +95,11 @@ def _resolve_quantdb_data_dir() -> str:
 
 
 def _resolve_market_factor_data_dir(meta: dict) -> str:
-    """按模型 metadata.context.market 解析因子数据根目录（HK→quanthk 等）。"""
+    """按模型 metadata.context.market 解析因子数据根目录（HK→quanthk 等）。
+
+    始终返回目标市场路径，目录不存在时不回退到 A 股 QuantDB，
+    以便预检/推理对非 CN 模型给出正确失败路径。
+    """
     try:
         from backend.services.engine.data_platform.quantdb_factor_reader import (
             market_data_dir, normalize_market,
@@ -103,8 +107,7 @@ def _resolve_market_factor_data_dir(meta: dict) -> str:
         market = normalize_market(
             str((meta.get("context") or {}).get("market") or "CN")
         )
-        path = market_data_dir(market)
-        return str(path) if path.is_dir() else _resolve_quantdb_data_dir()
+        return str(market_data_dir(market))
     except Exception:  # noqa: BLE001
         return _resolve_quantdb_data_dir()
 

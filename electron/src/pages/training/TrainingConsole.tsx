@@ -248,26 +248,26 @@ export const TrainingConsole: React.FC<TrainingConsoleProps> = ({
                 <span className="text-[11px] font-normal text-slate-400">{requestPreview.displayName || '未命名任务'}</span>
               </div>
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="rounded-xl bg-slate-50 p-2.5 border border-slate-100">
+                <div className="rounded-xl bg-slate-50 p-2.5 border border-slate-100 text-center flex flex-col items-center justify-center h-full">
                   <div className="text-[10px] text-slate-400 font-semibold mb-1">模型架构</div>
-                  <div className="flex flex-wrap gap-1">
+                  <div className="flex flex-col items-center justify-center gap-0.5">
                     {modelTypes.length > 0 ? (
                       modelTypes.map((m) => (
-                        <Tag key={m} color="blue" className="!mr-0 font-mono text-[10px]">
+                        <div key={m} className="text-lg font-bold font-mono text-slate-800 leading-tight">
                           {m}
-                        </Tag>
+                        </div>
                       ))
                     ) : (
-                      <span className="text-slate-500 font-mono text-[11px]">未选择模型</span>
+                      <span className="text-slate-500 font-mono text-sm">未选择模型</span>
                     )}
                     {requestPreview.params?.ensemble_method && requestPreview.params.ensemble_method !== 'none' && (
-                      <Tag color="purple" className="!mr-0 font-mono text-[10px]">
+                      <div className="text-sm font-semibold font-mono text-slate-600">
                         {requestPreview.params.ensemble_method}
-                      </Tag>
+                      </div>
                     )}
                   </div>
                 </div>
-                <div className="rounded-xl bg-slate-50 p-2.5 border border-slate-100">
+                <div className="rounded-xl bg-slate-50 p-2.5 border border-slate-100 text-center">
                   <div className="text-[10px] text-slate-400 font-semibold mb-1">特征与基准</div>
                   <div className="text-slate-700 font-medium truncate">
                     {requestPreview.selectedFeatures?.length || 0} 个因子 · {requestPreview.context?.benchmark || '000300.SH'}
@@ -283,7 +283,7 @@ export const TrainingConsole: React.FC<TrainingConsoleProps> = ({
                     <div className="mt-1 text-[10px] text-emerald-600">未启用筛选，全部特征将直接入模</div>
                   )}
                 </div>
-                <div className="rounded-xl bg-slate-50 p-2.5 border border-slate-100 col-span-2">
+                <div className="rounded-xl bg-slate-50 p-2.5 border border-slate-100 col-span-2 text-center">
                   <div className="text-[10px] text-slate-400 font-semibold mb-1">样本切分区间</div>
                   <div className="text-slate-600 font-mono text-[11px] truncate">
                     {formatDateOnly(requestPreview.timePeriods?.train?.[0])} ~ {formatDateOnly(requestPreview.timePeriods?.test?.[1])}

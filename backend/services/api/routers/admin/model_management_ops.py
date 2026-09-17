@@ -62,13 +62,13 @@ def _model_data_context(model_dir: Path) -> tuple[Path, dict[str, Any]]:
     except (OSError, ValueError, TypeError):
         meta = {}
     if str(meta.get("data_source") or "").lower() == "quantdb_factors":
-        # 与 script_runner._resolve_quantdb_data_dir 保持一致：
-        # QUANTDB_DATA_DIR → QM_QUANTDB_DATA_DIR → hub 统一解析。
-        # 仅读 QUANTDB_DATA_DIR 会在容器内落到不存在的默认 /app/data/quantdb，
-        # 导致回测日期发现/交易日期列表拿不到数据。
+        # 按模型 context.market 解析因子根目录（CN→quantdb，HK→quanthk …），
+        # 不再固定落到 A 股 QUANTDB_DATA_DIR。
         try:
-            from backend.services.engine.inference.script_runner import _resolve_quantdb_data_dir
-            return Path(_resolve_quantdb_data_dir()), meta
+            from backend.services.engine.inference.script_runner import (
+                _resolve_market_factor_data_dir,
+            )
+            return Path(_resolve_market_factor_data_dir(meta)), meta
         except Exception:  # pragma: no cover - 兜底
             return Path(os.getenv("QUANTDB_DATA_DIR", "/app/data/quantdb")), meta
     return Path(os.getcwd()) / "db" / "feature_snapshots", meta

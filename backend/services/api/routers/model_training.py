@@ -479,27 +479,22 @@ def _get_model_data_dir(model_dir: Path, metadata: dict | None = None) -> str:
     1. metadata.json 中的 qlib_data_path 字段（绝对路径）
     2. metadata.json 中的 context.market 字段映射到对应 qlib 数据目录
     3. metadata.json 中的 data_source 字段判断：
-       - "quantdb_factors" -> QuantDB 因子源目录（新链路默认）
+       - "quantdb_factors" -> 按 context.market 解析因子根目录（CN/HK/US/…）
        - "qlib" -> qlib 数据目录
        - "parquet" -> db/feature_snapshots（遗留冻结，仅旧模型）
-    4. 默认值 -> QuantDB 因子源目录
+    4. 默认值 -> 按空 metadata 的市场因子目录（缺省 CN）
     """
-    # QuantDB-bound models are pinned to the raw factor root.  This must be
-    # evaluated before historical qlib_data_path/context compatibility hints.
+    def _factor_data_dir(meta: dict) -> str:
+        from backend.services.engine.inference.script_runner import (
+            _resolve_market_factor_data_dir,
+        )
+
+        return _resolve_market_factor_data_dir(meta)
+
+    # Factor-bound models resolve by market before qlib/path compatibility hints.
     if metadata:
         if str(metadata.get("data_source") or "").lower() == "quantdb_factors":
-            # 与 script_runner._resolve_quantdb_data_dir 保持一致：
-            # QUANTDB_DATA_DIR → QM_QUANTDB_DATA_DIR → hub 统一解析。
-            # 仅读 QUANTDB_DATA_DIR 会在容器内落到不存在的默认 /app/data/quantdb，
-            # 导致推理数据目录预检阻断。
-            try:
-                from backend.services.engine.inference.script_runner import (
-                    _resolve_quantdb_data_dir,
-                )
-
-                return _resolve_quantdb_data_dir()
-            except Exception:  # pragma: no cover - 兜底
-                return os.getenv("QUANTDB_DATA_DIR", "/app/data/quantdb")
+            return _factor_data_dir(metadata)
         qlib_data_path = metadata.get("qlib_data_path")
         if qlib_data_path:
             return qlib_data_path
@@ -525,14 +520,7 @@ def _get_model_data_dir(model_dir: Path, metadata: dict | None = None) -> str:
         try:
             meta = json.loads(meta_file.read_text(encoding="utf-8"))
             if str(meta.get("data_source") or "").lower() == "quantdb_factors":
-                try:
-                    from backend.services.engine.inference.script_runner import (
-                        _resolve_quantdb_data_dir,
-                    )
-
-                    return _resolve_quantdb_data_dir()
-                except Exception:  # pragma: no cover - 兜底
-                    return os.getenv("QUANTDB_DATA_DIR", "/app/data/quantdb")
+                return _factor_data_dir(meta)
             qlib_data_path = meta.get("qlib_data_path")
             if qlib_data_path:
                 return qlib_data_path
@@ -552,15 +540,8 @@ def _get_model_data_dir(model_dir: Path, metadata: dict | None = None) -> str:
         except Exception:
             pass
 
-    # 默认值：无数据源元数据的模型按 QuantDB 直读处理（旧快照入口已废弃）
-    try:
-        from backend.services.engine.inference.script_runner import (
-            _resolve_quantdb_data_dir,
-        )
-
-        return _resolve_quantdb_data_dir()
-    except Exception:  # pragma: no cover - 兜底
-        return os.getenv("QUANTDB_DATA_DIR", "/data/quantdb")
+    # 默认值：无元数据时按 CN 因子目录解析（旧快照入口已废弃）
+    return _factor_data_dir({})
 
 
 def _render_next_run(next_run_at: Any) -> str | None:

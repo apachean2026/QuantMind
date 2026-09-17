@@ -88,7 +88,6 @@ export interface ResearchFiltersState {
   // Core
   minScore: number;
   excludeSt: boolean;
-  highConfidenceOnly: boolean;
   // Market & Liquidity
   amountRange: [number, number];
   turnoverRange: [number, number];
@@ -130,6 +129,5 @@ export interface ResearchFiltersState {
   selectedIndices: string[];
   marketType: string;
   // Meta
-  volumeTrendOnly: boolean;
   advancedFiltersEnabled: boolean;
 }

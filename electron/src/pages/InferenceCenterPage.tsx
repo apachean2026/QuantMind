@@ -564,8 +564,8 @@ export const InferenceCenterPage: React.FC = () => {
       {/* ================= 模式 1：市场截面推理 ================= */}
       {topTab === 'cross-section' && (
         <div className="flex-1 min-h-0 bg-white border border-gray-200 shadow-sm rounded-[28px] flex flex-col overflow-hidden">
-          {/* 模型选择与二级导航 Bar（与顶部栏同高 68px） */}
-          <div className="px-6 h-[68px] border-b border-gray-200 bg-slate-50/50 flex flex-wrap items-center justify-between gap-4 shrink-0">
+          {/* 模型选择与二级导航 Bar（含股票池；整体下移 30px） */}
+          <div className="px-6 h-[68px] border-b border-gray-200 bg-slate-50/50 flex flex-wrap items-center justify-between gap-4 shrink-0 mt-[30px]">
             {/* 模型选择 */}
             <div className="flex items-center gap-2.5">
               <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5 whitespace-nowrap">
