@@ -55,6 +55,21 @@ def test_live_trade_config_rejects_am_time_before_continuous_auction():
     assert "已选执行时段" in str(exc_info.value.detail)
 
 
+def test_live_trade_config_rejects_pm_times_with_am_only_session():
+    with pytest.raises(HTTPException) as exc_info:
+        _normalize_live_trade_config(
+            {
+                "enabled_sessions": ["AM"],
+                "sell_time": "14:30",
+                "buy_time": "14:45",
+            },
+            _default_live_trade_config(),
+        )
+    detail = str(exc_info.value.detail)
+    assert "14:30" in detail
+    assert "AM=" in detail or "09:30" in detail
+
+
 def test_live_trade_config_strips_seconds_from_hhmmss():
     live_config = _normalize_live_trade_config(
         {

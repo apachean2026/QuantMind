@@ -2,6 +2,10 @@ import React from 'react';
 import type { ExecutionConfig, LiveTradeConfig, TradeWeekday, TradingSession } from '../../../types/liveTrading';
 import type { ValidationIssue } from '../utils/liveTradeConfigValidation';
 import {
+  SESSION_RANGES,
+  syncSessionsToTimes,
+} from '../utils/liveTradeConfigValidation';
+import {
   StockPoolSelectField,
   type StockPoolSelection,
 } from '../../../components/backtest/StockPoolSelectField';
@@ -16,12 +20,6 @@ type Props = {
 
 const WEEKDAYS: TradeWeekday[] = ['MON', 'TUE', 'WED', 'THU', 'FRI'];
 const SESSIONS: TradingSession[] = ['AM', 'PM'];
-
-// 与后端 real_trading_utils._normalize_live_trade_config / A 股连续竞价一致
-const SESSION_RANGES: Record<TradingSession, [string, string]> = {
-  AM: ['09:30', '11:30'],
-  PM: ['13:00', '15:00'],
-};
 
 const SESSION_DEFAULTS: Record<string, { sell_time: string; buy_time: string }> = {
   AM: { sell_time: '09:30', buy_time: '09:35' },
@@ -56,6 +54,18 @@ const LiveTradeConfigForm: React.FC<Props> = ({
 }) => {
   const updateLive = (patch: Partial<LiveTradeConfig>) => {
     onLiveTradeConfigChange({ ...liveTradeConfig, ...patch });
+  };
+
+  /** 改买卖时点时自动勾选对应执行时段，避免「下午时间 + 上午时段」被后端拒绝。 */
+  const updateTradeTimes = (patch: Partial<Pick<LiveTradeConfig, 'sell_time' | 'buy_time'>>) => {
+    const sell_time = patch.sell_time ?? liveTradeConfig.sell_time;
+    const buy_time = patch.buy_time ?? liveTradeConfig.buy_time;
+    const enabled_sessions = syncSessionsToTimes(
+      liveTradeConfig.enabled_sessions || [],
+      sell_time,
+      buy_time,
+    );
+    updateLive({ ...patch, sell_time, buy_time, enabled_sessions });
   };
 
   const updateExec = (patch: Partial<ExecutionConfig>) => {
@@ -197,6 +207,7 @@ const LiveTradeConfigForm: React.FC<Props> = ({
             {liveTradeConfig.enabled_sessions.length > 0 && (
               <span className="text-[10px] text-gray-400">
                 {liveTradeConfig.enabled_sessions
+                  .slice()
                   .sort()
                   .map((s) => `${SESSION_RANGES[s][0]}–${SESSION_RANGES[s][1]}`)
                   .join(' / ')}
@@ -219,7 +230,7 @@ const LiveTradeConfigForm: React.FC<Props> = ({
                 value={liveTradeConfig.sell_time}
                 min={liveTradeConfig.enabled_sessions.includes('AM') ? '09:30' : '13:00'}
                 max={liveTradeConfig.enabled_sessions.includes('PM') ? '15:00' : '11:30'}
-                onChange={(e) => updateLive({ sell_time: e.target.value })}
+                onChange={(e) => updateTradeTimes({ sell_time: e.target.value })}
               />
               {fieldError(validationIssues, 'sell_time') && (
                 <div className="text-[10px] text-red-500 mt-0.5">{fieldError(validationIssues, 'sell_time')}</div>
@@ -234,7 +245,7 @@ const LiveTradeConfigForm: React.FC<Props> = ({
                 value={liveTradeConfig.buy_time}
                 min={liveTradeConfig.enabled_sessions.includes('AM') ? '09:30' : '13:00'}
                 max={liveTradeConfig.enabled_sessions.includes('PM') ? '15:00' : '11:30'}
-                onChange={(e) => updateLive({ buy_time: e.target.value })}
+                onChange={(e) => updateTradeTimes({ buy_time: e.target.value })}
               />
               {fieldError(validationIssues, 'buy_time') && (
                 <div className="text-[10px] text-red-500 mt-0.5">{fieldError(validationIssues, 'buy_time')}</div>

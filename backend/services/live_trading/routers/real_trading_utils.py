@@ -949,9 +949,18 @@ def _normalize_live_trade_config(user_live_cfg: dict, base_live_cfg: dict) -> di
             )
         )
         if not in_session:
+            ranges_text = ", ".join(
+                f"{s}={session_ranges[s][0]}-{session_ranges[s][1]}"
+                for s in enabled_sessions
+                if s in session_ranges
+            ) or "未选择时段"
             raise HTTPException(
                 status_code=400,
-                detail=f"live_trade_config.{key} 必须落在已选执行时段内",
+                detail=(
+                    f"live_trade_config.{key}={target} 必须落在已选执行时段内"
+                    f"（当前 {ranges_text}）。"
+                    f"若要用下午时点请勾选 PM/下午；若只跑上午请把时点改到 09:30-11:30。"
+                ),
             )
 
     return normalized

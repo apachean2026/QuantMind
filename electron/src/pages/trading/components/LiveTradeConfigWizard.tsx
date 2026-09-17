@@ -7,7 +7,7 @@ import type {
   LiveTradeConfig,
   StrategyLiveDefaults,
 } from '../../../types/liveTrading';
-import { validateLiveTradeConfig } from '../utils/liveTradeConfigValidation';
+import { validateLiveTradeConfig, syncSessionsToTimes } from '../utils/liveTradeConfigValidation';
 import LiveTradeConfigForm from './LiveTradeConfigForm';
 
 type Props = {
@@ -31,9 +31,10 @@ const DEFAULT_LIVE_TRADE_CONFIG: LiveTradeConfig = {
   rebalance_days: 3,
   schedule_type: 'interval',
   trade_weekdays: [],
-  enabled_sessions: ['AM'],
-  sell_time: '09:30',
-  buy_time: '09:35',
+  // 与后端默认一致：下午盘末调仓，避免「改成下午时间却仍勾着上午」被拒
+  enabled_sessions: ['PM'],
+  sell_time: '14:30',
+  buy_time: '14:45',
   sell_first: true,
   order_type: 'MARKET',
   max_price_deviation: 0.02,
@@ -45,17 +46,24 @@ function buildInitialState(
   initialExecutionConfig?: ExecutionConfig | null,
   initialLiveTradeConfig?: Partial<LiveTradeConfig> | null,
 ) {
+  const live_trade_config = {
+    ...DEFAULT_LIVE_TRADE_CONFIG,
+    ...(defaults?.live_defaults || {}),
+    ...(initialLiveTradeConfig || {}),
+  } as LiveTradeConfig;
+  // 历史快照可能留下「下午时点 + 上午时段」，打开向导时自动对齐
+  live_trade_config.enabled_sessions = syncSessionsToTimes(
+    live_trade_config.enabled_sessions || [],
+    live_trade_config.sell_time,
+    live_trade_config.buy_time,
+  );
   return {
     execution_config: {
       ...DEFAULT_EXECUTION_CONFIG,
       ...(defaults?.execution_defaults || {}),
       ...(initialExecutionConfig || {}),
     },
-    live_trade_config: {
-      ...DEFAULT_LIVE_TRADE_CONFIG,
-      ...(defaults?.live_defaults || {}),
-      ...(initialLiveTradeConfig || {}),
-    } as LiveTradeConfig,
+    live_trade_config,
   };
 }
 
