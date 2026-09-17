@@ -362,6 +362,29 @@ const RealTradingPage: React.FC = () => {
                 message.info('当前没有可交易信号，将以观察态启动，不会自动下单');
             }
 
+            // 模拟盘：单阶段精简自检，不再二次调用 /preflight
+            if (mode === 'SIMULATION') {
+                setPreflightStage('preflight');
+                setPreflightResult({
+                    ready: true,
+                    mode: 'SIMULATION',
+                    user_id: userId,
+                    tenant_id: tenantId,
+                    trading_permission: tradingReadiness.trading_permission,
+                    signal_readiness: tradingReadiness.signal_readiness,
+                    checks: tradingReadiness.items.map((item) => ({
+                        key: item.key,
+                        label: item.label,
+                        ok: item.passed,
+                        required: true,
+                        message: item.detail,
+                        details: {},
+                    })),
+                });
+                message.success('自检通过，请确认后启动模拟盘');
+                return;
+            }
+
             setPreflightStage('preflight');
             setPreflightLoading(true);
             const preflight = await Promise.race([
@@ -613,7 +636,11 @@ const RealTradingPage: React.FC = () => {
         </div>
 
             <Modal
-                title={preflightStage === 'trading-readiness' ? '交易准备度检测' : '启动前自检详情'}
+                title={
+                    preflightStage === 'trading-readiness'
+                        ? (preflightMode === 'SIMULATION' ? '模拟盘启动自检' : '交易准备度检测')
+                        : (preflightMode === 'SIMULATION' ? '模拟盘启动自检' : '启动前自检详情')
+                }
                 open={preflightModalOpen}
                 onCancel={closePreflightModal}
                 centered
@@ -665,7 +692,9 @@ const RealTradingPage: React.FC = () => {
                         <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                             <Spin size="small" />
                             <span className="ml-2 text-sm text-gray-600">
-                                {preflightStage === 'trading-readiness'
+                                {preflightMode === 'SIMULATION'
+                                    ? '正在检查数据库、默认模型、进程池、行情与信号...'
+                                    : preflightStage === 'trading-readiness'
                                     ? '正在逐项检查交易准备度...'
                                     : '交易准备度已通过，正在逐项检查启动条件...'}
                             </span>
