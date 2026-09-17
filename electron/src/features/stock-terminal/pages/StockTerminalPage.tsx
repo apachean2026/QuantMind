@@ -126,13 +126,13 @@ export default function StockTerminalPage() {
     };
   }, [selected, modelId]);
 
-  // watchlist 仅为搜索下拉星标
+  // 自选星标：用户股票池 favorites（与全局股票池对齐）
   useEffect(() => {
     let cancelled = false;
-    import('../../../services/researchService')
-      .then(({ researchService }) =>
-        researchService.getWatchlist(200).then((resp) => {
-          if (!cancelled) setWatchlist(new Set(resp.items.map((i) => i.symbol)));
+    import('../../../services/userStockPoolService')
+      .then(({ listUserPoolSymbols, USER_POOL_FAVORITES }) =>
+        listUserPoolSymbols(USER_POOL_FAVORITES).then((symbols) => {
+          if (!cancelled) setWatchlist(new Set(symbols.map((s) => String(s).toUpperCase())));
         }),
       )
       .catch(() => {

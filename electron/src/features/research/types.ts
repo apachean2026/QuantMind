@@ -9,37 +9,12 @@ export type FilterSectionKey =
   | 'technical'
   | 'fundamental'
   | 'sector';
-export type DataSourceTab = 'candidates' | 'watchlist' | 'pool';
 
 export interface ResearchModelOption {
   modelId: string;
   name: string;
   style: string;
   description: string;
-}
-
-export interface WatchlistRow {
-  key: string;
-  symbol: string;
-  stockName: string | null;
-  addedAt: string | null;
-  sourceRunId: string | null;
-  notes: string | null;
-  tags: string[];
-}
-
-export interface ResearchPoolRow {
-  key: string;
-  symbol: string;
-  stockName: string | null;
-  addedAt: string | null;
-  sourceRunId: string | null;
-  modelId: string | null;
-  fusionScore: number | null;
-  thesisSummary: string | null;
-  status: string;
-  notes: string | null;
-  tags: string[];
 }
 
 export interface ResearchStockRow {

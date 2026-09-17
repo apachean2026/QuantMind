@@ -1995,46 +1995,54 @@ async def get_research_universe_by_date(
 
 
 async def get_user_watchlist(tid: str, uid: str, limit: int, offset: int) -> dict[str, Any]:
-    async with get_session(read_only=True) as session:
-        res = await session.execute(
-            text(
-                "SELECT symbol, stock_name, added_at, source_run_id FROM qm_user_watchlist "
-                "WHERE tenant_id = :tid AND user_id = :uid ORDER BY added_at DESC LIMIT :limit OFFSET :offset"
-            ),
-            {"tid": tid, "uid": uid, "limit": limit, "offset": offset},
+    """兼容旧接口：自选事实源已迁到用户股票池 favorites。"""
+    from backend.shared.stock_pool import repository as sp_repo
+    from backend.shared.stock_pool.user_pools import (
+        CODE_FAVORITES,
+        ensure_user_pool,
+        members_as_watchlist_items,
+    )
+
+    async with get_session() as session:
+        pool = await ensure_user_pool(
+            session, code=CODE_FAVORITES, user_id=str(uid), tenant_id=str(tid), actor=str(uid)
         )
-        items = [
-            {"symbol": r[0], "stockName": r[1], "addedAt": _serialize_date(r[2]), "sourceRunId": r[3]} for r in res
-        ]
-        total = (
-            await session.execute(
-                text("SELECT COUNT(*) FROM qm_user_watchlist WHERE tenant_id = :tid AND user_id = :uid"),
-                {"tid": tid, "uid": uid},
-            )
-        ).scalar() or 0
-    return {"code": 200, "data": {"items": items, "total": total}}
+        symbols = sp_repo.read_members(pool)
+    items = members_as_watchlist_items(symbols)
+    total = len(items)
+    page = items[offset : offset + max(1, int(limit))]
+    return {"code": 200, "data": {"items": page, "total": total}}
 
 
 async def add_to_watchlist(
     tid: str, uid: str, symbol: str, run_id: str | None, stock_name: str | None, features_snapshot: dict[str, Any] | None
 ) -> dict[str, Any]:
+    from backend.shared.stock_pool.user_pools import CODE_FAVORITES, add_symbol_to_user_pool
+
+    _ = (run_id, stock_name, features_snapshot)  # 元数据不再写入 TXT
     async with get_session() as session:
-        await session.execute(
-            text(
-                "INSERT INTO qm_user_watchlist (tenant_id, user_id, symbol, stock_name, source_run_id, features_snapshot, updated_at) "
-                "VALUES (:tid, :uid, :s, :n, :rid, :f, NOW()) "
-                "ON CONFLICT (tenant_id, user_id, symbol) DO UPDATE SET features_snapshot = EXCLUDED.features_snapshot, updated_at = NOW()"
-            ),
-            {"tid": tid, "uid": uid, "s": symbol, "n": stock_name, "rid": run_id, "f": json.dumps(features_snapshot or {})},
+        await add_symbol_to_user_pool(
+            session,
+            code=CODE_FAVORITES,
+            symbol=symbol,
+            user_id=str(uid),
+            tenant_id=str(tid),
+            actor=str(uid),
         )
     return {"code": 200, "message": "success"}
 
 
 async def remove_from_watchlist(tid: str, uid: str, symbol: str) -> dict[str, Any]:
+    from backend.shared.stock_pool.user_pools import CODE_FAVORITES, remove_symbol_from_user_pool
+
     async with get_session() as session:
-        await session.execute(
-            text("DELETE FROM qm_user_watchlist WHERE tenant_id = :tid AND user_id = :uid AND symbol = :s"),
-            {"tid": tid, "uid": uid, "s": symbol},
+        await remove_symbol_from_user_pool(
+            session,
+            code=CODE_FAVORITES,
+            symbol=symbol,
+            user_id=str(uid),
+            tenant_id=str(tid),
+            actor=str(uid),
         )
     return {"code": 200, "message": "success"}
 
@@ -2077,51 +2085,47 @@ async def _fetch_simulation_positions(authorization: str, x_user_id: str, x_tena
     return sorted(set(positions))
 
 
-async def _upsert_watchlist_position(tid: str, uid: str, symbol: str, stock_name: str | None) -> None:
-    """专用 upsert：只回填 stock_name/updated_at，不动 features_snapshot 与 source_run_id。"""
-    async with get_session() as session:
-        await session.execute(
-            text(
-                "INSERT INTO qm_user_watchlist (tenant_id, user_id, symbol, stock_name, updated_at) "
-                "VALUES (:tid, :uid, :s, :n, NOW()) "
-                "ON CONFLICT (tenant_id, user_id, symbol) "
-                "DO UPDATE SET stock_name = COALESCE(EXCLUDED.stock_name, qm_user_watchlist.stock_name), updated_at = NOW()"
-            ),
-            {"tid": tid, "uid": uid, "s": symbol, "n": stock_name},
-        )
-
-
 async def sync_watchlist_positions_service(tid: str, uid: str, authorization: str) -> dict[str, Any]:
-    """模拟盘持仓自动加入自选：拉持仓 -> 补名 -> 专用 upsert；返回当前持仓 prefix 列表。"""
+    """模拟盘持仓自动加入自选：拉持仓 -> 写入用户股票池 favorites。"""
+    from backend.shared.stock_pool.user_pools import CODE_FAVORITES, add_symbol_to_user_pool
+
     positions = await _fetch_simulation_positions(authorization, uid, tid)
     if positions:
-        names = await asyncio.to_thread(_get_quantdb_stock_names)
-        for symbol in positions:
-            name = names.get(StockCodeUtil.to_suffix(symbol)) or None
-            await _upsert_watchlist_position(tid, uid, symbol, name)
+        async with get_session() as session:
+            for symbol in positions:
+                await add_symbol_to_user_pool(
+                    session,
+                    code=CODE_FAVORITES,
+                    symbol=symbol,
+                    user_id=str(uid),
+                    tenant_id=str(tid),
+                    actor=str(uid),
+                )
     return {"code": 200, "data": {"positions": positions}}
 
 
 async def get_user_research_pool(tid: str, uid: str, status: str | None, limit: int, offset: int) -> dict[str, Any]:
-    where = "tenant_id = :tid AND user_id = :uid"
-    params: dict[str, Any] = {"tid": tid, "uid": uid, "limit": limit, "offset": offset}
-    if status:
-        where += " AND status = :status"
-        params["status"] = status
-    async with get_session(read_only=True) as session:
-        res = await session.execute(
-            text(
-                f"SELECT symbol, stock_name, added_at, source_run_id, status FROM qm_user_research_pool "
-                f"WHERE {where} ORDER BY added_at DESC LIMIT :limit OFFSET :offset"
-            ),
-            params,
+    """兼容旧接口：研究池事实源已迁到用户股票池 research。"""
+    from backend.shared.stock_pool import repository as sp_repo
+    from backend.shared.stock_pool.user_pools import (
+        CODE_RESEARCH,
+        ensure_user_pool,
+        members_as_watchlist_items,
+    )
+
+    _ = status
+    async with get_session() as session:
+        pool = await ensure_user_pool(
+            session, code=CODE_RESEARCH, user_id=str(uid), tenant_id=str(tid), actor=str(uid)
         )
-        items = [
-            {"symbol": r[0], "stockName": r[1], "addedAt": _serialize_date(r[2]), "sourceRunId": r[3], "status": r[4]}
-            for r in res
-        ]
-        total = (await session.execute(text(f"SELECT COUNT(*) FROM qm_user_research_pool WHERE {where}"), params)).scalar() or 0
-    return {"code": 200, "data": {"items": items, "total": total}}
+        symbols = sp_repo.read_members(pool)
+    items = [
+        {**row, "status": "active"}
+        for row in members_as_watchlist_items(symbols)
+    ]
+    total = len(items)
+    page = items[offset : offset + max(1, int(limit))]
+    return {"code": 200, "data": {"items": page, "total": total}}
 
 
 async def add_to_research_pool(
@@ -2135,34 +2139,32 @@ async def add_to_research_pool(
     thesis_summary: str | None,
     features_snapshot: dict[str, Any] | None,
 ) -> dict[str, Any]:
+    from backend.shared.stock_pool.user_pools import CODE_RESEARCH, add_symbol_to_user_pool
+
+    _ = (run_id, stock_name, model_id, fusion_score, thesis_summary, features_snapshot)
     async with get_session() as session:
-        await session.execute(
-            text(
-                "INSERT INTO qm_user_research_pool "
-                "(tenant_id, user_id, symbol, stock_name, source_run_id, model_id, fusion_score, thesis_summary, features_snapshot, updated_at) "
-                "VALUES (:tid, :uid, :s, :n, :rid, :mid, :fs, :ts, :f, NOW()) "
-                "ON CONFLICT (tenant_id, user_id, symbol) DO UPDATE SET features_snapshot = EXCLUDED.features_snapshot, updated_at = NOW()"
-            ),
-            {
-                "tid": tid,
-                "uid": uid,
-                "s": symbol,
-                "n": stock_name,
-                "rid": run_id,
-                "mid": model_id,
-                "fs": fusion_score,
-                "ts": thesis_summary,
-                "f": json.dumps(features_snapshot or {}),
-            },
+        await add_symbol_to_user_pool(
+            session,
+            code=CODE_RESEARCH,
+            symbol=symbol,
+            user_id=str(uid),
+            tenant_id=str(tid),
+            actor=str(uid),
         )
     return {"code": 200, "message": "success"}
 
 
 async def remove_from_research_pool(tid: str, uid: str, symbol: str) -> dict[str, Any]:
+    from backend.shared.stock_pool.user_pools import CODE_RESEARCH, remove_symbol_from_user_pool
+
     async with get_session() as session:
-        await session.execute(
-            text("DELETE FROM qm_user_research_pool WHERE tenant_id = :tid AND user_id = :uid AND symbol = :s"),
-            {"tid": tid, "uid": uid, "s": symbol},
+        await remove_symbol_from_user_pool(
+            session,
+            code=CODE_RESEARCH,
+            symbol=symbol,
+            user_id=str(uid),
+            tenant_id=str(tid),
+            actor=str(uid),
         )
     return {"code": 200, "message": "success"}
 

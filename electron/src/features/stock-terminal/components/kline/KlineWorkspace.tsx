@@ -8,7 +8,12 @@ import { Button, Select, Tooltip, message, Modal, InputNumber, Input, Switch, Ta
 import { useNavigate } from 'react-router-dom';
 import { StockListItem, StockProfile, KlineBar } from '../../types';
 import { stockTerminalService } from '../../services/stockTerminalService';
-import { researchService } from '../../../../services/researchService';
+import {
+  addSymbolToUserPool,
+  listUserPoolSymbols,
+  removeSymbolFromUserPool,
+  USER_POOL_FAVORITES,
+} from '../../../../services/userStockPoolService';
 import { KlineChart, IndicatorConfig, IndexOverlay, SignalPoint, ScoreSeries, TradeMarker, RefLine, OVERLAY_COLORS, SubplotType } from './KlineChart';
 import { KlineReplay } from './KlineReplay';
 import { ChartBacktestPanel, ChartBacktestData } from '../ChartBacktestPanel';
@@ -108,11 +113,15 @@ export function KlineWorkspace({ stock, profile, height = 460, onSelectStock }: 
     return () => { cancelled = true; };
   }, []);
 
-  // 自选状态
+  // 自选状态（用户股票池 favorites）
   useEffect(() => {
-    researchService.getWatchlist(200).then(resp => {
-      setWatchlist(new Set(resp.items.map(i => i.symbol)));
-    }).catch(() => { /* ignore */ });
+    listUserPoolSymbols(USER_POOL_FAVORITES)
+      .then((symbols) => {
+        setWatchlist(new Set(symbols.map((s) => String(s).toUpperCase())));
+      })
+      .catch(() => {
+        /* ignore */
+      });
   }, []);
   const isWatched = watchlist.has(toPrefix(stock.symbol));
 
@@ -170,15 +179,21 @@ export function KlineWorkspace({ stock, profile, height = 460, onSelectStock }: 
     const prefix = toPrefix(stock.symbol);
     try {
       if (isWatched) {
-        await researchService.removeFromWatchlist(prefix);
-        const n = new Set(watchlist); n.delete(prefix); setWatchlist(n);
+        await removeSymbolFromUserPool(prefix, USER_POOL_FAVORITES);
+        const n = new Set(watchlist);
+        n.delete(prefix);
+        setWatchlist(n);
         message.success(`已移出自选：${stock.name}`);
       } else {
-        await researchService.addToWatchlist(prefix, { stockName: stock.name });
-        const n = new Set(watchlist); n.add(prefix); setWatchlist(n);
+        await addSymbolToUserPool(prefix, USER_POOL_FAVORITES);
+        const n = new Set(watchlist);
+        n.add(prefix);
+        setWatchlist(n);
         message.success(`已加入自选：${stock.name}`);
       }
-    } catch { message.error('自选操作失败'); }
+    } catch {
+      message.error('自选操作失败');
+    }
   }, [stock, isWatched, watchlist]);
 
   // 加载 K 线 + 信号
