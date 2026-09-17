@@ -6,7 +6,8 @@ export interface ValidationIssue {
 }
 
 function isTimeInRange(value: string, start: string, end: string) {
-  return value >= start && value <= end;
+  const hhmm = value.length >= 5 ? value.slice(0, 5) : value;
+  return hhmm >= start && hhmm <= end;
 }
 
 export function validateLiveTradeConfig(config: LiveTradeConfig): ValidationIssue[] {
@@ -37,9 +38,10 @@ export function validateLiveTradeConfig(config: LiveTradeConfig): ValidationIssu
     issues.push({ field: 'enabled_sessions', message: '至少选择一个执行时段' });
   }
 
+  // 与后端 / LiveTradeConfigForm 一致：A 股连续竞价 AM 09:30–11:30、PM 13:00–15:00
   const sessionRanges = {
-    AM: ['00:00', '23:59'],
-    PM: ['00:00', '23:59'],
+    AM: ['09:30', '11:30'],
+    PM: ['13:00', '15:00'],
   } as const;
 
   if (config.sell_time) {

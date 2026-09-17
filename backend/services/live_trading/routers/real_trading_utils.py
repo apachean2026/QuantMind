@@ -929,6 +929,12 @@ def _normalize_live_trade_config(user_live_cfg: dict, base_live_cfg: dict) -> di
     ):
         normalized["max_price_deviation"] = float(normalized["max_price_deviation"])
 
+    # schema 校验可能已把 HH:MM:SS 裁成 HH:MM；这里再兜底一次，保证时段比较口径一致
+    for key in ("sell_time", "buy_time"):
+        text = str(normalized.get(key) or "").strip()
+        if len(text) >= 5 and text[2] == ":":
+            normalized[key] = text[:5]
+
     session_ranges = {
         "AM": ("09:30", "11:30"),
         "PM": ("13:00", "15:00"),

@@ -17,21 +17,23 @@ type Props = {
 const WEEKDAYS: TradeWeekday[] = ['MON', 'TUE', 'WED', 'THU', 'FRI'];
 const SESSIONS: TradingSession[] = ['AM', 'PM'];
 
+// 与后端 real_trading_utils._normalize_live_trade_config / A 股连续竞价一致
 const SESSION_RANGES: Record<TradingSession, [string, string]> = {
-  AM: ['09:00', '11:30'],
+  AM: ['09:30', '11:30'],
   PM: ['13:00', '15:00'],
 };
 
 const SESSION_DEFAULTS: Record<string, { sell_time: string; buy_time: string }> = {
-  AM: { sell_time: '09:00', buy_time: '09:05' },
+  AM: { sell_time: '09:30', buy_time: '09:35' },
   PM: { sell_time: '14:30', buy_time: '14:45' },
-  'AM,PM': { sell_time: '09:00', buy_time: '09:05' },
+  'AM,PM': { sell_time: '09:30', buy_time: '09:35' },
 };
 
 function isTimeInSessions(time: string, sessions: TradingSession[]): boolean {
+  const hhmm = time.length >= 5 ? time.slice(0, 5) : time;
   return sessions.some((s) => {
     const [start, end] = SESSION_RANGES[s];
-    return time >= start && time <= end;
+    return hhmm >= start && hhmm <= end;
   });
 }
 
@@ -215,7 +217,7 @@ const LiveTradeConfigForm: React.FC<Props> = ({
                 type="time"
                 className={`${controlClassName} h-8 ${!isTimeInSessions(liveTradeConfig.sell_time, liveTradeConfig.enabled_sessions) ? 'border-red-500 bg-red-50' : ''}`}
                 value={liveTradeConfig.sell_time}
-                min={liveTradeConfig.enabled_sessions.includes('AM') ? '09:00' : '13:00'}
+                min={liveTradeConfig.enabled_sessions.includes('AM') ? '09:30' : '13:00'}
                 max={liveTradeConfig.enabled_sessions.includes('PM') ? '15:00' : '11:30'}
                 onChange={(e) => updateLive({ sell_time: e.target.value })}
               />
@@ -230,7 +232,7 @@ const LiveTradeConfigForm: React.FC<Props> = ({
                 type="time"
                 className={`${controlClassName} h-8 ${!isTimeInSessions(liveTradeConfig.buy_time, liveTradeConfig.enabled_sessions) ? 'border-red-500 bg-red-50' : ''}`}
                 value={liveTradeConfig.buy_time}
-                min={liveTradeConfig.enabled_sessions.includes('AM') ? '09:00' : '13:00'}
+                min={liveTradeConfig.enabled_sessions.includes('AM') ? '09:30' : '13:00'}
                 max={liveTradeConfig.enabled_sessions.includes('PM') ? '15:00' : '11:30'}
                 onChange={(e) => updateLive({ buy_time: e.target.value })}
               />
