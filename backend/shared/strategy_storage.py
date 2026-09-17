@@ -515,6 +515,29 @@ class StrategyStorageService:
                 "parameters": row[7] or {},
             }
 
+    async def rename(self, user_id: str, strategy_id: str, name: str) -> bool:
+        """只更新策略名称，编号不变。"""
+        if not str(strategy_id).isdigit():
+            return False
+        uid_int = _ensure_int_user_id(user_id)
+        now = datetime.now(timezone.utc)
+        with get_db() as session:
+            row = session.execute(
+                text(
+                    "UPDATE strategies SET name = :name, updated_at = :now "
+                    "WHERE id = :sid AND user_id = :uid "
+                    f"AND status != '{_STATUS_ARCHIVED}' "
+                    "RETURNING id"
+                ),
+                {
+                    "name": name,
+                    "now": now,
+                    "sid": int(strategy_id),
+                    "uid": uid_int,
+                },
+            ).fetchone()
+            return row is not None
+
     async def mark_as_verified(self, strategy_id: str, user_id: str) -> bool:
         uid_int = _ensure_int_user_id(user_id)
         with get_db() as session:
