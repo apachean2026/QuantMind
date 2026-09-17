@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { LayoutDashboard, PieChart, FileText, Settings, User, ClipboardList, Clock } from 'lucide-react';
-import HelpCenterLink from '../../components/common/HelpCenterLink';
 import type { LucideIcon } from 'lucide-react';
 import { Button, Collapse, Modal, Spin, Tag, message } from 'antd';
 import TopBar from './components/TopBar';
@@ -557,37 +556,6 @@ const RealTradingPage: React.FC = () => {
                                     <span>{tab.label}</span>
                                 </button>
                             ))}
-                        </div>
-
-                        {/* Bottom help, explicit mode selector, and trading disclaimer. */}
-                        <div className="p-3 pb-6 border-t border-gray-200 shrink-0 bg-white space-y-1.5">
-                            {/* ===== 实盘入口（模拟/实盘切换，暂隐藏，后期功能完善后恢复）=====
-                            <div className="flex items-center justify-between gap-2 px-1 pb-1">
-                                <span className="text-[11px] font-semibold text-slate-400">交易模式</span>
-                                <button
-                                    type="button"
-                                    role="switch"
-                                    aria-checked={tradingMode === 'real'}
-                                    aria-label={`当前交易模式：${tradingMode === 'real' ? '实盘' : '模拟盘'}，点击切换`}
-                                    onClick={() => handleModeSwitch(tradingMode === 'real' ? 'simulation' : 'real')}
-                                    className={`relative flex h-8 w-[88px] items-center rounded-full border p-1 transition-all ${
-                                        tradingMode === 'real'
-                                            ? 'border-emerald-300 bg-emerald-50'
-                                            : 'border-amber-300 bg-amber-50'
-                                    }`}
-                                    title="切换实盘 / 模拟盘"
-                                >
-                                    <span className={`absolute top-1 bottom-1 w-[39px] rounded-full shadow-sm transition-transform ${
-                                        tradingMode === 'real' ? 'translate-x-[40px] bg-emerald-500' : 'translate-x-0 bg-amber-500'
-                                    }`} />
-                                    <span className="relative z-10 flex w-full justify-between px-1.5 text-[11px] font-bold">
-                                        <span className={tradingMode === 'real' ? 'text-slate-700' : 'text-white'}>模拟</span>
-                                        <span className={tradingMode === 'real' ? 'text-white' : 'text-slate-700'}>实盘</span>
-                                    </span>
-                                </button>
-                            </div>
-                            */}
-                            <HelpCenterLink className="w-full text-xs font-semibold tracking-wide" />
                         </div>
                     </div>
 

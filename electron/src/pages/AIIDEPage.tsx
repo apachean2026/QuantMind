@@ -39,7 +39,6 @@ import { clsx } from 'clsx';
 import { authService } from '../features/auth/services/authService';
 import { strategyManagementService } from '../services/strategyManagementService';
 import { modelTrainingService } from '../services/modelTrainingService';
-import HelpCenterLink from '../components/common/HelpCenterLink';
 import { SERVICE_ENDPOINTS } from '../config/services';
 import { PAGE_LAYOUT } from '../config/pageLayout';
 import { useAppSelector } from '../store';
@@ -2022,11 +2021,6 @@ const AIIDEPage: React.FC = () => {
                             </div>
                         ))
                     )}
-                </div>
-
-                {/* Status Bar Left Part */}
-                <div className="p-4 border-t border-gray-200 shrink-0">
-                    <HelpCenterLink className="w-full" />
                 </div>
             </aside>
 
