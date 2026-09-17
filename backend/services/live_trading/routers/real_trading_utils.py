@@ -900,6 +900,72 @@ def _normalize_live_trade_config(user_live_cfg: dict, base_live_cfg: dict) -> di
     merged.update(base_live_cfg or {})
     merged.update(user_live_cfg or {})
 
+    # 先裁 HH:MM，再按时点对齐时段，最后做 schema 校验。
+    # 前端偶发只改了 14:xx 却仍提交 AM，后端在此自动补 PM，避免误拒。
+    session_ranges = {
+        "AM": ("09:30", "11:30"),
+        "PM": ("13:00", "15:00"),
+    }
+
+    def _hhmm(value: object) -> str:
+        text = str(value or "").strip()
+        if len(text) >= 5 and text[2] == ":":
+            return text[:5]
+        return text
+
+    def _sessions_covering(hhmm: str) -> list[str]:
+        return [
+            name
+            for name, (start, end) in session_ranges.items()
+            if start <= hhmm <= end
+        ]
+
+    for key in ("sell_time", "buy_time"):
+        if key in merged and merged[key] is not None:
+            merged[key] = _hhmm(merged[key])
+
+    enabled_sessions = [
+        str(item).upper() for item in (merged.get("enabled_sessions") or [])
+    ]
+    sell_hhmm = _hhmm(merged.get("sell_time"))
+    buy_hhmm = _hhmm(merged.get("buy_time"))
+    for label, hhmm in (("sell_time", sell_hhmm), ("buy_time", buy_hhmm)):
+        covering = _sessions_covering(hhmm)
+        if hhmm and not covering:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"live_trade_config.{label}={hhmm} 不在任何交易时段内"
+                    f"（AM 09:30-11:30 / PM 13:00-15:00）"
+                ),
+            )
+    needed = list(
+        dict.fromkeys(_sessions_covering(sell_hhmm) + _sessions_covering(buy_hhmm))
+    )
+    sell_ok = any(
+        start <= sell_hhmm <= end
+        for start, end in (
+            session_ranges[s] for s in enabled_sessions if s in session_ranges
+        )
+    )
+    buy_ok = any(
+        start <= buy_hhmm <= end
+        for start, end in (
+            session_ranges[s] for s in enabled_sessions if s in session_ranges
+        )
+    )
+    if needed and not (sell_ok and buy_ok):
+        healed = list(dict.fromkeys([*enabled_sessions, *needed]))
+        logger.info(
+            "live_trade_config auto-heal enabled_sessions %s -> %s (sell=%s buy=%s)",
+            enabled_sessions,
+            healed,
+            sell_hhmm,
+            buy_hhmm,
+        )
+        enabled_sessions = healed
+        merged["enabled_sessions"] = healed
+
     try:
         LiveTradeConfigSchema.model_validate(merged)
     except Exception as exc:
@@ -914,7 +980,7 @@ def _normalize_live_trade_config(user_live_cfg: dict, base_live_cfg: dict) -> di
     normalized["trade_weekdays"] = [
         str(item).upper() for item in (normalized.get("trade_weekdays") or [])
     ]
-    normalized["enabled_sessions"] = [
+    normalized["enabled_sessions"] = enabled_sessions or [
         str(item).upper() for item in (normalized.get("enabled_sessions") or [])
     ]
     normalized["order_type"] = str(normalized.get("order_type") or "MARKET").upper()
@@ -929,16 +995,9 @@ def _normalize_live_trade_config(user_live_cfg: dict, base_live_cfg: dict) -> di
     ):
         normalized["max_price_deviation"] = float(normalized["max_price_deviation"])
 
-    # schema 校验可能已把 HH:MM:SS 裁成 HH:MM；这里再兜底一次，保证时段比较口径一致
     for key in ("sell_time", "buy_time"):
-        text = str(normalized.get(key) or "").strip()
-        if len(text) >= 5 and text[2] == ":":
-            normalized[key] = text[:5]
+        normalized[key] = _hhmm(normalized.get(key))
 
-    session_ranges = {
-        "AM": ("09:30", "11:30"),
-        "PM": ("13:00", "15:00"),
-    }
     enabled_sessions = normalized.get("enabled_sessions") or []
     for key in ("sell_time", "buy_time"):
         target = str(normalized.get(key) or "")
