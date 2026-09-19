@@ -347,12 +347,15 @@ def preprocess(
     feature_cols = meta.get("feature_columns") or meta.get("features", [])
     fill_values = meta.get("fill_values", {})
 
-    # features_daily.return_Nd 是未来 N 日收益，不能当作 mom_ret_Nd 使用：
-    # 训练侧已改为只用 l1_factors 的 mom_ret_Nd（过去收益），推理侧必须一致，
-    # 否则线上会把未来收益喂给模型，导致预测分布与训练时完全不同。
+    # features_daily 未来收益列不能当特征（标签泄漏）。
+    # QuantDB 2026-09：return_Nd → future_return_Nd；旧名一并剔除。
     _leaky = [
-        c for c in ("return_1d", "return_3d", "return_5d",
-                    "return_10d", "return_20d", "return_60d")
+        c for c in (
+            "future_return_1d", "future_return_3d", "future_return_5d",
+            "future_return_10d", "future_return_20d", "future_return_60d",
+            "return_1d", "return_3d", "return_5d",
+            "return_10d", "return_20d", "return_60d",
+        )
         if c in df.columns
     ]
     if _leaky:

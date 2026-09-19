@@ -344,15 +344,15 @@ def test_projected_batch_does_not_fill_return_from_momentum(monkeypatch):
     """return_* 全为 NaN 时，不再用 mom_ret_*d ×100 兜底。
 
     投研平台的 return 系列语义是“推理日后 N 日真实收益”，必须来自 features_daily
-    的 return_* 标签；mom_ret_*d 是过去动量，混用会把历史收益冒充未来收益。
-    未来交易日未走完时 return_* 为 NaN，应返回空由前端显示“-”。
+    的 future_return_* 标签；mom_ret_*d 是过去动量，混用会把历史收益冒充未来收益。
+    未来交易日未走完时标签为 NaN，应返回空由前端显示“-”。
     """
     _install_hub(
         monkeypatch,
         _FakeHub(
             {
                 "qdb_technical_indicators": [
-                    {"symbol": "600036.SH", "dt": 1, "return_5d": float("nan")}
+                    {"symbol": "600036.SH", "dt": 1, "future_return_5d": float("nan")}
                 ],
                 "qdb_l1_factors": [
                     {"symbol": "600036.SH", "dt": 1, "mom_ret_5d": 0.01742}
@@ -368,13 +368,13 @@ def test_projected_batch_does_not_fill_return_from_momentum(monkeypatch):
 
 
 def test_projected_batch_prefers_real_return_over_fallback(monkeypatch):
-    """真实 return_5d 有值时不应被兜底覆盖。"""
+    """真实 future_return_5d 有值时不应被兜底覆盖。"""
     _install_hub(
         monkeypatch,
         _FakeHub(
             {
                 "qdb_technical_indicators": [
-                    {"symbol": "600036.SH", "dt": 1, "return_5d": 3.5}
+                    {"symbol": "600036.SH", "dt": 1, "future_return_5d": 3.5}
                 ],
                 "qdb_l1_factors": [
                     {"symbol": "600036.SH", "dt": 1, "mom_ret_5d": 0.01742}
@@ -409,7 +409,7 @@ def test_projected_batch_omits_unavailable_long_horizon_returns(monkeypatch):
 
 
 def test_projected_batch_fills_missing_return10d_from_kline(monkeypatch):
-    """宽表 return_10d 为 NaN 时，用 daily_forward 按交易日 LEAD 现算未来 10 日收益。"""
+    """宽表 future_return_10d 为 NaN 时，用 daily_forward 按交易日 LEAD 现算未来 10 日收益。"""
     calendar = [
         "20260901",
         "20260902",
@@ -431,8 +431,8 @@ def test_projected_batch_fills_missing_return10d_from_kline(monkeypatch):
                     {
                         "symbol": "301589.SZ",
                         "dt": 20260901,
-                        "return_1d": -1.1708,
-                        "return_10d": float("nan"),
+                        "future_return_1d": -1.1708,
+                        "future_return_10d": float("nan"),
                     }
                 ],
                 "qdb_daily_forward": [

@@ -124,6 +124,13 @@ _CAMEL_ALIASES: dict[str, str] = {
     # 前端列（volRatio5/volRatio20）取不到值。
     "vol_to_ma5": "volRatio5",
     "vol_to_ma20": "volRatio20",
+    # QuantDB 2026-09：未来收益 future_return_Nd → 前端 return1d…
+    "future_return_1d": "return1d",
+    "future_return_3d": "return3d",
+    "future_return_5d": "return5d",
+    "future_return_10d": "return10d",
+    "future_return_20d": "return20d",
+    "future_return_60d": "return60d",
 }
 
 # market_sentiment 视图的列没有前缀，前端统一加 sentiment 前缀避免与基础字段冲突。
@@ -156,10 +163,8 @@ def _camel_name(column: str, view: str) -> str:
 # 投影兜底：目标字段缺失时，用替代列换算填充。
 # 注意：return1d/3d/5d 不再兜底到 l1_factors.mom_ret_*d（过去收益）——
 # 投研平台的 return 系列是“推理日后 N 日真实收益”，语义上必须来自
-# features_daily 按推理日读取的 return_* 标签；mom_ret_*d 是历史动量（过去收益），
-# 用它会污染“未来收益”展示。features_daily 按日增量落盘时，远期 return_* 往往
-# 不会回写历史分区（实测 10/20/60 日长期全 NaN），投影路径在宽表缺失时改用
-# daily_forward 的 close[T+N]/close[T]-1 现算，单位与宽表一致（百分数）。
+# features_daily 的 future_return_*（2026-09 前为 return_*）；mom_ret_*d 是历史动量，
+# 用它会污染“未来收益”展示。宽表远期标签缺失时改用 daily_forward 现算。
 _RETURN_HORIZONS: dict[str, int] = {
     "return1d": 1,
     "return3d": 3,
@@ -443,8 +448,8 @@ def _query_sources(
 
     if "turnoverRate" in wanted:
         # 日线视图只用于取 volume（现算换手率的原料）。其余列必须丢弃：
-        # amount/open/high/low 与 UI 字段同名但量纲不同（amount 是元，UI 期望亿元），
-        # 一旦混入就会污染成交额筛选。
+        # amount/open/high/low 与 UI 字段同名但量纲不同（QuantDB 个股 amount=万元、OHLC=元；
+        # UI 成交额期望亿元），一旦混入就会污染成交额筛选。
         daily = _latest_rows("qdb_daily_unadjusted", symbols, dt)
         sources["qdb_daily_unadjusted"] = {
             sym: {"volume": row.get("volume")} for sym, row in daily.items()

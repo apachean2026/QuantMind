@@ -241,7 +241,7 @@ class SimulationExecutionEngine:
         )
         return MarketSnapshot(
             price=price,
-            price_source="redis_series",
+            price_source=str(tick.get("price_source") or "redis_series"),
             quote_timestamp=self._as_int(tick.get("timestamp")),
             quote_age_seconds=self._as_float(tick.get("age_s")),
             recent_volume=self._as_float(tick.get("recent_volume")),
@@ -676,6 +676,7 @@ return tostring(granted)
         market: str | None = None,
         snapshot: MarketSnapshot | None = None,
         requested_quantity: float | None = None,
+        allow_stale_market_fill: bool = False,
     ) -> ExecutionResult:
         snapshot = snapshot or await self._latest_price(
             order.symbol, user_id=order.user_id, tenant_id=order.tenant_id
@@ -699,8 +700,10 @@ return tostring(granted)
 
         # P0-5：兜底价（DB昨收/本地日线）是陈旧价，非交易时段市价单禁止按此成交，
         # 否则盘后/节假日一点即成交。限价单允许（用户显式定价）。
+        # Bootstrap 首次建仓可显式放开（allow_stale_market_fill），用本地日线收盘价成交。
         if (
-            fetched_source
+            not allow_stale_market_fill
+            and fetched_source
             in {
                 "db_fallback",
                 "local_daily_open",

@@ -376,10 +376,17 @@ def predict_with_model(model, meta: dict, day_df: pd.DataFrame) -> dict[str, flo
     fill_values = meta.get("fill_values", {})
     best_iter = meta.get("best_iteration")
 
-    # features_daily.return_Nd 是未来 N 日收益，不能作为特征喂给模型（标签泄漏）
-    _leaky = [c for c in ("return_1d", "return_3d", "return_5d",
-                          "return_10d", "return_20d", "return_60d")
-              if c in day_df.columns]
+    # features_daily 未来收益列不能当特征（标签泄漏）。
+    # QuantDB 2026-09：return_Nd → future_return_Nd。
+    _leaky = [
+        c for c in (
+            "future_return_1d", "future_return_3d", "future_return_5d",
+            "future_return_10d", "future_return_20d", "future_return_60d",
+            "return_1d", "return_3d", "return_5d",
+            "return_10d", "return_20d", "return_60d",
+        )
+        if c in day_df.columns
+    ]
     if _leaky:
         day_df = day_df.drop(columns=_leaky, errors="ignore")
 

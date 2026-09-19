@@ -31,6 +31,7 @@ description: "QuantDB 字段单位速查手册 — 全部数据集实测验证�
 
 | 规则 | 说明 |
 |---|---|
+| **个股 OHLC = 元** | 开高低收统一为人民币元（与市值同量纲） |
 | **个股成交量 = 股** | A 股 1 手 = 100 股，但 QuantDB 个股 kline 的 `volume` 单位就是**股**，不是手 |
 | **个股成交额 = 万元** | `amount = 5828.37` 表示 5828.37 **万元**（约 5828 万），不是元 |
 | **指数成交量 = 手** | `index_daily.volume` 单位是**手**（1 手 = 100 股），与个股相反！ |
@@ -145,7 +146,7 @@ python backend/scripts/wind_l2_import.py --archive ... --force                  
 | `volume_ma_3/5` | 股 | |
 | `amount_ma_5` | 万元 | |
 | `pct_change` | **%** | 1.4717 = 1.47% |
-| `return_1d / return_20d` | 缺失（NaN） | 别用，改用 pct_change |
+| `future_return_1d / future_return_20d` | **未来 N 日收益（标签）** | 2026-09 由 `return_Nd` 改名；勿当历史动量或过滤条件（标签泄漏）。历史动量用 `pct_change` / l1 `mom_ret_*` |
 | `vol_std_20` | **%** | 4.0578 = 4.06%（l1 里同名字段是小数 0.0406，差 100 倍！） |
 | `vol_atr_14` | **元** | 3.58 元（l1 同名字段也是元，一致） |
 | `macd_hist / rsi_14 / kdj_*` | 原始指标值 | 与 l1 一致 |
@@ -272,7 +273,7 @@ API 层 `_UNIT_SCALES` 把部分字段缩放后输出：
 4. **instrument_detail** HqDate 滞后（20260720）
 5. **dt=20260729~20260802** 个股日线有同步缺口（非交易日+同步中断）
 5b. **valuation dt=20260813** 只有 101 行（同步缺口，dividend_rate 全 NaN），features_daily 同日 5543 行正常
-6. **technical_indicators.return_1d/return_20d** 全 NaN
+6. **technical_indicators / features_daily 的 `future_return_*`（旧 `return_*`）是未来收益标签**，勿当历史动量过滤
 7. **stock_daily_latest** 的 turnover_rate/flow_net_amount/main_flow 常为 NULL
 8. **l2_data 原始逐笔仅 20260511 单日** —— 万得按日 7z 手动导入（`wind_l2_import.py`），非自动日更
 9. **tick_data 单位混源** —— wind=股/万元，旧同步=手/元，对账前勿直接用

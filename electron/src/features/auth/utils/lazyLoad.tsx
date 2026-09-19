@@ -4,13 +4,9 @@
  */
 
 import { lazy, ComponentType, Suspense } from 'react';
-import { Spin } from 'antd';
+import { RouteFallback } from '../../../components/common/UnifiedLoading';
 
-const LoadingSpinner = () => (
-  <div style={{ display: 'flex', justifyContent: 'center', padding: '50px' }}>
-    <Spin size="large" />
-  </div>
-);
+const LoadingSpinner = () => <RouteFallback message="加载中..." fill />;
 
 /**
  * 懒加载组件包装器

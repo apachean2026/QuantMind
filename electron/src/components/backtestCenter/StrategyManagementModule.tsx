@@ -14,14 +14,10 @@ import { motion } from 'framer-motion';
 import {
     FileCode,
     Trash2,
-    Eye,
     TestTube,
-    Rocket,
-    StopCircle,
     Search,
     RefreshCw,
     Edit,
-    Copy,
     AlertTriangle,
 } from 'lucide-react';
 import { message, Modal } from 'antd';
@@ -52,14 +48,13 @@ export const StrategyManagementModule: React.FC = () => {
     
     const [strategies, setStrategies] = useState<Strategy[]>([]);
     const [loading, setLoading] = useState(false);
-    const [filter, setFilter] = useState<'all' | 'draft' | 'repository' | 'live_trading'>('all');
     const [searchTerm, setSearchTerm] = useState('');
     const [deleteModalVisible, setDeleteModalVisible] = useState(false);
     const [selectedStrategy, setSelectedStrategy] = useState<Strategy | null>(null);
 
     useEffect(() => {
         loadStrategies();
-    }, [filter]);
+    }, []);
 
     const normalizeStatus = (status?: string): Strategy['status'] => {
         const value = String(status || '').toLowerCase();
@@ -136,11 +131,9 @@ export const StrategyManagementModule: React.FC = () => {
         }
     };
 
-    const filteredStrategies = strategies.filter((s) => {
-        const matchesFilter = filter === 'all' || s.status === filter;
-        const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase());
-        return matchesFilter && matchesSearch;
-    });
+    const filteredStrategies = strategies.filter((s) =>
+        s.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
     const getStatusBadge = (status: Strategy['status']) => {
         const configs: any = {
@@ -166,34 +159,21 @@ export const StrategyManagementModule: React.FC = () => {
                     <div>
                         <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Strategy Library</p>
                         <h2 className="text-lg font-bold text-slate-800 tracking-tight">策略管理</h2>
-                        <p className="text-sm text-gray-500">管理策略生命周期：草稿 → 仓库 → 模拟盘</p>
+                        <p className="text-sm text-gray-500">查看、编辑与回测验证策略</p>
                     </div>
                     <button onClick={loadStrategies} className="p-2 hover:bg-gray-100 rounded-xl transition-colors">
                         <RefreshCw className={`w-5 h-5 text-gray-600 ${loading ? 'animate-spin' : ''}`} />
                     </button>
                 </div>
-                <div className="flex items-center gap-3">
-                    <div className="flex-1 relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        <input
-                            type="text"
-                            placeholder="搜索策略..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-                        />
-                    </div>
-                    <div className="flex gap-2">
-                        {(['all', 'draft', 'repository', 'live_trading'] as const).map((f) => (
-                            <button
-                                key={f}
-                                onClick={() => setFilter(f)}
-                                className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${filter === f ? 'bg-gradient-to-br from-blue-500 to-purple-500 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                            >
-                                {f === 'all' ? '全部' : f === 'draft' ? '草稿' : f === 'repository' ? '仓库' : '模拟'}
-                            </button>
-                        ))}
-                    </div>
+                <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                        type="text"
+                        placeholder="搜索策略..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
                 </div>
             </div>
 

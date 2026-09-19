@@ -165,6 +165,34 @@ async def test_execute_order_fills_sell_and_charges_stamp_duty():
 
 
 @pytest.mark.asyncio
+async def test_execute_order_blocks_market_on_stale_local_close():
+    """非 bootstrap：本地日线收盘价不得给市价单成交。"""
+    engine, manager = _engine(_snapshot(price=10.0, source="local_daily_close"))
+
+    result = await engine.execute_order(_make_order(OrderSide.BUY))
+
+    assert result.success is False
+    assert "非实时行情" in result.message
+    assert manager.update_balance.called is False
+
+
+@pytest.mark.asyncio
+async def test_execute_order_allows_stale_market_fill_when_flagged():
+    """Bootstrap：显式 allow_stale_market_fill 时可用本地日线市价成交。"""
+    engine, manager = _engine(_snapshot(price=10.0, source="local_daily_close"))
+
+    result = await engine.execute_order(
+        _make_order(OrderSide.BUY),
+        allow_stale_market_fill=True,
+    )
+
+    assert result.success is True
+    assert result.quantity == 100
+    assert result.price_source == "local_daily_close"
+    assert manager.update_balance.called is True
+
+
+@pytest.mark.asyncio
 async def test_execute_order_partially_fills_at_participation_cap(monkeypatch):
     monkeypatch.setenv("SIMULATION_MAX_PARTICIPATION_RATE", "0.10")
     engine, manager = _engine(_snapshot(price=10.0, recent_volume=5_000))

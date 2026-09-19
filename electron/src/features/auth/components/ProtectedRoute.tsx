@@ -4,12 +4,13 @@
 
 import React, { ReactNode } from 'react';
 import { useNavigate, useLocation, Navigate } from 'react-router-dom';
-import { Spin, Result, Button } from 'antd';
+import { Result, Button } from 'antd';
 import { LockOutlined, CloudServerOutlined } from '@ant-design/icons';
 import { useRequireAuth, useRequireRole } from '../hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '../../../store';
 import { logout, retryAuthInit } from '../store/authSlice';
 import { getDynamicServerUrl, initDynamicServerUrl } from '../../../config/services';
+import { PageLoading } from '../../../components/common/UnifiedLoading';
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -43,21 +44,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   // 加载中
   if (isLoading) {
-    return (
-      <div
-        style={{
-          height: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: '#f0f2f5',
-        }}
-      >
-        <Spin size="large" tip="验证身份中...">
-          <div style={{ height: 100 }} />
-        </Spin>
-      </div>
-    );
+    return <PageLoading message="验证身份中..." variant="app" fullViewport />;
   }
 
   // 服务器不可达：整页提示 + 重试，不进入缓存数据

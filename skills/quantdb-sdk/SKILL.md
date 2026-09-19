@@ -189,13 +189,13 @@ Qlib 二进制缓存（data/quantdb/.qlib_cache/cn_data）
 `symbol, time, close, total_capital, circulating_capital, total_mv, float_mv, net_profit_ttm, revenue_ttm, equity, annual_net_profit, pe_ttm, pe_static, pb, ps_ttm, dividend_rate`
 
 ### technical_indicators（技术指标，37 列）
-`close, ma5, ma10, ma20, ma60, ma_gap_5/10/20, rsi_6, rsi_14, kdj_k/d/j, macd_dif/dea/hist, vol_std_5/20/60, vol_atr_14, vol_to_ma5/20, volume_ma_3, amount_ma_5, volume_trend_3d, return_1d/3d/5d/10d/20d/60d, pct_change, beta_20`
+`close, ma5, ma10, ma20, ma60, ma_gap_5/10/20, rsi_6, rsi_14, kdj_k/d/j, macd_dif/dea/hist, vol_std_5/20/60, vol_atr_14, vol_to_ma5/20, volume_ma_3, amount_ma_5, volume_trend_3d, future_return_1d/3d/5d/10d/20d/60d, pct_change, beta_20`
 
 ### market_sentiment（市场情绪，19 列）
 `price_range, upper_shadow, lower_shadow, body_ratio, amount_per_trade, liquidity_score, intraday_vol, gap_up_down, buy_pressure, sell_pressure, momentum_1d/3d, am_pm_trend, volume_concentration`
 
 ### features_daily（日频特征合并表，**78 列**，2026-09 起）
-= technical_indicators + valuation 的 46 个数值列（`close/ma*/rsi*/kdj*/macd*/vol_*/return_*/pct_change/beta_20/total_capital/circulating_capital/total_mv/float_mv/net_profit_ttm/revenue_ttm/equity/annual_net_profit/pe_ttm/pe_static/pb/ps_ttm/dividend_rate`）**↑ 新增 30 列**（全部以**字符串**存储，用前需转数值）：
+= technical_indicators + valuation 的 46 个数值列（`close/ma*/rsi*/kdj*/macd*/vol_*/future_return_*/pct_change/beta_20/total_capital/circulating_capital/total_mv/float_mv/net_profit_ttm/revenue_ttm/equity/annual_net_profit/pe_ttm/pe_static/pb/ps_ttm/dividend_rate`）**↑ 新增 30 列**（全部以**字符串**存储，用前需转数值）：
 
 - **标记(0/1 字符串)**：`in_hs300, is_hsgt, is_margin, is_kcb_creatable, is_st, is_quit_risk, is_hk`
 - **分类**：`industry_code/industry_name`（128 细分行业）、`sector_code`、`region_area_code/region_area_name`（32 地区板块）、`main_business`（自由文本）、`list_date`（`YYYYMMDD` 字符串）

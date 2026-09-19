@@ -4,9 +4,10 @@
 
 import React, { useEffect, useState } from 'react';
 import { useUserConfig, useNotificationSettings, usePrivacySettings } from '../hooks';
-import { Form, Switch, message, Spin, Alert } from 'antd';
+import { Form, Switch, message, Alert } from 'antd';
 import { Bell, ShieldCheck, Mail, Smartphone, Zap, Globe, MessageCircle, BarChart3, Users, RefreshCw, Info } from 'lucide-react';
 import { systemService, type SystemVersion } from '../../../services/systemService';
+import { SectionLoading } from '../../../components/common/UnifiedLoading';
 
 interface SettingsPageProps {
   userId: string;
@@ -70,13 +71,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ userId }) => {
   };
 
   if (isLoading) {
-    return (
-      <div style={{ textAlign: 'center', padding: 50 }}>
-        <Spin size="large" tip="加载中...">
-          <div style={{ height: 100 }} />
-        </Spin>
-      </div>
-    );
+    return <SectionLoading tip="加载中..." minHeight={200} />;
   }
 
   if (error) {

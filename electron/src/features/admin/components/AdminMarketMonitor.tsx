@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Row, Col, Typography, Spin, Alert, Badge, Button, Divider, Tag } from 'antd';
+import { Card, Row, Col, Typography, Alert, Badge, Button, Divider, Tag } from 'antd';
 import { DatabaseOutlined, CloudServerOutlined, ReloadOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import { adminService } from '../services/adminService';
+import { SectionLoading } from '../../../components/common/UnifiedLoading';
 
 const { Title, Text } = Typography;
 
@@ -98,13 +99,7 @@ export const AdminMarketMonitor: React.FC = () => {
     };
 
     if (loading && !data) {
-        return (
-            <div className="flex items-center justify-center h-64">
-                <Spin size="large" tip="加载行情源监控数据...">
-                    <div style={{ height: 100, width: 100 }} />
-                </Spin>
-            </div>
-        );
+        return <SectionLoading tip="加载行情源监控数据..." minHeight={256} />;
     }
 
     if (error && !data) {

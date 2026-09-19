@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Row, Col, Statistic, Spin, message, Result, Button, Space, Typography, Tag, Progress, List, Badge, Divider, Modal } from 'antd';
+import { Card, Row, Col, Statistic, message, Result, Button, Space, Typography, Tag, Progress, List, Badge, Divider, Modal } from 'antd';
 import {
     UserOutlined, 
     LineChartOutlined, 
@@ -27,6 +27,7 @@ import { authService } from '../../auth/services/authService';
 import { useAppDispatch } from '../../../store';
 import { logout } from '../../auth/store/authSlice';
 import { DashboardMetrics, DashboardServiceInfo } from '../types';
+import { SectionLoading } from '../../../components/common/UnifiedLoading';
 
 const { Title, Text } = Typography;
 
@@ -71,32 +72,39 @@ export const AdminDashboard: React.FC = () => {
     };
 
     /**
-     * 「更新系统」：确认弹窗 → 触发宿主机 deploy/update.sh。
-     * 更新会重建并重启所有核心服务，当前会话可能短暂中断；故二次确认。
+     * 「更新系统」：确认弹窗 → 触发宿主机 deploy/update.sh --force。
+     * 强制覆盖本地未提交改动；重建并重启核心服务，会话可能短暂中断。
      */
     const handleUpdateSystem = () => {
         Modal.confirm({
-            title: '确认更新系统？',
+            title: '确认强制更新系统？',
             icon: <CloudSyncOutlined className="text-blue-500" />,
             content: (
                 <div className="text-sm space-y-2">
-                    <p className="m-0">将执行宿主机 <b>deploy/update.sh</b>：拉取最新代码、重建镜像并重启服务。</p>
-                    <p className="m-0 text-amber-600">⚠️ 重启过程中当前连接可能中断，请勿在交易时段执行，并确保已保存数据。</p>
+                    <p className="m-0">
+                        将执行宿主机 <b>deploy/update.sh --force</b>：拉取最新代码、重建镜像并重启服务。
+                    </p>
+                    <p className="m-0 text-amber-600">
+                        ⚠️ 强制升级会覆盖服务器上未提交的本地代码改动（git reset --hard），业务数据（data/models/db/.env）不受影响。
+                    </p>
+                    <p className="m-0 text-amber-600">
+                        ⚠️ 重启过程中当前连接可能中断，请勿在交易时段执行。
+                    </p>
                     <p className="m-0 text-slate-400 text-xs">更新完成后，页面会在一段时间后自动恢复。</p>
                 </div>
             ),
-            okText: '开始更新',
+            okText: '强制更新',
             cancelText: '取消',
             okButtonProps: { type: 'primary', danger: true, disabled: updating, loading: updating },
             onOk: async () => {
                 setUpdating(true);
                 try {
                     const res = await adminService.updateSystem();
-                    message.success(res?.started ? '已提交系统更新，后台执行中…' : '更新任务已提交');
+                    message.success(res?.started ? '已提交强制更新，后台执行中…' : '更新任务已提交');
                 } catch (err: any) {
                     const status = err?.response?.status;
                     if (status === 403) {
-                        message.warning('更新功能未开启：需在宿主机挂载 docker socket 并设置 QUANTMIND_ENABLE_WEB_UPDATE=true');
+                        message.warning('更新功能未开启：需在宿主机挂载 docker socket');
                     } else {
                         message.error(err?.response?.data?.detail || '系统更新失败');
                     }
@@ -167,10 +175,7 @@ export const AdminDashboard: React.FC = () => {
     }
 
     if (loading || !metrics) return (
-        <div className="w-full flex flex-col items-center justify-center py-32 space-y-4">
-            <Spin size="large" />
-            <Text className="text-slate-400 font-bold text-xs">正在加载指标数据...</Text>
-        </div>
+        <SectionLoading tip="正在加载指标数据..." minHeight={280} />
     );
 
     const serviceStats: DashboardServiceInfo[] = metrics.system?.services || [];
@@ -285,7 +290,7 @@ export const AdminDashboard: React.FC = () => {
                         danger
                         className="rounded-xl font-bold shadow-sm h-10 px-6"
                     >
-                        更新系统
+                        强制更新
                     </Button>
                     <Button
                         icon={<ThunderboltOutlined />}

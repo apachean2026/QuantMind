@@ -84,7 +84,12 @@ def create_views(con: duckdb.DuckDBPyConnection, data_dir: Path) -> duckdb.DuckD
             CREATE VIEW IF NOT EXISTS qdb_technical_indicators AS
             SELECT COALESCE(symbol, "Symbol") AS symbol,
                    dt, time, close, pct_change,
-                   return_1d, return_3d, return_5d, return_10d, return_20d, return_60d
+                   future_return_1d AS return_1d,
+                   future_return_3d AS return_3d,
+                   future_return_5d AS return_5d,
+                   future_return_10d AS return_10d,
+                   future_return_20d AS return_20d,
+                   future_return_60d AS return_60d
             FROM read_parquet('{_partition_glob(data_dir, DATASET_DIRS["technical_indicators"])}',
                               hive_partitioning=1, union_by_name=true)
         """)

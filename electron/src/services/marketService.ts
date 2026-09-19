@@ -505,118 +505,27 @@ class MarketService {
             timestamp: new Date().toISOString(),
           };
         }
-        console.warn('CoinGecko API 失败，使用模拟数据');
+        console.warn('CoinGecko API 无数据');
       }
 
-      // 非A股或API失败时，使用模拟数据
-      console.warn(`${market}市场使用模拟数据`);
+      // 无真实行情时返回空列表（不再注入 MOCK）
+      console.warn(`${market}市场暂无行情数据`);
       return {
         success: true,
-        data: this.generateMarketMockData(market),
-        timestamp: new Date().toISOString()
+        data: { indices: [], lastUpdate: '', count: 0 },
+        timestamp: new Date().toISOString(),
       };
 
     } catch (error) {
       console.error('获取市场概览数据异常:', error);
       return {
         success: true,
-        data: this.generateMarketMockData(market),
-        timestamp: new Date().toISOString()
+        data: { indices: [], lastUpdate: '', count: 0 },
+        timestamp: new Date().toISOString(),
       };
     }
-  }
+  }}
 
 
-
-  // 辅助方法：根据股票代码获取指数名称
-  private getIndexName(symbol: string): string {
-    const indexNames: Record<string, string> = {
-      '000001.SH': '上证指数',
-      '399001.SZ': '深成指数',
-      '399006.SZ': '创业板指',
-      '000300.SH': '沪深300',
-      '000905.SH': '中证500',
-      '000016.SH': '上证50',
-      '399005.SZ': '中小板指'
-    };
-
-    return indexNames[symbol] || symbol;
-  }
-
-  // 生成模拟数据（支持8个主要指数）
-  generateMockData(): MarketOverviewResponse {
-    const mockIndices: MarketIndex[] = Object.entries(SUPPORTED_INDICES).map(([symbol, name]) => {
-      const basePrice = this.getBasePriceForIndex(symbol);
-      const change = (Math.random() - 0.5) * (basePrice * 0.03); // 最大3%波动
-      const price = basePrice + change;
-      const prevClose = price - change;
-      const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
-
-      return {
-        symbol: symbol.toUpperCase(),
-        name,
-        price: parseFloat(price.toFixed(2)),
-        change: parseFloat(change.toFixed(2)),
-        changePercent: parseFloat(changePercent.toFixed(2)),
-        volume: Math.floor(Math.random() * 1000000000),
-        amount: Math.floor(Math.random() * 500000000000), // 成交额
-        marketCap: Math.floor(Math.random() * 50000000000000), // 市值
-        timestamp: new Date().toISOString()
-      };
-    });
-
-    return {
-      indices: mockIndices,
-      lastUpdate: new Date().toISOString(),
-      count: mockIndices.length
-    };
-  }
-
-  // 生成指定市场的模拟数据
-  generateMarketMockData(market: MarketId): MarketOverviewResponse {
-    const indices = MARKET_INDICES[market] || MARKET_INDICES.CN;
-    const volatility = market === 'CRYPTO' ? 0.06 : 0.03; // 加密货币波动更大
-
-    const mockIndices: MarketIndex[] = indices.map(({ symbol, name, basePrice }) => {
-      const change = (Math.random() - 0.5) * (basePrice * volatility);
-      const price = basePrice + change;
-      const prevClose = price - change;
-      const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
-
-      return {
-        symbol: symbol.toUpperCase(),
-        name,
-        price: parseFloat(price.toFixed(2)),
-        change: parseFloat(change.toFixed(2)),
-        changePercent: parseFloat(changePercent.toFixed(2)),
-        volume: Math.floor(Math.random() * 1000000000),
-        amount: Math.floor(Math.random() * 500000000000),
-        timestamp: new Date().toISOString()
-      };
-    });
-
-    return {
-      indices: mockIndices,
-      lastUpdate: new Date().toISOString(),
-      count: mockIndices.length
-    };
-  }
-
-  // 获取指数基准价格
-  private getBasePriceForIndex(symbol: string): number {
-    const basePrices: Record<string, number> = {
-      'sh000001': 3200, // 上证指数
-      'sz399001': 12000, // 深成指数
-      'sz399006': 2500, // 创业板指
-      'sh000300': 4200, // 沪深300
-      'sh000905': 6800, // 中证500
-      'sh000016': 2800, // 上证50
-      'sz399102': 1800, // 创业板综
-      'sz399005': 8500  // 中小板指
-    };
-
-    return basePrices[symbol] || 3000;
-  }
-}
 
 export const marketService = new MarketService();

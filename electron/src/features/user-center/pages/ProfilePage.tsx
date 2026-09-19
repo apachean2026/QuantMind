@@ -4,10 +4,11 @@
 
 import React, { useState } from 'react';
 import { useProfile } from '../hooks';
-import { Form, Input, Button, message, Spin, Alert, Upload, Avatar, Modal, Steps, Space } from 'antd';
+import { Form, Input, Button, message, Alert, Upload, Avatar, Modal, Steps, Space } from 'antd';
 import { UserOutlined, UploadOutlined } from '@ant-design/icons';
 import type { UserProfileUpdate } from '../types';
 import { useAuth } from '../../auth/hooks';
+import { SectionLoading } from '../../../components/common/UnifiedLoading';
 
 
 interface ProfilePageProps {
@@ -74,13 +75,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userId }) => {
   };
 
   if (isLoading) {
-    return (
-      <div style={{ textAlign: 'center', padding: 50 }}>
-        <Spin size="large" tip="加载中...">
-          <div style={{ height: 100 }} />
-        </Spin>
-      </div>
-    );
+    return <SectionLoading tip="加载中..." minHeight={200} />;
   }
 
   if (error) {

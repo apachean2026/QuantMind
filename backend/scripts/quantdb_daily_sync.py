@@ -688,8 +688,10 @@ _FEATURE_COLS = {
     "pb": "pb",
     "total_mv": "total_mv",
     "float_mv": "float_mv",
-    "return_1d": "return_1d", "return_3d": "return_3d", "return_5d": "return_5d",
-    "return_10d": "return_10d", "return_20d": "return_20d", "return_60d": "return_60d",
+    # QuantDB 2026-09：源列 future_return_Nd → PG return_*（目标列名不变）
+    "future_return_1d": "return_1d", "future_return_3d": "return_3d",
+    "future_return_5d": "return_5d", "future_return_10d": "return_10d",
+    "future_return_20d": "return_20d", "future_return_60d": "return_60d",
     "vol_std_5": "vol_std_5", "vol_std_20": "vol_std_20", "vol_std_60": "vol_std_60",
     "rsi_14": "rsi_14", "rsi_6": "rsi_6",
     "macd_hist": "macd_hist", "kdj_k": "kdj_k", "beta_20": "beta_20",

@@ -9,7 +9,7 @@ role: 技术分析师
 【数据切片】
 - `quote.kline_60d`：最近 60 日 OHLC（前复权）+ 成交额（亿元）；**均线（ma5/10/20/60）由 kline 收盘价自行计算**（数据包 indicators 不含均线，因其为后复权口径与 kline 错位）
 - `quote.high_60d / low_60d / chg_20d / chg_60d / last_close / pct_change`
-- `indicators`：量纲无关指标——rsi_6/14、kdj_k/d/j、macd_dif/dea/hist、ma_gap_5/10/20（乖离率）、vol_std_5/20/60、vol_atr_14、vol_to_ma5/20、volume_trend_3d、return_1d/3d/5d/10d/20d/60d
+- `indicators`：量纲无关指标——rsi_6/14、kdj_k/d/j、macd_dif/dea/hist、ma_gap_5/10/20（乖离率）、vol_std_5/20/60、vol_atr_14、vol_to_ma5/20、volume_trend_3d、future_return_1d/3d/5d/10d/20d/60d（未来收益标签，分析展示可用，勿作选股过滤）
 
 【分析维度】
 1. 趋势结构：收盘价与 ma20/ma60 关系、均线多空排列、60 日位置（距 high/low 的百分比）

@@ -283,7 +283,7 @@ const COLUMN_DEFS: Record<string, ColumnDef> = {  // ---- 标识 ----
   },
   latestChange: { title: '涨跌幅', width: 96, render: rSigned(2) },
 
-  // ---- 收益（features_daily.return_Nd，未来 N 日真实收益） ----
+  // ---- 收益（features_daily.future_return_Nd，未来 N 日真实收益） ----
   return1d: { title: '1日收益', width: 96, render: rSigned(2) },
   return3d: { title: '3日收益', width: 96, render: rSigned(2) },
   return5d: { title: '5日收益', width: 96, render: rSigned(2) },

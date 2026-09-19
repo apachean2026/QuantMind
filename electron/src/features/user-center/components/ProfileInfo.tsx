@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Form, Input, Button, message, Spin, Upload, Avatar, Alert } from 'antd';
+import { Form, Input, Button, message, Upload, Avatar, Alert } from 'antd';
 import { UserOutlined, UploadOutlined } from '@ant-design/icons';
 import { useProfile } from '../hooks';
 import type { UserProfileUpdate } from '../types';
 import { useAuth } from '../../auth/hooks';
 import defaultLogo from '../../../assets/logo.png';
+import { SectionLoading } from '../../../components/common/UnifiedLoading';
 
 interface ProfileInfoProps {
     userId: string;
@@ -66,11 +67,7 @@ export const ProfileInfo: React.FC<ProfileInfoProps> = ({ userId }) => {
         return (
             <>
                 <Form form={form} component={false} />
-                <div style={{ textAlign: 'center', padding: 50 }}>
-                    <Spin size="large" tip="加载中...">
-                        <div style={{ padding: 20 }} />
-                    </Spin>
-                </div>
+                <SectionLoading tip="加载中..." minHeight={200} />
             </>
         );
     }

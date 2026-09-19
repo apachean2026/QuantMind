@@ -67,7 +67,7 @@ CT="Content-Type: application/json"
 | `rsi_6` / `rsi_14` | RSI | — |
 | `kdj_k` / `kdj_d` / `kdj_j` | KDJ | — |
 | `macd_dif` / `macd_dea` / `macd_hist` | MACD | — |
-| `return_1d` / `return_3d` / `return_5d` / `return_20d` / `return_60d` | 收益率 | % |
+| `future_return_1d` / `future_return_3d` / `future_return_5d` / `future_return_20d` / `future_return_60d` | 未来 N 日收益（标签，勿作过滤） | % |
 | `vol_std_5` / `vol_std_20` / `vol_std_60` | 波动率 | % |
 | `vol_atr_14` | 14日ATR | — |
 | `beta_20` | 20日Beta | — |
@@ -128,11 +128,12 @@ curl -s -X POST "$BASE/api/v1/strategy/query-pool" -H "$AUTH" -H "$CT" \
   -d '{"dsl":"SELECT symbol WHERE pe < 15 AND market_cap > 500 AND roe > 10","market":"CN"}'
 ```
 
-### 5.2 动量强势（20日收益>10% 且 RSI>60）
+### 5.2 动量强势（过去 20 日收益>10% 且 RSI>60）
 ```bash
 curl -s -X POST "$BASE/api/v1/strategy/query-pool" -H "$AUTH" -H "$CT" \
-  -d '{"dsl":"SELECT symbol WHERE return_20d > 10 AND rsi_14 > 60 AND turnover_rate < 20","market":"CN"}'
+  -d '{"dsl":"SELECT symbol WHERE mom_ret_20d > 0.10 AND rsi_14 > 60 AND turnover_rate < 20","market":"CN"}'
 ```
+> 勿用 `future_return_*`（旧名 `return_*`）做选股过滤——那是未来收益标签，会造成泄漏。
 
 ### 5.3 高波动小盘（波动大 + 市值小）
 ```bash

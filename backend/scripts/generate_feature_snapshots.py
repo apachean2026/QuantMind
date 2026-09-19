@@ -44,9 +44,11 @@ def _normalize_symbol(series: "pd.Series") -> "pd.Series":
     return s.str.zfill(6)
 
 
-# features_daily.return_Nd 是【未来 N 日收益】(return_1d[T] == pct_change[T+1])，
-# 直接当特征会造成标签泄漏，故一律丢弃，改用 l1_factors 的 mom_ret_Nd（过去收益）。
+# features_daily 未来收益列（QuantDB 2026-09：return_Nd → future_return_Nd），
+# 直接当特征会造成标签泄漏；旧名一并丢弃。
 _LEAKY_RETURN_COLS: tuple[str, ...] = (
+    "future_return_1d", "future_return_3d", "future_return_5d",
+    "future_return_10d", "future_return_20d", "future_return_60d",
     "return_1d", "return_3d", "return_5d", "return_10d", "return_20d", "return_60d",
 )
 

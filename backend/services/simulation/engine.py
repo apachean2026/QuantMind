@@ -120,6 +120,7 @@ class SimulationEngine:
         params_override: dict[str, Any] | None = None,
         pool_id: str | None = None,
         signal_run_id: str | None = None,
+        allow_stale_quotes: bool | None = None,
     ) -> ExecutionReport:
         """
         执行一次模拟盘调仓周期。
@@ -131,6 +132,8 @@ class SimulationEngine:
             run_id: 本轮执行 ID（订单备注/任务追踪），不是推理批次
             signal_run_id: 指定推理信号批次；None 则取最新截面
             params_override: 前端传递的策略参数覆盖
+            allow_stale_quotes: 允许用本地日线兜底（bootstrap 盘后建仓）；
+                None 时若 run_id 以 bootstrap_ 开头则自动开启
 
         Returns:
             执行报告
@@ -139,6 +142,11 @@ class SimulationEngine:
         uid = str(user_id or "").strip()
         now = datetime.now()
         exec_run_id = run_id or f"sim_{now.strftime('%Y%m%d%H%M%S')}"
+        stale_ok = (
+            bool(allow_stale_quotes)
+            if allow_stale_quotes is not None
+            else str(exec_run_id).startswith("bootstrap_")
+        )
 
         report = ExecutionReport(
             tenant_id=tenant,
@@ -263,6 +271,18 @@ class SimulationEngine:
                 ]
                 symbols = list(dict.fromkeys([s.symbol for s in signals] + position_symbols))
                 quotes, live_ticks = await self._load_live_quotes(symbols)
+                if not live_ticks and stale_ok:
+                    # Bootstrap / 盘后：实时序列为空时用本地日线收盘价建仓，避免启动即 failed filled=0
+                    bars = await self._load_bars(symbols, market=market)
+                    quotes = self._quotes_from_bars(bars)
+                    live_ticks = self._ticks_from_bars(bars)
+                    logger.warning(
+                        "SimulationEngine: realtime empty, stale local bars used "
+                        "tenant=%s user=%s bars=%d (bootstrap/stale allowed)",
+                        tenant,
+                        uid,
+                        len(bars),
+                    )
                 if not live_ticks:
                     report.error = "realtime_quote_unavailable"
                     logger.error(
@@ -307,6 +327,7 @@ class SimulationEngine:
                         market=market,
                         run_id=exec_run_id,
                         live_tick=self._tick_for_symbol(live_ticks, order.symbol),
+                        allow_stale_fill=stale_ok,
                     )
                     report.orders.append(self._order_to_dict(order, result))
                     if result.success:
@@ -490,6 +511,29 @@ class SimulationEngine:
         return quotes
 
     @staticmethod
+    def _ticks_from_bars(bars: dict[str, Any]) -> dict[str, dict[str, Any]]:
+        """将本地日线 bar 转成 execute_order 可用的 tick 字典（bootstrap 兜底）。"""
+        ticks: dict[str, dict[str, Any]] = {}
+        for sym, bar in bars.items():
+            price = float(getattr(bar, "close", 0) or 0)
+            if price <= 0:
+                continue
+            tick = {
+                "price": price,
+                "price_source": "local_daily_close",
+                "timestamp": None,
+                "age_s": None,
+            }
+            for key in {
+                sym,
+                StockCodeUtil.to_prefix(sym),
+                StockCodeUtil.to_suffix(sym),
+            }:
+                if key:
+                    ticks[key] = tick
+        return ticks
+
+    @staticmethod
     def _bar_for_symbol(bars: dict[str, Any], symbol: str) -> Any:
         if symbol in bars:
             return bars[symbol]
@@ -561,6 +605,7 @@ class SimulationEngine:
         market: Any = None,
         run_id: str = "",
         live_tick: dict[str, Any] | None = None,
+        allow_stale_fill: bool = False,
     ) -> ExecutionResult:
         """执行单个订单（虚拟撮合；成功后按开关镜像一笔真单到 QMT）"""
         from backend.services.simulation.models.order import (
@@ -616,14 +661,15 @@ class SimulationEngine:
         )
         await db.flush()
 
-        session_decision = await exec_engine.assess_execution_window(sim_order)
-        if not session_decision.can_execute:
-            result = ExecutionResult(
-                success=False,
-                message=str(session_decision.message or "outside trading session"),
-            )
-            await exec_engine.mark_rejected(sim_order, result.message)
-            return result
+        if not allow_stale_fill:
+            session_decision = await exec_engine.assess_execution_window(sim_order)
+            if not session_decision.can_execute:
+                result = ExecutionResult(
+                    success=False,
+                    message=str(session_decision.message or "outside trading session"),
+                )
+                await exec_engine.mark_rejected(sim_order, result.message)
+                return result
 
         snapshot = (
             exec_engine.market_snapshot_from_tick(order.symbol, live_tick)
@@ -634,6 +680,7 @@ class SimulationEngine:
             sim_order,
             market=getattr(market, "value", None),
             snapshot=snapshot,
+            allow_stale_market_fill=allow_stale_fill,
         )
         if result.success:
             await exec_engine.apply_filled(sim_order, result)

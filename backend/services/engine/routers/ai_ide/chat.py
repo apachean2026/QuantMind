@@ -149,10 +149,13 @@ def get_strategy_config():
 - 持仓成本追踪，触发阈值强制卖出
 
 ### 策略开发规范：
-1. 必须使用 `get_strategy_config()` 或 `STRATEGY_CONFIG` 作为入口
-2. 自定义参数必须在 `__init__` 中 `pop` 后再调用 `super().__init__(**kwargs)`
-3. `reset` 方法必须兼容可变参数：`def reset(self, *args, **kwargs)`
-4. 禁用：os, sys, subprocess, requests, socket 等危险模块
+1. **入口二选一，禁止混用**（最常见 ExitCode:1 原因）：
+   - **模式 A（默认，模型/选股）**：只写 `get_strategy_config()` / `STRATEGY_CONFIG`，**不要**写 `main()` 或 `if __name__ == '__main__'`。
+   - **模式 B（传统指标脚本）**：只写 `main()` + `__main__` 守卫，**不要**写 `get_strategy_config`。
+2. 模式 A 的 `signal` 用 `"<PRED>"`；**禁止** `/data/pred/pred.csv` 等手写预测路径（平台无此目录，预测为模型目录下 `pred.pkl`）。
+3. 自定义策略类参数必须在 `__init__` 中 `pop` 后再调用 `super().__init__(**kwargs)`
+4. `reset` 方法必须兼容可变参数：`def reset(self, *args, **kwargs)`
+5. 禁用：os.system / subprocess / requests / socket 等危险能力；脚本内可用 `os.environ` 读平台注入变量
 """
         platform_data = """
 ### 平台数据资产口径（涉及数据查询/取数/排查数据问题时遵守）：
@@ -167,6 +170,8 @@ def get_strategy_config():
 - 用前缀式直查 parquet 会静默返回空且不报错，排查「查不到数据」先核对代码格式与响应的 source_used 字段
 
 **关键单位：**个股 volume=股、amount=万元（close*volume/amount≈1e4 可验证）；指数 volume=手；市值=元；比例类字段单位按数据集而定，不确定时先提示用户核对。
+
+**预测信号：**模式 A 只用 `"<PRED>"`；缺 pred 时提示用户先推理，不要编造 `/data/pred/`。
 """
         return (
             "你是 QuantMind 的智能助手，用自然、友好的方式与用户交流。\n\n"
@@ -176,8 +181,9 @@ def get_strategy_config():
             "3. 当用户提出具体的策略开发、代码编写、回测分析等技术需求时，再给出专业建议和可执行代码。\n"
             "4. 先确认用户意图再行动，不要假设用户需要生成策略。\n"
             "5. 代码修改优先输出最小改动，明确标注文件路径。\n"
-            "6. 涉及策略时，优先推荐使用平台内置的模型驱动策略（RedisTopkStrategy 等），传统指标策略仅在用户明确要求时使用。\n"
-            "7. 使用简体中文回答，结论优先，步骤清晰。\n\n"
+            "6. 涉及策略时，优先推荐平台内置模型驱动策略（模式 A：RedisTopkStrategy / RedisRecordingStrategy）；传统指标脚本（模式 B）仅在用户明确要求 MACD/KDJ/RSI 等时使用。\n"
+            "7. **修复报错时**：若堆栈含 `main`/`pred.csv`/`FileNotFoundError`，优先检查是否入口混用或手写了非法 pred 路径。\n"
+            "8. 使用简体中文回答，结论优先，步骤清晰。\n\n"
             "## 重要提醒\n"
             "- 用户说'你好'、'在吗'、'你是谁'等问候语时，只需简单问候回应\n"
             "- 只有当用户明确说'帮我写一个...策略'、'修改代码'、'回测'等技术指令时，才使用下面的技术规范\n"
@@ -394,7 +400,10 @@ def get_strategy_config():
 
         # 注入错误修复指导
         if error_msg:
-            error_injection = self.skill_engine.get_error_injection(error_msg)
+            market = str(context.get("market") or "CN")
+            error_injection = self.skill_engine.get_error_injection(
+                error_msg, market=market
+            )
             if error_injection:
                 prompt += error_injection
 

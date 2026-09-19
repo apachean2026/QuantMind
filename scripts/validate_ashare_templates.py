@@ -39,14 +39,20 @@ _FEATURES_DAILY_COLUMNS = {
     "close", "ma5", "ma10", "ma20", "ma60", "ma_gap_5", "ma_gap_10", "ma_gap_20",
     "rsi_6", "rsi_14", "kdj_k", "kdj_d", "kdj_j", "macd_dif", "macd_dea", "macd_hist",
     "vol_std_5", "vol_std_20", "vol_std_60", "vol_atr_14", "vol_to_ma5", "vol_to_ma20",
-    "volume_ma_3", "amount_ma_5", "volume_trend_3d", "return_1d", "return_3d",
-    "return_5d", "return_10d", "return_20d", "return_60d", "pct_change", "beta_20",
+    "volume_ma_3", "amount_ma_5", "volume_trend_3d",
+    "future_return_1d", "future_return_3d", "future_return_5d",
+    "future_return_10d", "future_return_20d", "future_return_60d",
+    "pct_change", "beta_20",
     "Symbol_val", "close_val", "total_capital", "circulating_capital", "total_mv",
     "float_mv", "net_profit_ttm", "revenue_ttm", "equity", "annual_net_profit",
     "pe_ttm", "pe_static", "pb", "ps_ttm", "dividend_rate", "time", "symbol",
 }
-# 未来收益列：禁止用作过滤（标签泄漏）
-_LEAKY_COLUMNS = {"return_1d", "return_3d", "return_5d", "return_10d", "return_20d", "return_60d"}
+# 未来收益列：禁止用作过滤（标签泄漏）；含改名前旧名
+_LEAKY_COLUMNS = {
+    "future_return_1d", "future_return_3d", "future_return_5d",
+    "future_return_10d", "future_return_20d", "future_return_60d",
+    "return_1d", "return_3d", "return_5d", "return_10d", "return_20d", "return_60d",
+}
 
 
 def _live_features_columns() -> set[str]:

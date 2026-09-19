@@ -151,7 +151,7 @@ export const AdminQlibDataPanel: React.FC = () => {
           </div>
           <div>
             <div className="flex items-center gap-3">
-              <Title level={4} className="!m-0 !font-black !text-slate-800 tracking-tight">Qlib 数据管理</Title>
+              <Title level={4} className="!m-0 !font-black !text-slate-800 tracking-tight">Qlib 引擎</Title>
               {ready !== undefined && <Tag color={ready ? 'green' : 'red'} className="!m-0 rounded-full font-black">{ready ? 'Qlib 就绪' : '未就绪'}</Tag>}
               <Tag className="m-0 rounded-full font-black">A 股 CN</Tag>
             </div>

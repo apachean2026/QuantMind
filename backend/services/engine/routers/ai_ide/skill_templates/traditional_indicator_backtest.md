@@ -1,19 +1,25 @@
-用途：传统技术指标（MACD/KDJ/RSI/BOLL）脚本，必须”直接运行并输出收益指标”。
+用途：传统技术指标（MACD/KDJ/RSI/BOLL）脚本 — **仅模式 B（可执行脚本）**，必须直接运行并输出收益指标。
 
 强制约束：
 1) 数据读取必须使用 qlib：
    - qlib.init(provider_uri=”{{PROVIDER_URI}}”, region=”{{MARKET_REGION}}”)
    - D.features(...)
 2) 禁止 CSV 占位路径和 AAPL 默认代码。
-3) 必须包含 main() 入口。
-4) 必须输出：累计收益、年化收益、最大回撤、夏普比率、交易次数。
-5) 回测计算必须使用 position=signal.shift(1) 防未来函数。
-6) 默认参数：
+3) 必须包含 `main()`，且文件末尾：
+   ```python
+   if __name__ == "__main__":
+       main()
+   ```
+4) **禁止** `get_strategy_config` / `STRATEGY_CONFIG` / Redis*Strategy（那是模式 A）。
+5) **禁止** 读取 `/data/pred/pred.csv` 或任何 pred 文件；信号由指标计算得出。
+6) 必须输出：累计收益、年化收益、最大回撤、夏普比率、交易次数。
+7) 回测计算必须使用 position=signal.shift(1) 防未来函数。
+8) 默认参数：
    - initial_capital=1000000
    - commission=0.0003
    - slippage=0.0005
-7) 默认股票池 top100（可配置），禁止无边界遍历全市场。
-8) 优先一次性向量化计算，避免在 on_bar 内重复全窗口指标计算。
+9) 默认股票池 top100（可配置），禁止无边界遍历全市场。
+10) 优先一次性向量化计算，避免在 on_bar 内重复全窗口指标计算。
 
 建议骨架：
 - init_qlib()
@@ -38,6 +44,7 @@ from qlib.constant import REG_{{MARKET_REGION_UPPER}}
 - from qlib.backtest import executor, analyzer
 - from qlib.workflow import R
 - 任何未使用导入
+- open("/data/pred/...") / pd.read_csv(...pred...)
 
 输出指标格式（必须包含）：
 ```python

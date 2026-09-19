@@ -16,7 +16,7 @@ main 容器已挂载 /var/run/docker.sock。因此这里借 **docker socket HTTP
     -v /var/run/docker.sock:/var/run/docker.sock
     -v <host-docker>:/usr/bin/docker:ro          -> 复用宿主 docker CLI
     -v <host-compose-plugin>:/usr/libexec/docker/cli-plugins:ro
-    --entrypoint bash <app-image> -lc "bash <project>/deploy/update.sh > <project>/data/update.log 2>&1"
+    --entrypoint bash <app-image> -lc "bash <project>/deploy/update.sh --force > <project>/data/update.log 2>&1"
 
 该容器不属于 compose 管理，deploy/update.sh 里 `docker compose up --force-recreate`
 重建 main 服务时不会波及它，因此它能把整个更新（git pull → build → 重启 → 健康检查）
@@ -117,7 +117,8 @@ def _remove_stale(client: httpx.Client) -> None:
 
 
 def _build_container_spec(image: str) -> dict:
-    cmd = f"bash {shlex.quote(_SCRIPT_PATH)} > {shlex.quote(_LOG_PATH)} 2>&1"
+    # Web 一键更新默认 --force：本地未提交改动一律 reset --hard 覆盖，避免脏树阻断升级
+    cmd = f"bash {shlex.quote(_SCRIPT_PATH)} --force > {shlex.quote(_LOG_PATH)} 2>&1"
     binds = [
         f"{_PROJECT_DIR}:{_PROJECT_DIR}:rw",
         f"{_SOCKET}:/var/run/docker.sock",
@@ -193,9 +194,9 @@ async def trigger_update(
                 event_type="system_update",
                 level="info",
                 source="quantmind-api",
-                title="系统更新已触发（Web）",
-                message=f"updater 镜像 {image} 已启动，容器 {cid[:12]}",
-                meta={"container_id": cid, "image": image},
+                title="系统强制更新已触发（Web）",
+                message=f"updater 镜像 {image} 已启动（--force），容器 {cid[:12]}",
+                meta={"container_id": cid, "image": image, "force": True},
             ))
         except Exception:
             pass

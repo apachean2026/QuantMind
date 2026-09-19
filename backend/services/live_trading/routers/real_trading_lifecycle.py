@@ -404,15 +404,6 @@ async def start_trading(
                 }
             ),
         )
-        _schedule_user_notification(
-            user_id=resolved_user_id,
-            tenant_id=resolved_tenant_id,
-            title="模拟策略已启动",
-            content=f"策略 {strategy_name} 启动成功",
-            type="strategy",
-            level="success",
-            action_url="/trading",
-        )
 
         # 5. 首次启动 Bootstrap：不限时、按最新价、用真实推理立即跑一遍
         # 目的：让用户启动后立刻看到策略在真实运行（等价于手动任务），后续再按
@@ -485,6 +476,51 @@ async def start_trading(
                             resolved_tenant_id, resolved_user_id, strategy_id or strategy_name, exc, exc_info=True,
                         )
 
+        # 通知放在 bootstrap 之后：失败时用 warning，避免「已启动成功」但 filled=0 的假象
+        # lock_exists 表示 24h 内已建仓，不算失败
+        _benign_skip = {"bootstrap_lock_exists"}
+        bootstrap_failed = bool(
+            (
+                bootstrap_skipped_reason
+                and bootstrap_skipped_reason not in _benign_skip
+            )
+            or (
+                isinstance(bootstrap_result, dict)
+                and bootstrap_result.get("status") == "failed"
+            )
+        )
+        if bootstrap_failed:
+            detail = bootstrap_skipped_reason or (
+                (bootstrap_result or {}).get("error") if isinstance(bootstrap_result, dict) else None
+            ) or "bootstrap 未成交"
+            _schedule_user_notification(
+                user_id=resolved_user_id,
+                tenant_id=resolved_tenant_id,
+                title="模拟策略已启动（建仓未完成）",
+                content=f"策略 {strategy_name} 已启动，但首次建仓未完成：{detail}",
+                type="strategy",
+                level="warning",
+                action_url="/trading",
+            )
+        else:
+            filled = (
+                (bootstrap_result or {}).get("filled_count")
+                if isinstance(bootstrap_result, dict)
+                else None
+            )
+            content = f"策略 {strategy_name} 启动成功"
+            if filled is not None and mode == "SIMULATION":
+                content = f"策略 {strategy_name} 启动成功，首次建仓成交 {filled} 笔"
+            _schedule_user_notification(
+                user_id=resolved_user_id,
+                tenant_id=resolved_tenant_id,
+                title="模拟策略已启动",
+                content=content,
+                type="strategy",
+                level="success",
+                action_url="/trading",
+            )
+
         # 启动成功后立即失效该用户的 status 缓存，避免读到上一轮旧值
         try:
             from backend.services.trade_shared.utils.redis_cache import (
@@ -501,7 +537,11 @@ async def start_trading(
 
         return {
             "status": "success",
-            "message": f"策略 {strategy_name} 已成功启动",
+            "message": (
+                f"策略 {strategy_name} 已成功启动"
+                if not bootstrap_failed
+                else f"策略 {strategy_name} 已启动，但首次建仓未完成"
+            ),
             "effective_execution_config": exec_config,
             "effective_live_trade_config": live_config,
             "code_overrides": code_overrides,
@@ -511,6 +551,7 @@ async def start_trading(
                 "attempted": mode == "SIMULATION" and trading_permission != "blocked",
                 "task_id": (bootstrap_result or {}).get("task_id") if isinstance(bootstrap_result, dict) else None,
                 "status": (bootstrap_result or {}).get("status") if isinstance(bootstrap_result, dict) else None,
+                "filled_count": (bootstrap_result or {}).get("filled_count") if isinstance(bootstrap_result, dict) else None,
                 "skipped_reason": bootstrap_skipped_reason,
             } if mode == "SIMULATION" else None,
         }

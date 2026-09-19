@@ -832,8 +832,28 @@ def main():
     source = pathlib.Path(STRATEGY_PATH).read_text(encoding="utf-8")
     info = _analyze(source)
 
+    has_module = bool(
+        info.get("has_strategy_config")
+        or info.get("has_get_strategy_config")
+        or info.get("has_get_strategy_instance")
+    )
+    has_script = bool(info.get("has_main_guard") or info.get("has_top_level_exec"))
+    has_main_fn = "main" in (info.get("function_names") or []) or "run" in (
+        info.get("function_names") or []
+    )
+
+    # 混用时优先模块回测：LLM 常同时写出 get_strategy_config + main，
+    # 旧逻辑会先 runpy 脚本，从而踩 /data/pred/pred.csv 等错误路径。
+    if has_module and (has_script or has_main_fn):
+        print(
+            "[SYSTEM] 同时检测到配置入口与 main/脚本入口，"
+            "优先使用回测中心兼容模式（忽略 main）"
+        )
+        module = _load_module(STRATEGY_PATH)
+        return _run_module_backtest(module)
+
     # 模式 1: 可执行脚本（有 __main__ 或顶层执行）
-    if info["has_main_guard"] or info["has_top_level_exec"]:
+    if has_script:
         print("[SYSTEM] 检测到可执行脚本入口，开始运行 strategy.py")
         runpy.run_path(STRATEGY_PATH, run_name="__main__")
         return 0
@@ -844,7 +864,7 @@ def main():
         return 0
 
     # 模式 3: 模块型策略（回测中心兼容模式）
-    if info.get("has_strategy_config") or info.get("has_get_strategy_config") or info.get("has_get_strategy_instance"):
+    if has_module:
         print("[SYSTEM] 检测到模块型策略，启动回测中心兼容模式")
         return _run_module_backtest(module)
 

@@ -125,7 +125,7 @@ def load_data(
             + list(features)
         )
     )
-    # features_daily.return_Nd 是未来 N 日收益（return_1d[T] == pct_change[T+1]），
+    # features_daily.future_return_Nd 是未来 N 日收益（旧名 return_Nd），
     # 曾被别名映射为 mom_ret_Nd 当特征使用，导致标签泄漏与虚高 RankIC。
     # 现只读取 l1_factors 提供的 mom_ret_Nd（过去收益），不做任何回退映射。
     _read_columns = list(required_columns)
@@ -421,13 +421,13 @@ def load_data(
                 "（请检查池成分与训练时间窗是否匹配）"
             )
 
-    # ── 丢弃 features_daily.return_Nd：这些列是【未来 N 日收益】 ──
-    # return_1d[T] == pct_change[T+1]，当特征使用会直接泄漏标签。
-    # 历史上曾把它们重命名为 mom_ret_Nd，导致 RankIC 虚高到 0.7+。
-    # 仅旧快照 parquet（A 股 features_daily 血统）携带该列；直读因子源
-    # （l1/l2/ccass/south）的 return_Nd 为过去收益（pct_change 口径），
-    # 不适用此剔除（HK l1_factors 的 return_1d 即过去 1 日收益）。
+    # ── 丢弃 features_daily 未来收益列（标签泄漏）──
+    # QuantDB 2026-09：return_Nd → future_return_Nd；旧名一并剔除。
+    # 仅旧快照 / features_daily 血统携带；直读 l1/l2 等因子源的 return_Nd
+    # 为过去收益，不适用此剔除（见 direct_factor_source）。
     _LEAKY_RETURN_COLS = (
+        "future_return_1d", "future_return_3d", "future_return_5d",
+        "future_return_10d", "future_return_20d", "future_return_60d",
         "return_1d", "return_3d", "return_5d", "return_10d", "return_20d", "return_60d",
     )
     if not direct_factor_source:

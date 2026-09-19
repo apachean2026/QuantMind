@@ -4,6 +4,7 @@ import { selectCurrentTab } from '../../store/slices/aiStrategySlice';
 import { ModuleGrid } from './ModuleGrid';
 import { NewBacktestCenterPage } from '../../pages/NewBacktestCenterPage';
 import { MarketWeatherBackground } from './MarketWeatherBackground';
+import { RouteFallback } from '../common/UnifiedLoading';
 
 const UserCenterPage = React.lazy(() => import('../../features/user-center/pages/UserCenterPage'));
 const RealTradingPage = React.lazy(() => import('../../pages/trading/RealTradingPage'));
@@ -17,16 +18,11 @@ interface DashboardLayoutProps {
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ modules, onLayoutChange }) => {
   const activeTab = useSelector(selectCurrentTab);
 
-  console.log('DashboardLayout: 当前activeTab', activeTab);
-  console.log('DashboardLayout: 渲染内容区域，activeTab =', activeTab);
-
   const renderContent = () => {
-    console.log('DashboardLayout: renderContent被调用，activeTab=', activeTab);
     switch (activeTab as any) {
       case 'dashboard':
         return <ModuleGrid modules={modules} onLayoutChange={onLayoutChange} />;
       case 'backtest':
-        console.log('DashboardLayout: 渲染回测中心组件');
         return (
           <div className="w-full h-full">
             <NewBacktestCenterPage />
@@ -34,7 +30,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ modules, onLay
         );
       case 'agent':
         return (
-          <React.Suspense fallback={<div className="w-full h-full flex items-center justify-center" />}>
+          <React.Suspense fallback={<RouteFallback message="加载 QuantBot..." />}>
             <div className="w-full h-full flex items-center justify-center">
               <QuantBotPage />
             </div>
@@ -42,7 +38,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ modules, onLay
         );
       case 'trading':
         return (
-          <React.Suspense fallback={<div className="w-full h-full" />}>
+          <React.Suspense fallback={<RouteFallback message="加载交易..." />}>
             <div className="w-full h-full">
               <RealTradingPage />
             </div>
@@ -50,7 +46,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ modules, onLay
         );
       case 'profile':
         return (
-          <React.Suspense fallback={<div className="w-full h-full flex items-center justify-center" />}>
+          <React.Suspense fallback={<RouteFallback message="加载个人中心..." />}>
             <div className="w-full h-full flex items-center justify-center">
               <UserCenterPage />
             </div>
@@ -64,16 +60,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ modules, onLay
   const showWeatherBackground = activeTab === 'dashboard';
 
   return (
-    <div
-      className="dashboard-layout w-full h-full p-0 relative z-0"
-    >
-      {/* 动态大盘天气背景层 - 仅在仪表盘页面显示 */}
+    <div className="dashboard-layout w-full h-full p-0 relative z-0">
       {showWeatherBackground && <MarketWeatherBackground />}
-      
-      {/* 内容层 - z-10 */}
-      <div className="relative z-10 h-full w-full">
-        {renderContent()}
-      </div>
+      <div className="relative z-10 h-full w-full">{renderContent()}</div>
     </div>
   );
 };

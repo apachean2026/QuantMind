@@ -34,10 +34,15 @@ const STATUS_COLOR: Record<string, string> = {
     skipped: 'default',
 };
 
+/** 调度记录表：固定列宽，表头与数据行共用同一模板，避免列位漂移 */
+const DISPATCH_GRID =
+    'grid w-full items-center gap-x-3 px-4 ' +
+    'grid-cols-[72px_168px_minmax(140px,1.2fr)_88px_104px_minmax(160px,1.6fr)_24px]';
+
 const emptyMonitor = (): AdminInferenceMonitorData => ({
     schedule: {
         enabled: false,
-        cron: '工作日 00:00',
+        cron: '工作日 08:00',
         timezone: 'Asia/Shanghai',
         next_run_at: null,
         task: 'engine.tasks.auto_inference_if_needed',
@@ -124,7 +129,7 @@ export const AdminInferenceMonitor: React.FC = () => {
                         推理监控
                     </Title>
                     <Text type="secondary">
-                        自动推理调度（Celery Beat 工作日 00:00）的成功、失败与跳过记录。
+                        自动推理调度（Celery Beat 工作日 08:00）的成功、失败与跳过记录。
                     </Text>
                 </div>
                 <Space wrap>
@@ -202,7 +207,7 @@ export const AdminInferenceMonitor: React.FC = () => {
                 title={`调度任务记录（${items.length}）`}
             >
                 <div className="flex min-h-0 flex-1 flex-col">
-                    <div className="min-h-0 flex-1 overflow-y-auto">
+                    <div className="min-h-0 flex-1 overflow-auto">
                         <Spin spinning={loading}>
                             {items.length === 0 ? (
                                 <Empty
@@ -211,33 +216,68 @@ export const AdminInferenceMonitor: React.FC = () => {
                                     description="暂无自动推理调度记录"
                                 />
                             ) : (
-                                <div className="divide-y divide-slate-100">
-                                    {paged.map((item) => (
-                                        <button
-                                            key={item.id}
-                                            type="button"
-                                            className="flex w-full items-center justify-center gap-3 overflow-hidden px-4 py-2.5 text-center hover:bg-slate-50"
-                                            onClick={() => setDetail(item)}
-                                        >
-                                            <StatusTag status={item.status} />
-                                            <span className="w-40 shrink-0 text-xs text-slate-500">
-                                                {formatTime(item.created_at)}
-                                            </span>
-                                            <span className="w-28 shrink-0 truncate font-medium text-slate-800">
-                                                {item.model_id || item.strategy_id || '全局默认'}
-                                            </span>
-                                            <span className="w-20 shrink-0 text-xs text-slate-500">
-                                                用户 {item.user_id || '-'}
-                                            </span>
-                                            <span className="w-24 shrink-0 text-xs text-slate-500">
-                                                {item.prediction_trade_date || '-'}
-                                            </span>
-                                            <span className="min-w-0 flex-1 truncate text-xs text-slate-400">
-                                                {item.reason_label || item.reason_code || item.reason_detail || '—'}
-                                            </span>
-                                            <RightOutlined className="shrink-0 text-slate-400" />
-                                        </button>
-                                    ))}
+                                <div className="min-w-[760px]">
+                                    <div
+                                        className={`${DISPATCH_GRID} sticky top-0 z-10 border-b border-slate-100 bg-slate-50 py-2 text-xs font-medium text-slate-500`}
+                                    >
+                                        <span>状态</span>
+                                        <span>时间</span>
+                                        <span className="truncate">模型 / 策略</span>
+                                        <span>用户</span>
+                                        <span>预测日</span>
+                                        <span className="truncate">原因</span>
+                                        <span aria-hidden />
+                                    </div>
+                                    <div className="divide-y divide-slate-100">
+                                        {paged.map((item) => (
+                                            <button
+                                                key={item.id}
+                                                type="button"
+                                                className={`${DISPATCH_GRID} py-2.5 text-left hover:bg-slate-50`}
+                                                onClick={() => setDetail(item)}
+                                            >
+                                                <span className="flex items-center">
+                                                    <StatusTag status={item.status} />
+                                                </span>
+                                                <span className="truncate font-mono text-xs text-slate-500">
+                                                    {formatTime(item.created_at)}
+                                                </span>
+                                                <span
+                                                    className="truncate text-sm font-medium text-slate-800"
+                                                    title={
+                                                        item.model_id ||
+                                                        item.strategy_id ||
+                                                        '全局默认'
+                                                    }
+                                                >
+                                                    {item.model_id ||
+                                                        item.strategy_id ||
+                                                        '全局默认'}
+                                                </span>
+                                                <span className="truncate text-xs text-slate-500">
+                                                    {item.user_id || '-'}
+                                                </span>
+                                                <span className="truncate font-mono text-xs text-slate-500">
+                                                    {item.prediction_trade_date || '-'}
+                                                </span>
+                                                <span
+                                                    className="truncate text-xs text-slate-400"
+                                                    title={
+                                                        item.reason_detail ||
+                                                        item.reason_label ||
+                                                        item.reason_code ||
+                                                        undefined
+                                                    }
+                                                >
+                                                    {item.reason_label ||
+                                                        item.reason_code ||
+                                                        item.reason_detail ||
+                                                        '—'}
+                                                </span>
+                                                <RightOutlined className="justify-self-end text-slate-400" />
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
                             )}
                         </Spin>

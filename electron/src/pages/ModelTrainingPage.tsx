@@ -910,7 +910,7 @@ export const ModelTrainingPage: React.FC = () => {
                       />
                       {factorCatalogVersion
                         ? <Tag color="blue">目录版本 {factorCatalogVersion}</Tag>
-                        : <Tooltip title="前往后台「训练服务 → 模型训练数据集」执行『刷新字段』数据扫描">
+                        : <Tooltip title="前往后台「训练服务 → 数据发布」执行『字段发现』数据扫描">
                             <Tag
                               color={dataCoverage?.ready ? 'default' : 'warning'}
                               className="cursor-pointer hover:opacity-80"

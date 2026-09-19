@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Layout, Menu, Button, Badge, Avatar, Typography, Divider, Tag } from 'antd';
+import { Layout, Menu, Button, Badge, Avatar, Typography, Divider, Tag, Tooltip } from 'antd';
 import { 
     DashboardOutlined, 
     UserOutlined, 
@@ -15,6 +15,9 @@ import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { AdminSystemLoadWidget } from './components/AdminSystemLoadWidget';
 
 const { Title, Text } = Typography;
+
+const FRONTEND_VERSION =
+  typeof __APP_VERSION__ !== 'undefined' && __APP_VERSION__ ? __APP_VERSION__ : 'dev';
 
 const AdminPage: React.FC = () => {
     const navigate = useNavigate();
@@ -34,7 +37,7 @@ const AdminPage: React.FC = () => {
             label: '数据管理',
             children: [
                 { key: 'data', label: '数据集目录' },
-                { key: 'qlib', label: 'Qlib 数据管理' },
+                { key: 'qlib', label: 'Qlib 引擎' },
                 { key: 'stock-pools', label: '全局股票池' },
                 { key: 'quotes', label: '数据源监控' },
                 { key: 'news', label: '新闻情感' },
@@ -64,7 +67,7 @@ const AdminPage: React.FC = () => {
             label: '训练服务',
             children: [
                 { key: 'feature-catalog', label: '特征字典' },
-                { key: 'training-datasets', label: '模型训练数据集' },
+                { key: 'training-datasets', label: '数据发布' },
                 { key: 'autodl-nodes', label: 'AutoDL 节点' },
             ]
         },
@@ -88,13 +91,25 @@ const AdminPage: React.FC = () => {
             {/* Sidebar */}
             <div className={`flex flex-col h-full bg-white border-r border-slate-200 transition-all duration-300 ${collapsed ? 'w-20' : 'w-64'}`}>
                 <div className="p-6 flex items-center gap-3">
-                    <div className="w-9 h-9 bg-slate-900 rounded-lg flex items-center justify-center shrink-0 shadow-sm">
-                        <RocketOutlined className="text-white text-lg" />
-                    </div>
+                    <Tooltip
+                        title={`前端版本 v${FRONTEND_VERSION}（electron/package.json）`}
+                        placement="right"
+                    >
+                        <div className="w-9 h-9 bg-slate-900 rounded-lg flex items-center justify-center shrink-0 shadow-sm cursor-default">
+                            <RocketOutlined className="text-white text-lg" />
+                        </div>
+                    </Tooltip>
                     {!collapsed && (
                         <div className="min-w-0">
                             <Title level={5} className="!m-0 !font-black !tracking-tight !text-slate-800 uppercase text-sm truncate">QuantMind</Title>
-                            <Text className="text-slate-400 text-[10px] font-bold tracking-widest uppercase">管理后台</Text>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                                <Text className="text-slate-400 text-[10px] font-bold tracking-widest uppercase">管理后台</Text>
+                                <Tooltip title={`当前前端构建版本，来自 electron/package.json`}>
+                                    <Tag className="!m-0 !px-1.5 !py-0 !text-[10px] !leading-4 !border-slate-200 !bg-slate-50 !text-slate-500 !rounded font-mono cursor-default">
+                                        v{FRONTEND_VERSION}
+                                    </Tag>
+                                </Tooltip>
+                            </div>
                         </div>
                     )}
                 </div>

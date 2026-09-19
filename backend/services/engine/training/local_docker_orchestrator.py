@@ -408,8 +408,8 @@ class LocalDockerOrchestrator(TrainingOrchestrator):
     ) -> tuple[list[str], list[str]]:
         """检查请求的特征是否存在于 parquet 中，返回 (valid, missing)。
 
-        不做 return_Nd → mom_ret_Nd 别名回退：features_daily.return_Nd 是未来
-        N 日收益，用作特征会泄漏标签。mom_ret_Nd 必须由 l1_factors 提供。
+        不做 return_Nd / future_return_Nd → mom_ret_Nd 别名回退：
+        features_daily 的未来收益列用作特征会泄漏标签。mom_ret_Nd 必须由 l1_factors 提供。
         """
         try:
             import pyarrow.parquet as pq

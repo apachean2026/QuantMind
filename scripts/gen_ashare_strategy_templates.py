@@ -10,7 +10,7 @@
 2. `f_*` 只在 RedisRecordingStrategy / RedisRiskGuardTopkStrategy 生效
    （FundamentalFilterMixin 先 pop，其余类会被 strip_unsupported_kwargs 丢掉）。
 3. `f_*` 只认 features_daily 真实存在的列；未知列静默跳过（logger.debug）。
-   features_daily 的 return_1d/3d/5d/10d/20d/60d 是【未来收益】，用作过滤=标签泄漏，禁用。
+   features_daily 的 future_return_1d/3d/5d/10d/20d/60d 是【未来收益】，用作过滤=标签泄漏，禁用。
    单位：total_mv/float_mv/net_profit_ttm/revenue_ttm/equity/annual_net_profit 为元；
    amount_ma_5 为万元；vol_std_*/ma_gap_*/rsi_*/pct_change 为百分数。
 4. JSON `params` 的 default 必须与 .py kwargs 一致：topk/n_drop/rebalance_days 等

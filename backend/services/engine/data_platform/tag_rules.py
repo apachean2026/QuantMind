@@ -45,6 +45,8 @@ def _build_metrics() -> pd.DataFrame:
         "return_60d", "ma_gap_20", "rsi_14", "vol_to_ma5", "vol_to_ma20",
         "volume_trend_3d", "macd_hist", "beta_20",
     ])
+    # 注：schema_adapter 已将 parquet 的 future_return_Nd 别名为 return_Nd，
+    # 规则阈值仍按百分数口径（与改名前一致）。
     val = latest_rows("qdb_valuation", [
         "pe_ttm", "pe_static", "pb", "ps_ttm", "dividend_rate", "total_mv",
         "float_mv", "net_profit_ttm", "revenue_ttm", "equity",

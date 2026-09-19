@@ -101,14 +101,12 @@ def run_pipeline_run(self, run_id: str) -> dict[str, Any]:
 )
 def auto_inference_if_needed() -> dict[str, Any]:
     """
-    Celery Beat 定时任务：交易日 00:00 自动扫描并执行所有活跃策略的推理。
+    Celery Beat 定时任务：工作日 08:00（Asia/Shanghai）扫描并执行自动推理。
 
-    逻辑：
-    1. 获取所有处于 'running' 状态且绑定了策略的投资组合。
-    2. 针对每个策略：
-        a. 检查是否已完成推理。
-        b. 尝试获取策略级分布式锁。
-        c. 执行推理脚本。
+    调度目标仅来自：
+    1. run_status=running 且绑定策略的投资组合；
+    2. qm_model_inference_settings 中 enabled=TRUE 的用户设置。
+    不注入系统级虚任务，也不做默认 production 目录兜底。
     """
     from zoneinfo import ZoneInfo
     from sqlalchemy import create_engine as sa_create_engine
@@ -125,7 +123,10 @@ def auto_inference_if_needed() -> dict[str, Any]:
     if now_local.time() < datetime.strptime("09:30", "%H:%M").time():
         data_trade_date_obj = _run_async(
             calendar_service.prev_trading_day(
-                market="SSE", trade_date=now_local.date(), tenant_id="default", user_id="*"
+                market="SSE",
+                trade_date=now_local.date(),
+                tenant_id="default",
+                user_id="*",
             )
         )
     else:
@@ -134,7 +135,10 @@ def auto_inference_if_needed() -> dict[str, Any]:
     data_trade_date = data_trade_date_obj.isoformat()
     prediction_trade_date_obj = _run_async(
         calendar_service.next_trading_day(
-            market="SSE", trade_date=data_trade_date_obj, tenant_id="default", user_id="*"
+            market="SSE",
+            trade_date=data_trade_date_obj,
+            tenant_id="default",
+            user_id="*",
         )
     )
     prediction_trade_date = prediction_trade_date_obj.isoformat()
@@ -143,7 +147,10 @@ def auto_inference_if_needed() -> dict[str, Any]:
     try:
         is_td = _run_async(
             calendar_service.is_trading_day(
-                market="SSE", trade_date=data_trade_date_obj, tenant_id="default", user_id="*"
+                market="SSE",
+                trade_date=data_trade_date_obj,
+                tenant_id="default",
+                user_id="*",
             )
         )
         if not is_td:
@@ -264,15 +271,8 @@ def auto_inference_if_needed() -> dict[str, Any]:
             )
         ).all()
 
-        # 总是包含一个系统级别的虚拟任务（全局默认模型）
-        tasks = [
-            {
-                "tenant_id": "default",
-                "user_id": "system",
-                "strategy_id": "global",
-                "model_id": None,
-            }
-        ]
+        # 仅调度真实目标：活跃组合 + 已启用的自动推理设置（无系统虚任务/无兜底）
+        tasks: list[dict[str, Any]] = []
         for p in active_portfolios:
             tasks.append(
                 {
@@ -283,7 +283,6 @@ def auto_inference_if_needed() -> dict[str, Any]:
                 }
             )
 
-        # 添加用户自动推理设置任务
         for s in auto_inference_settings:
             tasks.append(
                 {
@@ -315,6 +314,27 @@ def auto_inference_if_needed() -> dict[str, Any]:
             len(active_portfolios),
             len(auto_inference_settings),
         )
+
+        if not tasks:
+            logger.info(
+                "[AutoInference] 无调度目标（无 running 组合且无启用的自动推理设置），跳过。"
+            )
+            _write_dispatch_log(
+                tenant_id="default",
+                user_id="system",
+                strategy_id=None,
+                model_id=None,
+                status="skipped",
+                reason_code="NO_TARGETS",
+                reason_detail="no running portfolios and no enabled auto-inference settings",
+            )
+            return {
+                "status": "skipped",
+                "reason": "no_targets",
+                "date": prediction_trade_date,
+                "processed_count": 0,
+                "details": [],
+            }
 
         results = []
         redis = None
@@ -405,7 +425,14 @@ def auto_inference_if_needed() -> dict[str, Any]:
                     model_id=mid,
                     status="success" if exec_res.success else "failed",
                     reason_code=None if exec_res.success else "EXECUTION_FAILED",
-                    reason_detail=None if exec_res.success else str(getattr(exec_res, "message", "") or ""),
+                    reason_detail=None
+                    if exec_res.success
+                    else str(
+                        getattr(exec_res, "error", "")
+                        or getattr(exec_res, "stderr", "")
+                        or getattr(exec_res, "failure_stage", "")
+                        or ""
+                    ),
                     run_id=getattr(exec_res, "run_id", None),
                 )
             except Exception as task_exc:
@@ -699,6 +726,7 @@ def warmup_stock_latest_cache_task():
 # 资讯 enrichment：股票/行业/事件标签 + 情感分
 # ============================================================
 
+
 @celery_app.task(name="engine.tasks.news_enrich_recent", bind=True, ignore_result=True)
 def news_enrich_recent_task(self, limit: int = 200) -> dict[str, Any]:
     """每分钟扫描 Huntly 最近 N 篇文章，对未 enrich 的写入 news_article_enrichment。
@@ -706,6 +734,7 @@ def news_enrich_recent_task(self, limit: int = 200) -> dict[str, Any]:
     幂等：huntly_page_id 是主键 + model_version 不变则跳过。
     """
     from backend.services.api.news import run_enrichment_batch
+
     try:
         n = run_enrichment_batch(limit=limit)
         logger.info("[NewsEnrich] 完成: %d 篇新写入", n)
@@ -720,6 +749,7 @@ def news_matcher_reload_task() -> dict[str, Any]:
     """每 10 分钟重载 stock_aliases / finance_lexicon 自动机，
     让管理员在 SQL 里新增的词条尽快生效。"""
     from backend.services.api.news import get_matcher
+
     try:
         m = get_matcher(force_reload=True)
         return {"status": "success", "aliases": m.alias_count, "lex": m.lex_count}
@@ -749,7 +779,9 @@ def daily_data_sync_task(
     lock_key = "quantmind:daily_sync:lock"
     lock_ttl = 3600  # 1 小时自动过期
     try:
-        rds = _redis.from_url(os.getenv("REDIS_URL", "redis://redis:6379/0"), socket_timeout=2)
+        rds = _redis.from_url(
+            os.getenv("REDIS_URL", "redis://redis:6379/0"), socket_timeout=2
+        )
         acquired = rds.set(lock_key, self.request.id, nx=True, ex=lock_ttl)
         if not acquired:
             running_id = rds.get(lock_key)
@@ -758,19 +790,33 @@ def daily_data_sync_task(
     except Exception as lock_exc:
         logger.warning("[DailySync] Redis 锁获取失败，继续执行: %s", lock_exc)
 
-    logger.info("[DailySync] 开始: market=%s incremental=%s symbols=%s", market, incremental, symbols[:100])
+    logger.info(
+        "[DailySync] 开始: market=%s incremental=%s symbols=%s",
+        market,
+        incremental,
+        symbols[:100],
+    )
     try:
-        sym_list = [s.strip() for s in symbols.split(",") if s.strip()] if symbols else None
+        sym_list = (
+            [s.strip() for s in symbols.split(",") if s.strip()] if symbols else None
+        )
 
         if market.upper() == "A":
             from backend.scripts.quantdb_daily_sync import run_daily_sync
-            from backend.shared.quantdb_sync_jobs import new_celery_job, celery_progress_cb, upsert_job, _now_iso
+            from backend.shared.quantdb_sync_jobs import (
+                new_celery_job,
+                celery_progress_cb,
+                upsert_job,
+                _now_iso,
+            )
 
             job = new_celery_job(with_pg=not skip_pg)
             job_id = job["job_id"]
             logger.info("[DailySync] 创建 Redis 同步任务 %s", job_id)
 
-            result = run_daily_sync(skip_pg=skip_pg, progress_cb=celery_progress_cb(job_id))
+            result = run_daily_sync(
+                skip_pg=skip_pg, progress_cb=celery_progress_cb(job_id)
+            )
             upsert_job(job_id, status="completed", stage="done", finished_at=_now_iso())
             logger.info(
                 "[DailySync] QuantDB 完成: parquet=%s pg_rows=%s qlib=%s",
@@ -835,18 +881,30 @@ def update_qlib_cache_task(self) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Strategy Lab daily scan (Day 16)
 # ---------------------------------------------------------------------------
-@celery_app.task(name="engine.tasks.feature_snapshot", max_retries=1, default_retry_delay=120, bind=True)
+@celery_app.task(
+    name="engine.tasks.feature_snapshot",
+    max_retries=1,
+    default_retry_delay=120,
+    bind=True,
+)
 def feature_snapshot_task(self, year: int = 0) -> dict[str, Any]:
     """Legacy compatibility task; new models read raw QuantDB factors directly."""
     from datetime import date as _date
 
     target_year = year if year > 0 else _date.today().year
-    if os.getenv("QM_ENABLE_LEGACY_FEATURE_SNAPSHOT", "").lower() not in {"1", "true", "yes"}:
+    if os.getenv("QM_ENABLE_LEGACY_FEATURE_SNAPSHOT", "").lower() not in {
+        "1",
+        "true",
+        "yes",
+    }:
         return {
-            "status": "skipped", "year": target_year,
+            "status": "skipped",
+            "year": target_year,
             "reason": "direct QuantDB factor reader is active; legacy snapshot generation disabled",
         }
-    logger.info("[FeatureSnapshot] 开始: year=%d task_id=%s", target_year, self.request.id)
+    logger.info(
+        "[FeatureSnapshot] 开始: year=%d task_id=%s", target_year, self.request.id
+    )
 
     try:
         from backend.scripts.generate_feature_snapshots import _build_snapshot
@@ -882,7 +940,9 @@ def strategy_lab_daily_scan(lookback_days: int = 7) -> dict[str, Any]:
 
 
 @celery_app.task(name="engine.tasks.backfill_inference_quality")
-def backfill_inference_quality(horizon_days: int = 5, limit: int = 500) -> dict[str, Any]:
+def backfill_inference_quality(
+    horizon_days: int = 5, limit: int = 500
+) -> dict[str, Any]:
     """回填推理质量：为已完成推理但无 quality 记录、且已过收益兑现期的模型算真实 IC。
 
     滞后 horizon_days 天执行（需等未来收益兑现）。扫描 qm_model_inference_runs 中
@@ -896,13 +956,15 @@ def backfill_inference_quality(horizon_days: int = 5, limit: int = 500) -> dict[
 
     try:
         cutoff = (datetime.now(timezone.utc) - timedelta(days=horizon_days)).date()
+
         async def _scan_and_backfill():
             await inference_quality_backfill.ensure_tables()
             async with get_session(read_only=True) as session:
                 rows = (
-                    await session.execute(
-                        text(
-                            """
+                    (
+                        await session.execute(
+                            text(
+                                """
                             SELECT DISTINCT r.tenant_id, r.user_id, r.model_id, r.data_trade_date
                             FROM qm_model_inference_runs r
                             WHERE r.status = 'completed'
@@ -915,15 +977,22 @@ def backfill_inference_quality(horizon_days: int = 5, limit: int = 500) -> dict[
                             ORDER BY r.data_trade_date DESC
                             LIMIT :limit
                             """
-                        ),
-                        {"cutoff": cutoff, "limit": int(limit)},
+                            ),
+                            {"cutoff": cutoff, "limit": int(limit)},
+                        )
                     )
-                ).mappings().all()
+                    .mappings()
+                    .all()
+                )
             results = []
             for row in rows:
                 res = await inference_quality_backfill.backfill_date(
-                    tenant_id=row["tenant_id"], user_id=row["user_id"], model_id=row["model_id"],
-                    trade_date=str(row["data_trade_date"])[:10], market="CN", horizon=horizon_days,
+                    tenant_id=row["tenant_id"],
+                    user_id=row["user_id"],
+                    model_id=row["model_id"],
+                    trade_date=str(row["data_trade_date"])[:10],
+                    market="CN",
+                    horizon=horizon_days,
                 )
                 results.append(res)
             ok = [r for r in results if r.get("status") == "ok"]
@@ -951,7 +1020,9 @@ def backfill_inference_quality(horizon_days: int = 5, limit: int = 500) -> dict[
 def dispatch_market_sync() -> dict[str, Any]:
     """每分钟检查各市场定时同步配置，到点派发同步任务。"""
     try:
-        from backend.services.engine.tasks.market_sync_scheduler import dispatch_due_syncs
+        from backend.services.engine.tasks.market_sync_scheduler import (
+            dispatch_due_syncs,
+        )
 
         return dispatch_due_syncs()
     except Exception as e:
@@ -985,7 +1056,9 @@ def run_market_scheduled_sync(market: str, cfg: dict[str, Any]) -> dict[str, Any
 _SNAPSHOT_PARTITION_REL = "1_kline_data/daily_unadjusted"
 
 
-def _snapshot_source_state(data_dir: str, out_dir: str) -> tuple[str | None, str | None]:
+def _snapshot_source_state(
+    data_dir: str, out_dir: str
+) -> tuple[str | None, str | None]:
     """返回 (库内最大分区日期, latest.json 的 trade_date)，均为 YYYYMMDD 或 None。"""
     import json as _json
     from pathlib import Path as _P
@@ -1010,7 +1083,10 @@ def _snapshot_source_state(data_dir: str, out_dir: str) -> tuple[str | None, str
     latest_path = _P(out_dir) / "latest.json"
     try:
         if latest_path.is_file():
-            td = str(_json.loads(latest_path.read_text(encoding="utf-8")).get("trade_date") or "")
+            td = str(
+                _json.loads(latest_path.read_text(encoding="utf-8")).get("trade_date")
+                or ""
+            )
             td = td.strip().replace("-", "")
             if len(td) == 8 and td.isdigit():
                 latest_td = td
@@ -1050,7 +1126,8 @@ def run_market_snapshot() -> dict[str, Any]:
         if latest_td is not None and max_part <= latest_td:
             logger.warning(
                 "[MarketSnapshot] 跳过：库内最新分区 %s 未超过线上快照 %s（同步未完成或今日无新数据），不覆盖 latest",
-                max_part, latest_td,
+                max_part,
+                latest_td,
             )
             return {
                 "status": "skipped",
@@ -1060,20 +1137,34 @@ def run_market_snapshot() -> dict[str, Any]:
             }
 
         cmd = [
-            sys.executable, str(script),
-            "--data-dir", data_dir,
-            "--out", out_dir,
-            "--periods", "1d", "5d", "20d",
+            sys.executable,
+            str(script),
+            "--data-dir",
+            data_dir,
+            "--out",
+            out_dir,
+            "--periods",
+            "1d",
+            "5d",
+            "20d",
         ]
         started = datetime.now()
         logger.info("[MarketSnapshot] 开始: %s", " ".join(str(c) for c in cmd))
 
-        proc = subprocess.run(cmd, cwd=str(root), capture_output=True, text=True, timeout=1800)
+        proc = subprocess.run(
+            cmd, cwd=str(root), capture_output=True, text=True, timeout=1800
+        )
         if proc.returncode != 0:
-            logger.error("[MarketSnapshot] 失败 code=%d stderr=%s",
-                         proc.returncode, proc.stderr[-4000:])
-            return {"status": "failed", "returncode": proc.returncode,
-                    "stderr_tail": proc.stderr[-4000:]}
+            logger.error(
+                "[MarketSnapshot] 失败 code=%d stderr=%s",
+                proc.returncode,
+                proc.stderr[-4000:],
+            )
+            return {
+                "status": "failed",
+                "returncode": proc.returncode,
+                "stderr_tail": proc.stderr[-4000:],
+            }
 
         elapsed = (datetime.now() - started).total_seconds()
         logger.info("[MarketSnapshot] 完成 用时%.0fs\n%s", elapsed, proc.stdout[-2000:])

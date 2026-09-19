@@ -7,7 +7,6 @@ import {
   Card,
   Descriptions,
   Tag,
-  Spin,
   Alert,
   Button,
   Space,
@@ -29,6 +28,7 @@ import {
 import { useNavigate, useParams } from 'react-router-dom';
 import type { UserStrategy, StrategyStatus } from '../types';
 import { userCenterService } from '../services/userCenterService';
+import { SectionLoading } from '../../../components/common/UnifiedLoading';
 
 const { TabPane } = Tabs;
 
@@ -127,13 +127,7 @@ const StrategyDetailPage: React.FC = () => {
   };
 
   if (loading) {
-    return (
-      <div style={{ textAlign: 'center', padding: 100 }}>
-        <Spin size="large" tip="加载中...">
-          <div style={{ height: 100 }} />
-        </Spin>
-      </div>
-    );
+    return <SectionLoading tip="加载中..." minHeight={280} />;
   }
 
   if (error) {

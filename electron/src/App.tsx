@@ -3,11 +3,11 @@ import { useSelector, useDispatch } from 'react-redux';
 import { RecoilRoot } from 'recoil';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Spin, notification, Button, ConfigProvider } from 'antd';
+import { notification, Button, ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import dayjs from 'dayjs';
 import 'dayjs/locale/zh-cn';
-import { DashboardSkeleton } from './components/common/DashboardSkeleton';
+import { PageLoading, RouteFallback } from './components/common/UnifiedLoading';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { FloatingNavBar } from './components/navigation/FloatingNavBar';
 import { TitleBar } from './components/layout/TitleBar';
@@ -407,90 +407,16 @@ export default function App() {
 
   if (!serverConfigReady) {
     if (!hasLocalToken || isPublicRoute) {
-      return (
-        <div
-          style={{
-            minHeight: '100vh',
-            background:
-              'linear-gradient(135deg, #667eea 0%, #764ba2 25%, #f093fb 50%, #f5576c 75%, #4facfe 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <div style={{ textAlign: 'center', color: 'white' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-              <div style={{ fontSize: 18, fontWeight: 700, color: 'white', letterSpacing: '-0.02em' }}>
-                QuantMind
-              </div>
-              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>
-                正在恢复服务器配置
-              </div>
-            </div>
-            <div style={{ height: 20 }} />
-            <Spin size="large" />
-          </div>
-        </div>
-      );
+      return <PageLoading message="正在恢复服务器配置" variant="brand" />;
     }
-    return (
-      <div style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'var(--bg-gradient)',
-        flexDirection: 'column',
-        gap: 16,
-      }}>
-        <Spin size="large" />
-        <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>正在验证身份...</span>
-      </div>
-    );
+    return <PageLoading message="正在验证身份..." variant="app" />;
   }
 
   if (isLoading) {
     if (!hasLocalToken || isPublicRoute) {
-      return (
-        <div
-          style={{
-            minHeight: '100vh',
-            background:
-              'linear-gradient(135deg, #667eea 0%, #764ba2 25%, #f093fb 50%, #f5576c 75%, #4facfe 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <div style={{ textAlign: 'center', color: 'white' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-              <div style={{ fontSize: 18, fontWeight: 700, color: 'white', letterSpacing: '-0.02em' }}>
-                QuantMind
-              </div>
-              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>
-                正在验证身份...
-              </div>
-            </div>
-            <div style={{ height: 20 }} />
-            <Spin size="large" />
-          </div>
-        </div>
-      );
+      return <PageLoading message="正在验证身份..." variant="brand" />;
     }
-    return (
-      <div style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'var(--bg-gradient)',
-        flexDirection: 'column',
-        gap: 16,
-      }}>
-        <Spin size="large" />
-        <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>正在验证身份...</span>
-      </div>
-    );
+    return <PageLoading message="正在验证身份..." variant="app" />;
   }
 
   // 🔐 认证守卫：未登录且访问受保护路由，重定向到登录页
@@ -520,20 +446,7 @@ export default function App() {
             <TitleBar />
             <ErrorBoundary>
               <div className="app-main">
-              <Suspense
-                fallback={<div style={{
-                  minHeight: '100vh',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  background: 'var(--bg-gradient)',
-                  flexDirection: 'column',
-                  gap: 16,
-                }}>
-                  <Spin size="large" />
-                  <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>加载中...</span>
-                </div>}
-              >
+              <Suspense fallback={<PageLoading message="加载中..." variant="app" />}>
                 {/* 使用路由系统，包含认证守卫 */}
                 <Routes>
                   {/* 认证相关路由 */}
@@ -651,7 +564,7 @@ export default function App() {
                     path="/rss-news"
                     element={
                       <ProtectedRoute>
-                        <Suspense fallback={<Spin size="large" />}>
+                        <Suspense fallback={<RouteFallback />}>
                           <AdminNewsPage />
                         </Suspense>
                       </ProtectedRoute>
@@ -662,21 +575,7 @@ export default function App() {
                     element={
                       <ProtectedRoute>
                         {/* 首次加载（lazy chunk 拉取）时载入动画居中展示，而不是贴在内容区顶部 */}
-                        <Suspense
-                          fallback={
-                            <div
-                              style={{
-                                width: '100%',
-                                height: '100%',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                              }}
-                            >
-                              <Spin size="large" />
-                            </div>
-                          }
-                        >
+                        <Suspense fallback={<RouteFallback />}>
                           <AlphaResearchPage />
                         </Suspense>
                       </ProtectedRoute>
@@ -686,7 +585,7 @@ export default function App() {
                     path="/skills"
                     element={
                       <ProtectedRoute>
-                        <Suspense fallback={<Spin size="large" />}>
+                        <Suspense fallback={<RouteFallback />}>
                           <SkillsCenterPage />
                         </Suspense>
                       </ProtectedRoute>
@@ -702,24 +601,24 @@ export default function App() {
                     }
                   >
                     <Route index element={<Navigate to="overview" replace />} />
-                    <Route path="overview" element={<Suspense fallback={<Spin size="large" />}><AdminDashboard /></Suspense>} />
-                    <Route path="users" element={<Suspense fallback={<Spin size="large" />}><AdminUserTable /></Suspense>} />
-                    <Route path="models" element={<Suspense fallback={<Spin size="large" />}><AdminModelManagement /></Suspense>} />
-                    <Route path="data" element={<Suspense fallback={<Spin size="large" />}><AdminDataManagement /></Suspense>} />
-                    <Route path="qlib" element={<Suspense fallback={<Spin size="large" />}><AdminQlibDataPanel /></Suspense>} />
-                    <Route path="strategies" element={<Suspense fallback={<Spin size="large" />}><AdminStrategyTemplates /></Suspense>} />
-                    <Route path="stock-pools" element={<Suspense fallback={<Spin size="large" />}><AdminStockPool /></Suspense>} />
-                    <Route path="news" element={<Suspense fallback={<Spin size="large" />}><AdminNewsEmotion /></Suspense>} />
+                    <Route path="overview" element={<Suspense fallback={<RouteFallback />}><AdminDashboard /></Suspense>} />
+                    <Route path="users" element={<Suspense fallback={<RouteFallback />}><AdminUserTable /></Suspense>} />
+                    <Route path="models" element={<Suspense fallback={<RouteFallback />}><AdminModelManagement /></Suspense>} />
+                    <Route path="data" element={<Suspense fallback={<RouteFallback />}><AdminDataManagement /></Suspense>} />
+                    <Route path="qlib" element={<Suspense fallback={<RouteFallback />}><AdminQlibDataPanel /></Suspense>} />
+                    <Route path="strategies" element={<Suspense fallback={<RouteFallback />}><AdminStrategyTemplates /></Suspense>} />
+                    <Route path="stock-pools" element={<Suspense fallback={<RouteFallback />}><AdminStockPool /></Suspense>} />
+                    <Route path="news" element={<Suspense fallback={<RouteFallback />}><AdminNewsEmotion /></Suspense>} />
                     <Route path="tags" element={<Navigate to="/admin/news" replace />} />
                     <Route path="finbert" element={<Navigate to="/admin/news" replace />} />
-                    <Route path="feature-catalog" element={<Suspense fallback={<Spin size="large" />}><AdminFeatureCatalog /></Suspense>} />
-                    <Route path="autodl-nodes" element={<Suspense fallback={<Spin size="large" />}><AdminAutoDLNodes /></Suspense>} />
-                    <Route path="training-datasets" element={<Suspense fallback={<Spin size="large" />}><AdminTrainingDatasets /></Suspense>} />
-                    <Route path="inference" element={<Suspense fallback={<Spin size="large" />}><AdminInferenceMonitor /></Suspense>} />
-                    <Route path="orders" element={<Suspense fallback={<Spin size="large" />}><AdminOrderManagement /></Suspense>} />
-                    <Route path="risk" element={<Suspense fallback={<Spin size="large" />}><AdminRiskControl /></Suspense>} />
-                    <Route path="quotes" element={<Suspense fallback={<Spin size="large" />}><AdminDataPlatform /></Suspense>} />
-                    <Route path="settings" element={<Suspense fallback={<Spin size="large" />}><AdminSystemSettings /></Suspense>} />
+                    <Route path="feature-catalog" element={<Suspense fallback={<RouteFallback />}><AdminFeatureCatalog /></Suspense>} />
+                    <Route path="autodl-nodes" element={<Suspense fallback={<RouteFallback />}><AdminAutoDLNodes /></Suspense>} />
+                    <Route path="training-datasets" element={<Suspense fallback={<RouteFallback />}><AdminTrainingDatasets /></Suspense>} />
+                    <Route path="inference" element={<Suspense fallback={<RouteFallback />}><AdminInferenceMonitor /></Suspense>} />
+                    <Route path="orders" element={<Suspense fallback={<RouteFallback />}><AdminOrderManagement /></Suspense>} />
+                    <Route path="risk" element={<Suspense fallback={<RouteFallback />}><AdminRiskControl /></Suspense>} />
+                    <Route path="quotes" element={<Suspense fallback={<RouteFallback />}><AdminDataPlatform /></Suspense>} />
+                    <Route path="settings" element={<Suspense fallback={<RouteFallback />}><AdminSystemSettings /></Suspense>} />
                   </Route>
 
                   {/* 主应用路由 - 仪表盘等 */}

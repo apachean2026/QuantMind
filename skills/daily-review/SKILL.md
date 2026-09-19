@@ -30,7 +30,7 @@ description: "A股每日复盘（专业版）— 基于 QuantDB 本地数据 + �
 |---|---|
 | 个股 volume=**股**、amount=**万元** | 指数 volume=**手**、amount=万元 |
 | 复盘报告里金额一律换算为**亿元**（万元÷1e4） | 脚本输出的 `*_yi` 字段单位已是亿元 |
-| `technical_indicators.pct_change` = **%**；`return_1d/20d` 全 NaN 别用 | 涨跌家数/涨停/连板全用它 |
+| `technical_indicators.pct_change` = **%**；未来收益用 `future_return_*`（标签，勿当历史动量）；历史动量用 pct_change / mom_ret | 涨跌家数/涨停/连板全用它 |
 | `index_daily.preClose` **全 NULL** | 指数涨跌幅用 close 序列自算（脚本已处理） |
 | l2_factors 已恢复日更（202608+ 当日有数据，L1 主力资金可用）；两融通常滞后 1 日（偶与当日对齐，以 facts 为准）；北向只有季度快照 | 必须带「数据滞后声明」，滞后数据集禁止当当日数据写 |
 

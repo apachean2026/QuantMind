@@ -276,7 +276,7 @@ export const AdminTrainingDatasets: React.FC = () => {
 
   return <div className="p-6 space-y-4">
     <div className="flex items-center justify-between">
-      <div><Title level={4} className="!mb-0"><DatabaseOutlined /> 模型训练数据集</Title>
+      <div><Title level={4} className="!mb-0"><DatabaseOutlined /> 数据发布</Title>
         <Text type="secondary">仅读取各市场 ML 数据集原始因子；映射草稿发布后才影响新的训练任务。</Text></div>
       <Space wrap>
         <Select value={market} options={MARKET_OPTIONS} style={{ width: 100 }} onChange={handleMarketChange} />

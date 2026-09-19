@@ -588,11 +588,15 @@ def preprocess(df: pd.DataFrame, meta: dict) -> tuple[pd.DataFrame, list[str]]:
     feature_cols = meta.get("feature_columns") or meta.get("features", [])
     fill_values  = meta.get("fill_values", {})
 
-    # features_daily.return_Nd 是未来 N 日收益，不能映射为 mom_ret_Nd（过去收益），
-    # 否则线上推理会把未来信息喂给模型
+    # features_daily 未来收益列不能映射为 mom_ret（标签泄漏）。
+    # QuantDB 2026-09：return_Nd → future_return_Nd。
     _leaky = [
-        c for c in ("return_1d", "return_3d", "return_5d",
-                    "return_10d", "return_20d", "return_60d")
+        c for c in (
+            "future_return_1d", "future_return_3d", "future_return_5d",
+            "future_return_10d", "future_return_20d", "future_return_60d",
+            "return_1d", "return_3d", "return_5d",
+            "return_10d", "return_20d", "return_60d",
+        )
         if c in df.columns
     ]
     if _leaky:
