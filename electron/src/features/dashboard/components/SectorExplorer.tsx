@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Table, Tag, Spin, Empty, Typography } from 'antd';
-import { dataDashboardService } from '../services/dataDashboardService';
+import { dataDashboardService, isRequestCancelled } from '../services/dataDashboardService';
 
 const { Text } = Typography;
 
@@ -16,10 +16,12 @@ export const SectorExplorer: React.FC<SectorExplorerProps> = ({ market, symbol }
 
     useEffect(() => {
         if (!symbol) return;
+        let on = true;
         setLoading(true);
         dataDashboardService
             .getSectors(market, symbol)
             .then((rows) => {
+                if (!on) return;
                 setData(rows);
                 if (rows.length > 0) {
                     const cols = Object.keys(rows[0]).map((k) => ({
@@ -37,11 +39,17 @@ export const SectorExplorer: React.FC<SectorExplorerProps> = ({ market, symbol }
                     setColumns(cols);
                 }
             })
-            .catch(() => {
+            .catch((e) => {
+                if (!on || isRequestCancelled(e)) return;
                 setData([]);
                 setColumns([]);
             })
-            .finally(() => setLoading(false));
+            .finally(() => {
+                if (on) setLoading(false);
+            });
+        return () => {
+            on = false;
+        };
     }, [market, symbol]);
 
     return (

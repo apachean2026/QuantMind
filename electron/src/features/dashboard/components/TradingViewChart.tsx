@@ -1,5 +1,11 @@
 import React, { useEffect, useRef } from 'react';
-import { createChart, CandlestickSeries, HistogramSeries, type IChartApi } from 'lightweight-charts';
+import {
+    createChart,
+    CandlestickSeries,
+    HistogramSeries,
+    type IChartApi,
+    type ISeriesApi,
+} from 'lightweight-charts';
 import type { KlineItem } from '../services/dataDashboardService';
 
 interface TradingViewChartProps {
@@ -10,15 +16,12 @@ interface TradingViewChartProps {
 export const TradingViewChart: React.FC<TradingViewChartProps> = ({ data, height = 550 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
+  const candleRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const volumeRef = useRef<ISeriesApi<'Histogram'> | null>(null);
 
+  // 图表实例只建一次：data 变化只 setData，避免切换市场时整实例重建掉帧
   useEffect(() => {
     if (!containerRef.current) return;
-
-    // Cleanup previous chart
-    if (chartRef.current) {
-      chartRef.current.remove();
-      chartRef.current = null;
-    }
 
     const chart = createChart(containerRef.current, {
       height,
@@ -46,7 +49,7 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({ data, height
     chartRef.current = chart;
 
     // Candlestick series
-    const candleSeries = chart.addSeries(CandlestickSeries, {
+    candleRef.current = chart.addSeries(CandlestickSeries, {
       upColor: '#ef4444',
       downColor: '#10b981',
       borderUpColor: '#ef4444',
@@ -56,7 +59,7 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({ data, height
     });
 
     // Volume series
-    const volumeSeries = chart.addSeries(HistogramSeries, {
+    volumeRef.current = chart.addSeries(HistogramSeries, {
       priceFormat: { type: 'volume' },
       priceScaleId: 'volume',
     });
@@ -65,33 +68,40 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({ data, height
       scaleMargins: { top: 0.8, bottom: 0 },
     });
 
-    if (data && data.length > 0) {
-      const candleData = data.map((d) => ({
-        time: d.date as string,
-        open: d.open,
-        high: d.high,
-        low: d.low,
-        close: d.close,
-      }));
+    return () => {
+      chart.remove();
+      chartRef.current = null;
+      candleRef.current = null;
+      volumeRef.current = null;
+    };
+  }, [height]);
 
-      const volumeData = data.map((d) => ({
-        time: d.date as string,
-        value: d.volume,
-        color: d.close >= d.open ? 'rgba(239,68,68,0.4)' : 'rgba(16,185,129,0.4)',
-      }));
+  useEffect(() => {
+    const chart = chartRef.current;
+    const candleSeries = candleRef.current;
+    const volumeSeries = volumeRef.current;
+    if (!chart || !candleSeries || !volumeSeries) return;
 
-      candleSeries.setData(candleData);
-      volumeSeries.setData(volumeData);
+    const candleData = (data || []).map((d) => ({
+      time: d.date as string,
+      open: d.open,
+      high: d.high,
+      low: d.low,
+      close: d.close,
+    }));
+
+    const volumeData = (data || []).map((d) => ({
+      time: d.date as string,
+      value: d.volume,
+      color: d.close >= d.open ? 'rgba(239,68,68,0.4)' : 'rgba(16,185,129,0.4)',
+    }));
+
+    candleSeries.setData(candleData);
+    volumeSeries.setData(volumeData);
+    if (candleData.length > 0) {
       chart.timeScale().fitContent();
     }
-
-    return () => {
-      if (chartRef.current) {
-        chartRef.current.remove();
-        chartRef.current = null;
-      }
-    };
-  }, [data, height]);
+  }, [data]);
 
   return (
     <div

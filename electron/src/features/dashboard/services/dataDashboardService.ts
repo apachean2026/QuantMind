@@ -68,6 +68,8 @@ class DataDashboardService {
         (import.meta as any).env?.VITE_USER_API_URL,
         SERVICE_ENDPOINTS.USER_SERVICE,
     );
+    // 同 key 请求单飞：新请求自动取消旧的，避免快速切换市场时慢响应覆盖新数据
+    private inflight = new Map<string, AbortController>();
 
     constructor() {
         this.client = axios.create({
@@ -108,13 +110,27 @@ class DataDashboardService {
         return d as T;
     }
 
+    private async single<T>(key: string, run: (signal: AbortSignal) => Promise<T>): Promise<T> {
+        this.inflight.get(key)?.abort();
+        const c = new AbortController();
+        this.inflight.set(key, c);
+        try {
+            return await run(c.signal);
+        } finally {
+            if (this.inflight.get(key) === c) this.inflight.delete(key);
+        }
+    }
+
     /** 按市场列出所有可用字段 */
     async getFields(market: string): Promise<FieldInfo[]> {
-        const resp = await this.client.get('/data-dashboard/fields', {
-            params: { market },
+        return this.single(`fields:${market}`, async (signal) => {
+            const resp = await this.client.get('/data-dashboard/fields', {
+                params: { market },
+                signal,
+            });
+            const d = this.unwrap<{ fields: FieldInfo[] }>(resp);
+            return d?.fields || [];
         });
-        const d = this.unwrap<{ fields: FieldInfo[] }>(resp);
-        return d?.fields || [];
     }
 
     /** 获取日K线数据（复用已有的 /market/kline 端点） */
@@ -129,8 +145,10 @@ class DataDashboardService {
         if (start) params.start = start;
         if (end) params.end = end;
         if (!start && !end) params.days = days;
-        const resp = await this.client.get('/market/kline', { params });
-        return this.unwrap<KlineResponse>(resp);
+        return this.single(`kline:${market}:${symbol}:${days}`, async (signal) => {
+            const resp = await this.client.get('/market/kline', { params, signal });
+            return this.unwrap<KlineResponse>(resp);
+        });
     }
 
     /** 获取任意字段数据 */
@@ -140,11 +158,14 @@ class DataDashboardService {
         symbol: string,
         days = 365,
     ): Promise<FieldDataResponse> {
-        const resp = await this.client.get('/data-dashboard/field-data', {
-            params: { market, field, symbol, days },
-            timeout: 120000,
+        return this.single(`field-data:${market}:${field}:${symbol}`, async (signal) => {
+            const resp = await this.client.get('/data-dashboard/field-data', {
+                params: { market, field, symbol, days },
+                timeout: 120000,
+                signal,
+            });
+            return this.unwrap<FieldDataResponse>(resp);
         });
-        return this.unwrap<FieldDataResponse>(resp);
     }
 
     /** 股票搜索 */
@@ -153,11 +174,13 @@ class DataDashboardService {
         market?: string,
         limit = 20,
     ): Promise<SearchResult[]> {
-        const params: Record<string, any> = { keyword, limit };
-        if (market) params.market = market;
-        const resp = await this.client.get('/data-dashboard/search', { params });
-        const d = this.unwrap<{ results: SearchResult[] }>(resp);
-        return d?.results || [];
+        return this.single(`search:${market || ''}:${keyword}`, async (signal) => {
+            const params: Record<string, any> = { keyword, limit };
+            if (market) params.market = market;
+            const resp = await this.client.get('/data-dashboard/search', { params, signal });
+            const d = this.unwrap<{ results: SearchResult[] }>(resp);
+            return d?.results || [];
+        });
     }
 
     /** 实时行情 */
@@ -166,11 +189,14 @@ class DataDashboardService {
         symbol: string,
     ): Promise<RealtimeQuote | null> {
         try {
-            const resp = await this.client.get('/data-dashboard/realtime', {
-                params: { market, symbol },
+            return await this.single(`realtime:${market}:${symbol}`, async (signal) => {
+                const resp = await this.client.get('/data-dashboard/realtime', {
+                    params: { market, symbol },
+                    signal,
+                });
+                const d = this.unwrap<{ quote: RealtimeQuote }>(resp);
+                return d?.quote || null;
             });
-            const d = this.unwrap<{ quote: RealtimeQuote }>(resp);
-            return d?.quote || null;
         } catch {
             return null;
         }
@@ -179,11 +205,14 @@ class DataDashboardService {
     /** 行业板块 */
     async getSectors(market: string, symbol: string): Promise<Record<string, any>[]> {
         try {
-            const resp = await this.client.get('/data-dashboard/sectors', {
-                params: { market, symbol },
+            return await this.single(`sectors:${market}:${symbol}`, async (signal) => {
+                const resp = await this.client.get('/data-dashboard/sectors', {
+                    params: { market, symbol },
+                    signal,
+                });
+                const d = this.unwrap<{ data: Record<string, any>[] }>(resp);
+                return d?.data || [];
             });
-            const d = this.unwrap<{ data: Record<string, any>[] }>(resp);
-            return d?.data || [];
         } catch {
             return [];
         }
@@ -195,11 +224,14 @@ class DataDashboardService {
         symbol: string,
     ): Promise<Record<string, any>[]> {
         try {
-            const resp = await this.client.get('/data-dashboard/meta', {
-                params: { market, symbol },
+            return await this.single(`meta:${market}:${symbol}`, async (signal) => {
+                const resp = await this.client.get('/data-dashboard/meta', {
+                    params: { market, symbol },
+                    signal,
+                });
+                const d = this.unwrap<{ data: Record<string, any>[] }>(resp);
+                return d?.data || [];
             });
-            const d = this.unwrap<{ data: Record<string, any>[] }>(resp);
-            return d?.data || [];
         } catch {
             return [];
         }
@@ -207,3 +239,8 @@ class DataDashboardService {
 }
 
 export const dataDashboardService = new DataDashboardService();
+
+/** 被取消的请求不做错误提示、不覆盖数据 */
+export function isRequestCancelled(e: unknown): boolean {
+    return axios.isCancel(e);
+}

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Select, Table, Tag, Spin, Empty, Typography } from 'antd';
-import { dataDashboardService, FieldInfo, FieldDataResponse } from '../services/dataDashboardService';
+import { dataDashboardService, isRequestCancelled, FieldInfo, FieldDataResponse } from '../services/dataDashboardService';
 
 const { Text } = Typography;
 
@@ -76,28 +76,45 @@ export const FieldBrowser: React.FC<FieldBrowserProps> = ({ market, symbol }) =>
     const [fieldsLoading, setFieldsLoading] = useState(false);
 
     useEffect(() => {
+        let on = true;
         setFieldsLoading(true);
         dataDashboardService
             .getFields(market)
             .then((f) => {
+                if (!on) return;
                 const list = Array.isArray(f) ? f : [];
                 setFields(list);
                 if (list.length > 0 && !selectedField) {
                     setSelectedField(list[0].field);
                 }
             })
-            .finally(() => setFieldsLoading(false));
+            .finally(() => {
+                if (on) setFieldsLoading(false);
+            });
+        return () => {
+            on = false;
+        };
     }, [market]);
 
     useEffect(() => {
         if (!selectedField || !symbol) return;
+        let on = true;
         setLoading(true);
         setFieldData(null);
         dataDashboardService
             .getFieldData(market, selectedField, symbol, 365)
-            .then(setFieldData)
-            .catch(() => setFieldData(null))
-            .finally(() => setLoading(false));
+            .then((d) => {
+                if (on) setFieldData(d);
+            })
+            .catch((e) => {
+                if (on && !isRequestCancelled(e)) setFieldData(null);
+            })
+            .finally(() => {
+                if (on) setLoading(false);
+            });
+        return () => {
+            on = false;
+        };
     }, [market, selectedField, symbol]);
 
     // Build table columns from fieldData.columns

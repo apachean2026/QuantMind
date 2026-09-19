@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { startTransition } from 'react';
 import { motion } from 'framer-motion';
 import { useAppDispatch, useAppSelector } from '../../store';
 import { setMarket, selectCurrentMarket, type AppMarket } from '../../store/slices/uiSlice';
@@ -48,7 +48,8 @@ export const MarketSelector: React.FC = () => {
               type="button"
               role="radio"
               aria-checked={isActive}
-              onClick={() => dispatch(setMarket(market.id))}
+              // 数据订阅者多（~30 个），用并发切换：胶囊动画 urgent 先画，数据渲染不阻塞动画帧
+              onClick={() => startTransition(() => { dispatch(setMarket(market.id)); })}
               className={`relative z-10 flex items-center justify-center px-3 h-full text-[11px] font-bold tracking-tight transition-colors ${
                 isActive ? 'text-slate-800' : 'text-slate-400 hover:text-slate-600'
               }`}

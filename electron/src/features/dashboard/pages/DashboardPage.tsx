@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { startTransition, useCallback, useEffect, useState } from 'react';
 import { Card, Tabs, Tag, Typography, Space, Spin, message, List, Button, Empty } from 'antd';
 import {
     StockOutlined,
@@ -15,7 +15,7 @@ import { FieldBrowser } from '../components/FieldBrowser';
 import { SectorExplorer } from '../components/SectorExplorer';
 import { MarketOverview } from '../components/MarketOverview';
 import StrategyLabSignalCard from '../components/StrategyLabSignalCard';
-import { dataDashboardService, KlineItem } from '../services/dataDashboardService';
+import { dataDashboardService, isRequestCancelled, KlineItem } from '../services/dataDashboardService';
 import { listUserPoolSymbols, USER_POOL_FAVORITES } from '../../../services/userStockPoolService';
 import { useAppDispatch, useAppSelector } from '../../../store';
 import { selectCurrentMarket, setMarket, AppMarket } from '../../../store/slices/uiSlice';
@@ -84,24 +84,37 @@ const DashboardPage: React.FC = () => {
         loadWatchlist();
     }, [loadWatchlist]);
 
-    // Load field count for current market
+    // Load field count for current market（旧请求被 service 单飞取消，不覆盖新数据）
     useEffect(() => {
-        dataDashboardService.getFields(market).then((f) => setFieldCount(f.length)).catch(() => {});
+        let on = true;
+        dataDashboardService
+            .getFields(market)
+            .then((f) => {
+                if (on) setFieldCount(f.length);
+            })
+            .catch(() => {});
+        return () => {
+            on = false;
+        };
     }, [market]);
 
-    // Load K-line data
+    // Load K-line data（序号守卫：慢响应不覆盖快速切换后的新数据，取消不报错）
+    const klineReq = React.useRef(0);
     const loadKline = useCallback(async (m: AppMarket, sym: string) => {
+        const id = ++klineReq.current;
         setKlineLoading(true);
         try {
             const resp = await dataDashboardService.getKline(m, sym, 120);
+            if (id !== klineReq.current) return;
             setKlineData(resp.items || []);
             setKlineSource(resp.source_used || '');
         } catch (e: any) {
+            if (id !== klineReq.current || isRequestCancelled(e)) return;
             message.error(`K线数据加载失败: ${e?.message || e}`);
             setKlineData([]);
             setKlineSource('');
         } finally {
-            setKlineLoading(false);
+            if (id === klineReq.current) setKlineLoading(false);
         }
     }, []);
 
@@ -151,7 +164,7 @@ const DashboardPage: React.FC = () => {
     const handleWatchlistClick = useCallback(
         (item: WatchlistItem) => {
             const { symbol: sym, market: m } = normalizeSymbol(item.symbol);
-            dispatch(setMarket(m));
+            startTransition(() => { dispatch(setMarket(m)); });
             setSymbol(sym);
             setSymbolName(item.stockName || item.symbol);
             loadKline(m, sym);
@@ -174,7 +187,7 @@ const DashboardPage: React.FC = () => {
                 {/* Market Tabs */}
                 <Tabs
                     activeKey={market}
-                    onChange={(k) => dispatch(setMarket(k as AppMarket))}
+                    onChange={(k) => startTransition(() => { dispatch(setMarket(k as AppMarket)); })}
                     items={MARKET_TABS.map((t) => ({
                         key: t.key,
                         label: (
@@ -299,12 +312,28 @@ const DashboardPage: React.FC = () => {
                         </div>
                     }
                 >
-                    {klineLoading ? (
+                    {klineData.length === 0 && klineLoading ? (
                         <div style={{ height: 550, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <Spin />
                         </div>
                     ) : (
-                        <TradingViewChart data={klineData} height={550} />
+                        <div style={{ position: 'relative' }}>
+                            <TradingViewChart data={klineData} height={550} />
+                            {klineLoading && (
+                                <div
+                                    style={{
+                                        position: 'absolute',
+                                        top: 8,
+                                        right: 8,
+                                        background: 'rgba(255,255,255,0.85)',
+                                        borderRadius: 8,
+                                        padding: '4px 10px',
+                                    }}
+                                >
+                                    <Spin size="small" />
+                                </div>
+                            )}
+                        </div>
                     )}
                 </Card>
             </div>
