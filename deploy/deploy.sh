@@ -12,6 +12,7 @@ DOCKER_MIRROR="${QUANTMIND_DOCKER_MIRROR:-https://vmx3wfa8ih592aat3z.xuanyuan.ru
 PIP_MIRROR="${QUANTMIND_PIP_MIRROR:-https://pypi.tuna.tsinghua.edu.cn/simple/}"
 PIP_TRUSTED_HOST="${QUANTMIND_PIP_TRUSTED_HOST:-pypi.tuna.tsinghua.edu.cn}"
 FORCE=false
+SKIP_SKILLS=false
 
 log() { printf '[quantmind-deploy] %s\n' "$*"; }
 die() { log "错误: $*" >&2; exit 1; }
@@ -22,6 +23,7 @@ usage() {
 
   --ref <branch|tag>  部署代码版本（默认 master）
   --force             覆盖部署目录中未提交的代码改动，不删除业务数据
+  --skip-skills       跳过 QwenPaw 技能同步（离线/最小化部署用）
   -h, --help          显示帮助
 EOF
 }
@@ -30,6 +32,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --ref) REF="${2:-}"; shift 2 ;;
         --force) FORCE=true; shift ;;
+        --skip-skills) SKIP_SKILLS=true; shift ;;
         -h|--help) usage; exit 0 ;;
         *) die "未知参数: $1" ;;
     esac
@@ -65,7 +68,7 @@ PY
 }
 
 install_runtime() {
-    log '1/5 安装系统依赖、Docker 与 Compose'
+    log '1/6 安装系统依赖、Docker 与 Compose'
     apt-get update -y
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
         ca-certificates curl git python3 openssl zstd docker.io
@@ -80,7 +83,7 @@ install_runtime() {
 }
 
 sync_code() {
-    log "2/5 同步代码：$REF"
+    log "2/6 同步代码：$REF"
     if [[ -e "$PROJECT_DIR" && ! -d "$PROJECT_DIR/.git" ]]; then
         die "部署目录不是 Git 仓库: $PROJECT_DIR"
     fi
@@ -99,7 +102,7 @@ sync_code() {
 ensure_env() {
     local env_file="$PROJECT_DIR/.env"
     [[ -f "$env_file" ]] && return
-    log '3/5 生成 .env'
+    log '3/6 生成 .env'
     umask 077
     cat > "$env_file" <<EOF
 DB_PASSWORD=$(openssl rand -hex 24)
@@ -148,7 +151,7 @@ configure_qwenpaw_runtime() {
 }
 
 start_services() {
-    log '4/5 构建并启动服务'
+    log '4/6 构建并启动服务'
     cd "$PROJECT_DIR"
     # 仅预拉取第三方外部镜像（postgres/redis/huntly/rsshub/ib-gateway）。
     # 自研镜像（quantmind-oss / data-gateway / dashboard 等）未上传镜像仓库，
@@ -175,7 +178,7 @@ start_services() {
 }
 
 health_check() {
-    log '5/5 检查核心服务'
+    log '5/6 检查核心服务'
     local attempt
     for attempt in {1..30}; do
         if curl --fail --silent --max-time 3 http://127.0.0.1:8000/health >/dev/null; then
@@ -187,6 +190,45 @@ health_check() {
     done
     docker compose -f "$PROJECT_DIR/docker-compose.yml" ps || true
     die '服务未在 60 秒内通过健康检查，请查看 docker compose logs quantmind'
+}
+
+# QwenPaw 技能同步：skills/ → 技能池 → default 工作区，重启 qwenpaw 生效。
+# 失败仅告警不阻断部署；--skip-skills 或 QUANTMIND_SKIP_SKILLS=true 跳过。
+sync_qwenpaw_skills() {
+    if $SKIP_SKILLS || [[ "${QUANTMIND_SKIP_SKILLS:-false}" == "true" ]]; then
+        log '6/6 跳过 QwenPaw 技能同步（--skip-skills）'
+        return 0
+    fi
+    log '6/6 同步 QwenPaw 技能（skills/ → 技能池 → default 工作区）'
+    if ! docker ps --format '{{.Names}}' | grep -qx qwenpaw; then
+        log '  qwenpaw 未运行，跳过（启动后手动执行 bash scripts/quantbot_init.sh --skills-only）'
+        return 0
+    fi
+    local port
+    port="$(grep -E '^[[:space:]]*QWENPAW_PORT=' "$PROJECT_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d "\"' " || true)"
+    port="${port:-8088}"
+    local attempt
+    for attempt in $(seq 1 30); do
+        if curl --fail --silent --max-time 3 "http://127.0.0.1:${port}/health" >/dev/null 2>&1; then
+            break
+        fi
+        if (( attempt == 30 )); then
+            log '  qwenpaw 60s 内未就绪，跳过（稍后手动执行）'
+            return 0
+        fi
+        sleep 2
+    done
+    if ! QWENPAW_BASE_URL="${QWENPAW_BASE_URL:-http://127.0.0.1:${port}}" \
+         QWENPAW_AGENT_ID="${QWENPAW_AGENT_ID:-default}" \
+         bash "$PROJECT_DIR/scripts/quantbot_init.sh" --skills-only; then
+        log '  技能同步失败（不阻断部署，稍后手动执行 bash scripts/quantbot_init.sh --skills-only）'
+        return 0
+    fi
+    docker restart qwenpaw >/dev/null
+    sleep 5
+    local stat
+    stat="$(docker exec qwenpaw qwenpaw skills list 2>/dev/null | tail -1 || true)"
+    log "  技能同步完成：${stat:-状态未知，请手动确认（docker exec qwenpaw qwenpaw skills list）}"
 }
 
 show_completion_tips() {
@@ -218,6 +260,7 @@ main() {
     ensure_env
     start_services
     health_check
+    sync_qwenpaw_skills
     show_completion_tips
 }
 

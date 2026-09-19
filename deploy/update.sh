@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # QuantMind 一键更新脚本
-# 核心流程：拉代码 → 重建/重启后端容器 → 跑 data/upgrade_*.sql → 健康检查。
-# db/redis/qwenpaw 等基础设施容器不强制重启（仅 compose 配置漂移时按需重建）。
-# 用法：sudo bash deploy/update.sh [--ref master] [--remote gitee|github|origin] [--force] [--no-build] [--skip-backup]
+# 核心流程：拉代码 → 重建/重启后端容器 → 跑 data/upgrade_*.sql → 同步 QwenPaw 技能 → 健康检查。
+# db/redis/qwenpaw 等基础设施容器不强制重启（仅 compose 配置漂移时按需重建；qwenpaw 在技能同步后重启一次使新技能生效）。
+# 用法：sudo bash deploy/update.sh [--ref master] [--remote gitee|github|origin] [--force] [--no-build] [--skip-backup] [--skip-skills]
 
 set -Eeuo pipefail
 
@@ -12,6 +12,7 @@ REMOTE="${QUANTMIND_REMOTE:-origin}"   # 项目实际远端是 gitee/github；�
 FORCE=false
 BUILD=true
 SKIP_BACKUP=false
+SKIP_SKILLS=false
 
 log() { printf '[quantmind-update] %s\n' "$*"; }
 die() { log "错误: $*" >&2; exit 1; }
@@ -25,6 +26,7 @@ usage() {
   --force               覆盖服务器上的未提交代码改动，不删除业务数据
   --no-build            跳过核心镜像构建（仅代码改动时用，bind mount 已生效）
   --skip-backup         跳过升级前数据库备份
+  --skip-skills         跳过 QwenPaw 技能同步
   -h, --help            显示帮助
 EOF
 }
@@ -36,6 +38,7 @@ while [[ $# -gt 0 ]]; do
         --force) FORCE=true; shift ;;
         --no-build) BUILD=false; shift ;;
         --skip-backup) SKIP_BACKUP=true; shift ;;
+        --skip-skills) SKIP_SKILLS=true; shift ;;
         -h|--help) usage; exit 0 ;;
         *) die "未知参数: $1" ;;
     esac
@@ -104,7 +107,7 @@ backup_database() {
 }
 
 sync_code() {
-    log "1/4 同步代码：$REMOTE/$REF"
+    log "1/5 同步代码：$REMOTE/$REF"
     if ! git -C "$PROJECT_DIR" diff --quiet || ! git -C "$PROJECT_DIR" diff --cached --quiet; then
         $FORCE || die '检测到未提交代码改动；确认覆盖请加 --force'
         git -C "$PROJECT_DIR" reset --hard
@@ -173,7 +176,7 @@ build_core() {
     #   - 子项目 tools/rd-agent/dashboard/... 下的 requirements.txt 各自独立
     # 这样 95% 的纯代码升级从 5min 缩到 30s。
     if ! $BUILD; then
-        log '2/4 跳过镜像构建（--no-build 显式指定）'
+        log '2/5 跳过镜像构建（--no-build 显式指定）'
         return
     fi
 
@@ -236,7 +239,7 @@ build_core() {
             esac
         fi
         if [[ -n "$torch_val" ]]; then
-            log "2/4 未指定 TORCH_DEVICE，已从镜像推断为 $torch_val"
+            log "2/5 未指定 TORCH_DEVICE，已从镜像推断为 $torch_val"
             export TORCH_DEVICE="$torch_val"
             if [[ -f "$PROJECT_DIR/.env" ]]; then
                 if grep -qE '^[[:space:]]*TORCH_DEVICE=' "$PROJECT_DIR/.env"; then
@@ -252,7 +255,7 @@ build_core() {
                 --format '{{ index .Config.Labels "qm.req.sha" }}' 2>/dev/null || true)"
             case "$img_sha" in
                 ""|none|"<no value>")
-                    log '2/4 镜像无依赖指纹且无法推断 TORCH_DEVICE，构建签名按 skip'
+                    log '2/5 镜像无依赖指纹且无法推断 TORCH_DEVICE，构建签名按 skip'
                     ;;
                 *)
                     die "未指定 TORCH_DEVICE，且无法从镜像推断（镜像指纹=${img_sha}）。请显式设置 TORCH_DEVICE=cpu|gpu|skip 后重试，以免把已含 torch 的镜像按 skip 重建。"
@@ -285,15 +288,15 @@ build_core() {
     elif [[ -z "$prev" ]]; then
         # 镜像已在用、又无签名基线（首次启用新版脚本）→ 仅建基线，不白 rebuild
         need_build=false; need_seed=true
-        log "2/4 首次启用构建基线：镜像已存在，仅记录签名，跳过镜像重建"
+        log "2/5 首次启用构建基线：镜像已存在，仅记录签名，跳过镜像重建"
     else
         # 签名未变 → 跳过
-        log "2/4 跳过镜像构建（依赖/构建配置无变化；后端代码 bind mount 已生效）"
+        log "2/5 跳过镜像构建（依赖/构建配置无变化；后端代码 bind mount 已生效）"
         return
     fi
 
     if $need_build; then
-        log "2/4 重建核心后端镜像（检测到依赖/构建配置变更）"
+        log "2/5 重建核心后端镜像（检测到依赖/构建配置变更）"
         # 把依赖指纹同步写入镜像 Label（qm.req.sha），与 full-deploy 的指纹闸门共用一套口径。
         local req_sha
         req_sha="$(bash "$PROJECT_DIR/deploy/req-fingerprint.sh" "$PROJECT_DIR" 2>/dev/null || true)"
@@ -309,7 +312,7 @@ build_core() {
 # 关键步骤：强制重建 application 层容器（bind mount 代码需进程重启才生效），
 # 其余服务（含 db/redis/qwenpaw）不强制重启，仅在 compose 配置发生漂移时按需重建。
 restart_services() {
-    log '3/4 重启后端服务（强制重建 quantmind + celery）'
+    log '3/5 重启后端服务（强制重建 quantmind + celery）'
     cd "$PROJECT_DIR"
     local services=(quantmind)
     local service
@@ -339,7 +342,7 @@ restart_services() {
 # db 健康检查：短等待 15×2s=30s（覆盖 db 首次启动 / restart 窗口），
 # 不健康立即报错而不是傻等。
 update_database() {
-    log '4/4 执行数据库升级 SQL (data/upgrade_*.sql)'
+    log '4/5 执行数据库升级 SQL (data/upgrade_*.sql)'
     local max_attempts=15
     local attempt
     local pg_user
@@ -428,6 +431,45 @@ EOSQL
     fi
 }
 
+# QwenPaw 技能同步：skills/ → 技能池 → default 工作区，重启 qwenpaw 生效。
+# 失败仅告警不阻断升级；--skip-skills 或 QUANTMIND_SKIP_SKILLS=true 跳过。
+sync_qwenpaw_skills() {
+    if $SKIP_SKILLS || [[ "${QUANTMIND_SKIP_SKILLS:-false}" == "true" ]]; then
+        log '5/5 跳过 QwenPaw 技能同步（--skip-skills）'
+        return 0
+    fi
+    log '5/5 同步 QwenPaw 技能（skills/ → 技能池 → default 工作区）'
+    if ! docker ps --format '{{.Names}}' | grep -qx qwenpaw; then
+        log '  qwenpaw 未运行，跳过（启动后手动执行 bash scripts/quantbot_init.sh --skills-only）'
+        return 0
+    fi
+    local port
+    port="$(grep -E '^[[:space:]]*QWENPAW_PORT=' "$PROJECT_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d "\"' " || true)"
+    port="${port:-8088}"
+    local attempt
+    for attempt in $(seq 1 30); do
+        if curl --fail --silent --max-time 3 "http://127.0.0.1:${port}/health" >/dev/null 2>&1; then
+            break
+        fi
+        if (( attempt == 30 )); then
+            log '  qwenpaw 60s 内未就绪，跳过（稍后手动执行）'
+            return 0
+        fi
+        sleep 2
+    done
+    if ! QWENPAW_BASE_URL="${QWENPAW_BASE_URL:-http://127.0.0.1:${port}}" \
+         QWENPAW_AGENT_ID="${QWENPAW_AGENT_ID:-default}" \
+         bash "$PROJECT_DIR/scripts/quantbot_init.sh" --skills-only; then
+        log '  技能同步失败（不阻断升级，稍后手动执行 bash scripts/quantbot_init.sh --skills-only）'
+        return 0
+    fi
+    docker restart qwenpaw >/dev/null
+    sleep 5
+    local stat
+    stat="$(docker exec qwenpaw qwenpaw skills list 2>/dev/null | tail -1 || true)"
+    log "  技能同步完成：${stat:-状态未知，请手动确认（docker exec qwenpaw qwenpaw skills list）}"
+}
+
 main() {
     require_root
     require_project
@@ -437,6 +479,7 @@ main() {
     build_core
     restart_services
     update_database
+    sync_qwenpaw_skills
 
     # 健康检查：API + celery worker/beat 均就绪才算升级成功。
     # 仅 curl API 不充分——API 可能 200 而 celery 起崩。

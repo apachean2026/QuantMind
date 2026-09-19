@@ -422,6 +422,45 @@ configure_qwenpaw_runtime() {
     fi
 }
 
+# QwenPaw 技能同步：skills/ → 技能池 → default 工作区，重启 qwenpaw 生效。
+# 失败仅告警不阻断部署；QUANTMIND_SKIP_SKILLS=true 跳过（离线包场景按需设置）。
+sync_qwenpaw_skills() {
+    if [[ "${QUANTMIND_SKIP_SKILLS:-false}" == "true" ]]; then
+        log '跳过 QwenPaw 技能同步（QUANTMIND_SKIP_SKILLS=true）'
+        return 0
+    fi
+    log '同步 QwenPaw 技能（skills/ → 技能池 → default 工作区）'
+    if ! docker ps --format '{{.Names}}' | grep -qx qwenpaw; then
+        log '  qwenpaw 未运行，跳过（启动后手动执行 bash scripts/quantbot_init.sh --skills-only）'
+        return 0
+    fi
+    local port
+    port="$(grep -E '^[[:space:]]*QWENPAW_PORT=' "$PROJECT_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d "\"' " || true)"
+    port="${port:-8088}"
+    local attempt
+    for attempt in $(seq 1 30); do
+        if curl --fail --silent --max-time 3 "http://127.0.0.1:${port}/health" >/dev/null 2>&1; then
+            break
+        fi
+        if (( attempt == 30 )); then
+            log '  qwenpaw 60s 内未就绪，跳过（稍后手动执行）'
+            return 0
+        fi
+        sleep 2
+    done
+    if ! QWENPAW_BASE_URL="${QWENPAW_BASE_URL:-http://127.0.0.1:${port}}" \
+         QWENPAW_AGENT_ID="${QWENPAW_AGENT_ID:-default}" \
+         bash "$PROJECT_DIR/scripts/quantbot_init.sh" --skills-only; then
+        log '  技能同步失败（不阻断部署，稍后手动执行 bash scripts/quantbot_init.sh --skills-only）'
+        return 0
+    fi
+    docker restart qwenpaw >/dev/null
+    sleep 5
+    local stat
+    stat="$(docker exec qwenpaw qwenpaw skills list 2>/dev/null | tail -1 || true)"
+    log "  技能同步完成：${stat:-状态未知，请手动确认（docker exec qwenpaw qwenpaw skills list）}"
+}
+
 # 统一 torch 形态，避免依赖指纹漂移：
 # 镜像的 qm.req.sha 把 TORCH_DEVICE 纳入（skip/cpu/gpu 是不同镜像）。解析顺序：
 #   TORCH_DEVICE / QUANTMIND_TORCH_DEVICE > .env > 镜像 Label（qm.torch.device 或
@@ -536,6 +575,7 @@ build_and_start() {
     fi
     docker compose up -d --pull never
     configure_qwenpaw_runtime
+    sync_qwenpaw_skills
     docker compose ps
 }
 
