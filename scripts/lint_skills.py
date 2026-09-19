@@ -14,6 +14,9 @@ import pathlib
 import re
 import sys
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 REPO = pathlib.Path(__file__).resolve().parent.parent
 SKILLS = REPO / "skills"
 
@@ -71,9 +74,11 @@ def main() -> int:
         if not m:
             warnings.append(f"{d.name}: description 建议含'触发词：…'供意图识别")
         else:
+            seen_here: set[str] = set()
             for tok in re.split(r"[、，,；; ]+", m.group(1).strip()):
                 tok = tok.strip().strip("”").strip('"')
-                if tok:
+                if tok and tok not in seen_here:
+                    seen_here.add(tok)
                     trigger_index.setdefault(tok, []).append(d.name)
         # 契约全文粘贴检查：出现“运行环境契约”且引用块超长即判为粘贴
         if d.name not in EXEMPT_CONTRACT:
