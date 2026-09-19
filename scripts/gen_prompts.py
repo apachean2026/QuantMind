@@ -93,7 +93,7 @@ P.append(("trading-agents", "个股投研分析（智能体自主版）", "研�
     "data/reports/trading_agents/ PDF 报告",
     """请用智能体自主模式深度分析 {股票名称及代码}。
 
-请读取 skills/trading-agents/SKILL.md 并按其流程执行：拉取本地数据（特征/风险评分/推理分数/新闻）→ 组织多空子代理辩论 → 综合研判 → 生成 MD 报告 → 转 PDF 落盘 data/reports/trading_agents/{市场}/{股票名}/。最后给我投资论点摘要和主要风险。"""))
+请读取 skills/trading-agents/SKILL.md 并按其流程执行：拉取本地数据（特征快照/风险初筛/推理分数/新闻）→ 组织多空子代理辩论 → 综合研判 → 生成 MD 报告 → 转 PDF 落盘 data/reports/trading_agents/{市场}/{股票名}/。最后给我投资论点摘要和主要风险。"""))
 
 P.append(("smart-strategy-stock-picking", "条件选股", "研究分析",
     "QuantDB 条件选股：自然语言/结构化/DSL 三种方式，可选登记为全局股票池",
