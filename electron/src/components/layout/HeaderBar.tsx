@@ -6,10 +6,7 @@ import { Wifi, ShieldCheck } from 'lucide-react';
 import { MarketSelector } from './MarketSelector';
 import { motion } from 'framer-motion';
 import { selectCurrentTab } from '../../store/slices/aiStrategySlice';
-import { useAppDispatch, useAppSelector } from '../../store';
-import { setTradingMode } from '../../store/slices/uiSlice';
 
-const TRADING_MODE_PREF_KEY = 'qm:trading_mode_pref';
 import { SERVICE_URLS } from '../../config/services';
 
 export const HeaderBar: React.FC = () => {
@@ -17,8 +14,6 @@ export const HeaderBar: React.FC = () => {
   const [apiStatus, setApiStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
   const [networkLatency, setNetworkLatency] = useState<number>(0);
   const currentTab = useSelector(selectCurrentTab);
-  const dispatch = useAppDispatch();
-  const tradingMode = useAppSelector((state) => state.ui.tradingMode);
 
   const { isConnected: realtimeConnected } = useRealtimeData({
     enabled: false,
@@ -52,10 +47,7 @@ export const HeaderBar: React.FC = () => {
     return () => clearInterval(latencyTimer);
   }, []);
 
-  const handleModeSwitch = (mode: 'real' | 'simulation'): void => {
-    localStorage.setItem(TRADING_MODE_PREF_KEY, mode);
-    dispatch(setTradingMode(mode));
-  };
+  // 仅保留模拟交易：REAL/SIM 开关已移除（恢复见 git 历史），交易模式由 useTradingModeInitialization 强制 simulation
 
   return (
     <div className="relative px-8 pt-6 pb-2 grid grid-cols-3 items-center bg-transparent">

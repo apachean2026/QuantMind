@@ -270,7 +270,8 @@ const SettingsCenter: React.FC<SettingsCenterProps> = ({ userId, isActive }) => 
         </div>
         </div>
 
-        {/* 券商实盘接入卡片 */}
+        {/* 券商实盘接入卡片（仅保留模拟交易：不挂载，避免触发实盘接口与轮询；恢复把 SHOW_REAL_ENTRIES 置 true） */}
+        {SHOW_REAL_ENTRIES && (
         <div
           className={`h-full bg-white rounded-3xl border border-gray-200 shadow-sm overflow-y-auto custom-scrollbar ${
             activeTab === 'brokers' ? '' : 'hidden'
@@ -281,8 +282,10 @@ const SettingsCenter: React.FC<SettingsCenterProps> = ({ userId, isActive }) => 
             <BrokerConfigCard market={currentMarket} />
           </div>
         </div>
+        )}
 
-        {/* 大 QMT 真单镜像（仅 A 股） */}
+        {/* 大 QMT 真单镜像（仅 A 股，同上不挂载） */}
+        {SHOW_REAL_ENTRIES && (
         <div
           className={`h-full bg-white rounded-3xl border border-gray-200 shadow-sm overflow-y-auto custom-scrollbar ${
             activeTab === 'mirror' ? '' : 'hidden'
@@ -292,6 +295,7 @@ const SettingsCenter: React.FC<SettingsCenterProps> = ({ userId, isActive }) => 
             <QmtMirrorCard />
           </div>
         </div>
+        )}
       </div>
     </div>
   );

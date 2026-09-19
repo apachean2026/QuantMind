@@ -368,7 +368,7 @@ const LiveTradeConfigForm: React.FC<Props> = ({
           onChange={(next) =>
             updateLive({ pool_id: next?.ref || null, pool_name: next?.name || null })
           }
-          title="实盘交易股票池"
+          title="模拟交易股票池"
           compact
           stacked
         />

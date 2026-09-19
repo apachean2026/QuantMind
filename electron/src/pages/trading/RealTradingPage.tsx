@@ -13,18 +13,16 @@ import ReplayPage from './tabs/ReplayPage';
 import type { RealTradingStatus, AccountInfo, PreflightCheckResponse, PreflightCheckItem } from '../../services/realTradingService';
 import { authService } from '../../features/auth/services/authService';
 import type { StrategyFile } from '../../types/backtest/strategy';
-import { useAppDispatch, useAppSelector } from '../../store';
-import { selectCurrentMarket, selectTradingMode, setTradingMode } from '../../store/slices/uiSlice';
-import { getMarketConfig } from '../../config/marketConfig';
+import { useAppSelector } from '../../store';
+import { selectCurrentMarket } from '../../store/slices/uiSlice';
 import { useTradeWebSocket } from '../../hooks/useTradeWebSocket';
 import { buildTradingTopBarAccountInfo, resolveTradingAccountMode } from './utils/accountAdapter';
 import LiveTradeConfigWizard from './components/LiveTradeConfigWizard';
 import type { DeployMode, ExecutionConfig, LiveTradeConfig } from '../../types/liveTrading';
 
-type TradingMode = 'real' | 'simulation';  // 支持实盘(通达信桥)与模拟盘
+type TradingMode = 'real' | 'simulation'; // 仅保留模拟交易：实盘入口已隐藏，store 被强制为 simulation（恢复见 git 历史）
 type ActiveTab = 'manage' | 'manual-task' | 'personal' | 'position' | 'history' | 'settings' | 'replay';
 type PreflightStage = 'trading-readiness' | 'preflight';
-const TRADING_MODE_PREF_KEY = 'qm:trading_mode_pref';
 type PendingDeploy = {
     strategyId: string;
     mode: DeployMode;
@@ -71,20 +69,10 @@ const getErrorHttpStatus = (err: unknown): number | undefined => {
     return response?.status;
 };
 
-
-// 实盘通道文案按市场：CN=通达信桥/大QMT执行端，HK=富途/老虎/IB，US=老虎/IB/富途
-const BROKER_LABELS: Record<string, string> = {
-  CN: '通达信/大QMT',
-  HK: '富途/老虎/IB',
-  US: '老虎/IB/富途',
-  FUTURES: 'IB',
-  CRYPTO: '暂无',
-};
+// 实盘通道文案已随模拟专用化移除（恢复见 git 历史）。
 
 const RealTradingPage: React.FC = () => {
-    const dispatch = useAppDispatch();
     const currentMarket = useAppSelector(selectCurrentMarket);
-    const marketConfig = getMarketConfig(currentMarket);
     const [activeTab, setActiveTab] = useState<ActiveTab>('manage');
 
     // 券商通道卡「去配置凭证」跳转：切到设置页签
@@ -106,7 +94,8 @@ const RealTradingPage: React.FC = () => {
         }
         return 'user_1001';
     });
-    const tradingMode: TradingMode = useAppSelector(selectTradingMode);
+    // 仅保留模拟交易：页内无切换入口，强制 simulation（store 由 useTradingModeInitialization 兜底）
+    const tradingMode: TradingMode = 'simulation';
     const [status, setStatus] = useState<RealTradingStatus | null>(null);
     const [accountInfo, setAccountInfo] = useState<AccountInfo | null>(null);
     const [preflightResult, setPreflightResult] = useState<PreflightCheckResponse | null>(null);
@@ -122,7 +111,7 @@ const RealTradingPage: React.FC = () => {
     const [tradingReadinessResult, setTradingReadinessResult] = useState<TradingReadinessResult | null>(null);
     const [wizardOpen, setWizardOpen] = useState(false);
     const [wizardStrategy, setWizardStrategy] = useState<StrategyFile | null>(null);
-    const [wizardMode, setWizardMode] = useState<DeployMode>('REAL');
+    const [wizardMode, setWizardMode] = useState<DeployMode>('SIMULATION');
     const [confirmStarting, setConfirmStarting] = useState(false);
     const [revealedItemCount, setRevealedItemCount] = useState(0);
     const [isRevealing, setIsRevealing] = useState(false);
@@ -234,7 +223,7 @@ const RealTradingPage: React.FC = () => {
         ? 'running'
         : (runtimeStatus === 'starting' ? 'starting' : 'stopped');
     const resolvedRunMode: DeployMode | undefined = isRuntimeActive
-        ? (tradingMode === 'real' ? 'REAL' : 'SIMULATION')
+        ? 'SIMULATION'
         : undefined;
     const resolvedOrchestrationMode: 'docker' | 'k8s' | undefined = isRuntimeActive
         ? status?.orchestration_mode
@@ -273,7 +262,7 @@ const RealTradingPage: React.FC = () => {
                 setEffectiveLiveTradeConfig(startResp.effective_live_trade_config);
             }
 
-            const modeText = tradingMode === 'real' ? `实盘(${BROKER_LABELS[currentMarket] || '券商'})` : '模拟盘';
+            const modeText = '模拟盘';
             const permissionText = startResp?.trading_permission === 'observe_only'
                 ? '（观察态，不自动下单）'
                 : '';
@@ -306,16 +295,11 @@ const RealTradingPage: React.FC = () => {
         isShadow: boolean,
         strategy?: StrategyFile | null,
     ) => {
-        const mode: DeployMode = tradingMode === 'real' ? 'REAL' : 'SIMULATION';
+        const mode: DeployMode = 'SIMULATION';
         setWizardStrategy(strategy || { id: strategyId, name: strategyId, source: 'personal', code: '' });
         setWizardMode(mode);
         setWizardOpen(true);
     };
-
-    const handleModeSwitch = useCallback((mode: TradingMode) => {
-        localStorage.setItem(TRADING_MODE_PREF_KEY, mode);
-        dispatch(setTradingMode(mode));
-    }, [dispatch]);
 
     const handleWizardConfirm = useCallback(async (payload: {
         execution_config: ExecutionConfig;
@@ -450,7 +434,7 @@ const RealTradingPage: React.FC = () => {
 
     const confirmStartLabel = useMemo(() => {
         if (!pendingDeploy) return '确认并启动';
-        return tradingMode === 'real' ? `确认并启动实盘(${BROKER_LABELS[currentMarket] || '券商'})` : '确认并启动模拟盘';
+        return '确认并启动模拟盘';
     }, [pendingDeploy, tradingMode]);
 
     // 检测结果全部展示，不做逐项 reveal（加快加载速度）
