@@ -59,7 +59,7 @@ CT="Content-Type: application/json"
 | `beta_20` | 20日Beta | — |
 | `volume_ratio_5` / `volume_ratio_20` | 量比 | — |
 | `main_flow` | 主力资金净流入 | 元 |
-| `flow_net_amount` | 资金净流入总额 | 元 |
+| `flow_net_amount` | 资金净流入总额 | 万元（2026-09 起；读入归一为元） |
 | `inst_ownership` | 机构持仓 | % |
 | `concept_ai` / `concept_chip` 等 | 概念热度 | — |
 | `industry` | 行业 | — |

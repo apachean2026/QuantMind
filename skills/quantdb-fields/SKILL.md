@@ -185,10 +185,14 @@ python backend/scripts/wind_l2_import.py --archive ... --force                  
 ### l2_factors（二级因子，flow 金额注意）
 | 字段 | 单位 | 实测依据 |
 |---|---|---|
-| `flow_net_amount / flow_super_net / flow_large_net / flow_medium_net / flow_small_net` | **元** | 600519 flow_net_amount=-274109797.7 元 = -2.74 亿；flow_net_amount/(amount×1e4)=flow_net_ratio ✓ |
+| `flow_net_amount / flow_buy/sell / flow_super/large/medium/small_net` | **万元**（2026-09 起） | 与同表 `amount` 同量纲：`flow_net_amount/amount≈flow_net_ratio`；此前为**元**（`flow/(amount×1e4)≈ratio`） |
 | `flow_*_ratio` | 小数 | |
 | `vol_turnover_total` | **股** | 与 kline volume 完全相等 ✓ |
-| 分区 | 已恢复日更（2026-08-19 实测至 20260818，flow_net 5098 distinct 有区分度） | ⚠️ 此前「停更 2026-02-27」结论过时；top 少数几只净流入会厂商同值（如 165564181），属口径非 bug |
+| 分区 | 已恢复日更 | ⚠️ top 少数净流入可能厂商同值封顶 |
+
+**读入归一**：`backend/shared/quantdb_flow_units.py` 自动把万元→元（兼容旧分区），下游再 `/1e8`→亿、`×1e-6`→百万元。
+
+**flow 灌入口径**（update_sdl_complete_pipeline.py）：假定源为元时 `/1e6`→百万元；新版万元源须先 ×1e4。
 
 ## 七、PG 表 stock_daily_latest（API 服务数据源）
 
@@ -201,20 +205,15 @@ python backend/scripts/wind_l2_import.py --archive ... --force                  
 | `turnover_rate / flow_net_amount / main_flow` | **NULL**（未灌） | 风险评分里"缺少换手率"由此而来 |
 | `volume_ratio_5` | 倍（0.934） | |
 
-**flow 灌入口径**（update_sdl_complete_pipeline.py）：`main_flow = flow_large_net_amount/1e6`（**百万元**），`flow_net_amount = flow_net_amount/1e6`（**百万元**）——与 l2 parquet 的元不同，读 PG 时注意。
-
 ## 八、research API 换算表（/research/features 等接口返回）
 
-API 层 `_UNIT_SCALES` 把部分字段缩放后输出：
+API 层 `_UNIT_SCALES` 把部分字段缩放后输出（L2 金额先归一为元）：
 
-| 输出字段 | 缩放 | 输出单位 | 例（600519 探针） |
+| 输出字段 | 缩放 | 输出单位 | 例 |
 |---|---|---|---|
-| `totalMv / floatMv` | ×1e-8 | 亿元 | 16775.97 亿 ✓ |
-| `mainFlow / flowNetAmount / flowLargeNet / flowMediumNet / flowSmallNet` | ×1e-6 | 百万元 | flow_net_amount=-274.11（百万） |
-| **`flowSuperNet`** | **无缩放** | **元（bug！）** | flow_super_net=-6840376 元，与同类别其他字段差 1e6 |
-| `turnoverRate` | — | % 小数 | 0.00239 |
-
-> ⚠️ **fundFlow 类别内单位不一致**：flowSuperNet 是元，其余 flow* 是百万元。skill 分析时要统一换算后再比。
+| `totalMv / floatMv` | ×1e-8 | 亿元 | |
+| `mainFlow / flowNetAmount / flowLargeNet / flowMediumNet / flowSmallNet / flowSuperNet` | ×1e-6 | 百万元 | 统一口径 |
+| `turnoverRate` | — | % 小数 | |
 
 ## 九、3_financial_data 财务数据
 
