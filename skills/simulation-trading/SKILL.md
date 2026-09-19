@@ -1,24 +1,10 @@
 ---
 name: simulation-trading
-description: "模拟交易 — 下单买卖、持仓管理、成交查询、账户状态、资金快照。在 QuantBot / Claude Code 中执行模拟交易、下单、查询持仓、查看账户、管理交易记录时使用。触发词：模拟交易、模拟下单、买入股票、卖出股票、查持仓、查账户、模拟账户、交易记录、下单、撤单"
+description: "模拟交易 — 下单买卖、持仓管理、成交查询、账户状态、资金快照。在 QuantBot / Claude Code 中执行模拟交易、下单、查询持仓、查看账户、管理交易记录时使用。触发词：模拟交易、模拟下单、买入股票、卖出股票、查持仓、查账户、模拟账户、模拟交易记录、模拟撤单"
 ---
 
-> ## ⚙️ 运行环境契约（最高优先级，先于本文其余内容执行）
->
-> 本技能可能运行在 **QuantBot（QwenPaw 容器）** 或**宿主机/本地 Claude Code**。执行前先探测环境（`which docker`、API 连通性），并遵守以下映射规则：
->
-> 1. **后端 API 地址**：QwenPaw / 容器网络内一律用 `http://quantmind:8000`（`quantmind` 是 docker 网络别名）；仅宿主机调试用 `http://127.0.0.1:8000`。正文中出现的 `127.0.0.1:8000`、`localhost:800x`，在 QwenPaw 环境下自动替换为 `http://quantmind:8000`。
-> 2. **取数脚本执行**：凡 import 了 `pandas / duckdb / psycopg2 / numpy / sqlalchemy` 等重依赖或 `backend` 包的脚本，**必须在 quantmind 容器内执行**（QwenPaw 本地 venv 无这些依赖）：
->    ```bash
->    docker cp <脚本路径> quantmind:/tmp/<脚本名> && docker exec -w /app quantmind python3 /tmp/<脚本名> <参数>
->    ```
->    脚本源三选一：宿主机 repo `skills/<name>/scripts/`、QwenPaw 工作区 `/app/working/workspaces/default/skills/<name>/scripts/`、挂载目录 `/quantmind/skills/<name>/scripts/`。纯标准库脚本（无重依赖）可在 QwenPaw 本地直接跑。
-> 3. **报告落盘**：股票报告页可见的 MD/PDF 报告，直接写 `/data/reports/trading_agents/{市场或类别}/{股票名}/`（QwenPaw 对 `/app/db` 有写权限，**直接写文件，不要 docker cp**）；过程数据 facts 写 `/data/reports/<类别>/`（`/data` 可写）。
-> 4. **MD → PDF 转换（按优先级降级）**：
->    ① `docker exec -w /app quantmind python3 backend/scripts/md_to_pdf_report.py <输入.md> <输出.pdf>`（研报级排版，首选）；
->    ② docker 不可用时，**改用 QwenPaw 内置 `pdf` 技能**把 MD 转成 PDF；
->    ③ 两者都不可用则只交付 MD，并明确告知用户 PDF 未能生成及原因。
-> 5. 本文中的 `~/.claude`、`cp -r ... ~/.claude/skills` 等说明仅适用于本地 Claude Code 维护者，**QuantBot 不要执行**。
+> ⚙️ 本技能遵循公共运行环境契约（最高优先级，先于本文其余内容执行）：
+> 详见 [_shared/env-contract.md](../_shared/env-contract.md)，执行前先读它。
 
 # 模拟交易技能
 
@@ -167,9 +153,8 @@ curl -s -H "$AUTH" "$BASE/api/v1/real-trading/history"
 # 创建/列表组合
 curl -s -X POST -H "$AUTH" -H "$CT" "$BASE/api/v1/portfolios" -d '{"name":"我的组合","initial_capital":1000000}'
 curl -s -H "$AUTH" "$BASE/api/v1/portfolios"
-# 组合详情/分布/绩效
+# 组合详情/绩效（分布只有全量口径，见持仓管理节）
 curl -s -H "$AUTH" "$BASE/api/v1/portfolios/{id}"
-curl -s -H "$AUTH" "$BASE/api/v1/portfolios/{id}/distribution"
 curl -s -H "$AUTH" "$BASE/api/v1/portfolios/{id}/performance"
 # 结算/快照/同步
 curl -s -X POST -H "$AUTH" "$BASE/api/v1/portfolios/{id}/settlement"
@@ -182,10 +167,12 @@ curl -s -X POST -H "$AUTH" "$BASE/api/v1/portfolios/{id}/sync-status"
 # 组合持仓
 curl -s -H "$AUTH" "$BASE/api/v1/portfolios/{id}/positions"
 curl -s -X POST -H "$AUTH" -H "$CT" "$BASE/api/v1/portfolios/{id}/positions" -d '{"symbol":"600519.SH","quantity":100}'
-# 调整/清仓/更新价格
-curl -s -X POST -H "$AUTH" -H "$CT" "$BASE/api/v1/portfolios/{id}/adjust"
-curl -s -X POST -H "$AUTH" -H "$CT" "$BASE/api/v1/portfolios/{id}/close"
+# 调整/清仓（注意是 positions/{position_id} 口径，不是 portfolios/{id} 下挂 adjust/close）
+curl -s -X POST -H "$AUTH" -H "$CT" "$BASE/api/v1/positions/{position_id}/adjust" -d '{"quantity":100}'
+curl -s -X POST -H "$AUTH" -H "$CT" "$BASE/api/v1/positions/{position_id}/close"
 curl -s -X PUT -H "$AUTH" -H "$CT" "$BASE/api/v1/positions/{position_id}/price" -d '{"price":1500.0}'
+# 全量资产分布（无单组合 distribution，查全量再过滤）
+curl -s -H "$AUTH" "$BASE/api/v1/portfolios/distribution"
 ```
 
 ## 5. 实战流程（推荐）

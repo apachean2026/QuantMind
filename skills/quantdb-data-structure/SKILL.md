@@ -3,6 +3,9 @@ name: quantdb-data-structure
 description: "QuantDB 服务器数据结构与读取口径 — 数据目录组织（1_kline_data~6_ml_datasets）、Hive 分区规律（dt=YYYYMMDD 整数）、单文件 {symbol}.parquet、parquet 后缀式代码 600519.SH 与 PG 前缀式 SH600519 的转换口径、quantdb_hub.py 单一读取入口与 DuckDB 视图清单、服务器路径映射（/opt/quantmind/data/quantdb → 容器 /data/quantdb）。凡需要读写/探查/补数/验证 QuantDB 本地 parquet 数据、查目录结构、写 DuckDB 查询、排查查不到数据问题时使用。触发词：quantdb 结构、数据目录、dt 分区、hive 分区、parquet 路径、数据在哪里、600519.SH、代码格式、qdb_ 视图、quantdb_hub、增量同步、数据缺失排查"
 ---
 
+> ⚙️ 本技能遵循公共运行环境契约（最高优先级，先于本文其余内容执行）：
+> 详见 [_shared/env-contract.md](../_shared/env-contract.md)，执行前先读它。
+
 # quantdb-data-structure — QuantDB 数据结构与读取口径
 
 > 写任何触碰 QuantDB 本地数据的代码/查询前必读。字段单位与口径陷阱另见

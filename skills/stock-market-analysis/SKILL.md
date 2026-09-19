@@ -1,24 +1,10 @@
 ---
 name: stock-market-analysis
-description: "股票市场深度数据分析与导出 — 全市场信号扫描、行业轮动、个股研报级深度分析（基本面/估值/技术/资金筹码/情绪/风险六维）、数据挖掘、CSV/Excel 导出。在 QuantBot / Claude Code 中分析股票市场、挖掘机会、导出分析数据、生成选股/投研报告时使用。触发词：分析市场、数据分析、数据挖掘、全市场扫描、行业轮动、导出数据、导出CSV、生成报告、投研分析、深度分析、挖掘机会、个股研报、个股分析"
+description: "股票市场深度数据分析与导出 — 全市场信号扫描、行业轮动、个股研报级深度分析（基本面/估值/技术/资金筹码/情绪/风险六维）、数据挖掘、CSV/Excel 导出。在 QuantBot / Claude Code 中分析股票市场、挖掘机会、导出分析数据、生成选股报告时使用。触发词：分析市场、数据分析、数据挖掘、全市场扫描、行业轮动、导出数据、导出CSV、挖掘机会、个股研报、个股分析、深度分析"
 ---
 
-> ## ⚙️ 运行环境契约（最高优先级，先于本文其余内容执行）
->
-> 本技能可能运行在 **QuantBot（QwenPaw 容器）** 或**宿主机/本地 Claude Code**。执行前先探测环境（`which docker`、API 连通性），并遵守以下映射规则：
->
-> 1. **后端 API 地址**：QwenPaw / 容器网络内一律用 `http://quantmind:8000`（`quantmind` 是 docker 网络别名）；仅宿主机调试用 `http://127.0.0.1:8000`。正文中出现的 `127.0.0.1:8000`、`localhost:800x`，在 QwenPaw 环境下自动替换为 `http://quantmind:8000`。
-> 2. **取数脚本执行**：凡 import 了 `pandas / duckdb / psycopg2 / numpy / sqlalchemy` 等重依赖或 `backend` 包的脚本，**必须在 quantmind 容器内执行**（QwenPaw 本地 venv 无这些依赖）：
->    ```bash
->    docker cp <脚本路径> quantmind:/tmp/<脚本名> && docker exec -w /app quantmind python3 /tmp/<脚本名> <参数>
->    ```
->    脚本源三选一：宿主机 repo `skills/<name>/scripts/`、QwenPaw 工作区 `/app/working/workspaces/default/skills/<name>/scripts/`、挂载目录 `/quantmind/skills/<name>/scripts/`。纯标准库脚本（无重依赖）可在 QwenPaw 本地直接跑。
-> 3. **报告落盘**：股票报告页可见的 MD/PDF 报告，直接写 `/data/reports/trading_agents/{市场或类别}/{股票名}/`（QwenPaw 对 `/app/db` 有写权限，**直接写文件，不要 docker cp**）；过程数据 facts 写 `/data/reports/<类别>/`（`/data` 可写）。
-> 4. **MD → PDF 转换（按优先级降级）**：
->    ① `docker exec -w /app quantmind python3 backend/scripts/md_to_pdf_report.py <输入.md> <输出.pdf>`（研报级排版，首选）；
->    ② docker 不可用时，**改用 QwenPaw 内置 `pdf` 技能**把 MD 转成 PDF；
->    ③ 两者都不可用则只交付 MD，并明确告知用户 PDF 未能生成及原因。
-> 5. 本文中的 `~/.claude`、`cp -r ... ~/.claude/skills` 等说明仅适用于本地 Claude Code 维护者，**QuantBot 不要执行**。
+> ⚙️ 本技能遵循公共运行环境契约（最高优先级，先于本文其余内容执行）：
+> 详见 [_shared/env-contract.md](../_shared/env-contract.md)，执行前先读它。
 
 # 股票市场深度数据分析与导出
 
@@ -35,7 +21,7 @@ description: "股票市场深度数据分析与导出 — 全市场信号扫描�
 > | technical_indicators 的 close=**后复权** | valuation/market_sentiment=**不复权** |
 > | valuation `dividend_rate` 是**百分数**（0.148=0.148%），**20260814 起才切换** | 之前是小数口径，跨日分析必须 ×10 归一 |
 > | l1 `vol_std_*` 是**小数**（0.0406） | technical_indicators `vol_std_*` 是 **%**（4.06），差 100 倍 |
-> | `/research/features` API 已换算：市值→亿元、flow*→百万元 | parquet 原值：市值=元、flow=元（差 1e8/1e6） |
+> | symbols/features API 已换算：市值→亿元、flow*→百万元 | parquet 原值：市值=元、flow=元（差 1e8/1e6） |
 > | l2_factors 分区**停滞 20260227** | 用前先查最新日期，近期 l2 型字段大量 NaN 是正常的 |
 > | min1/min5 停更 20260724、hsgt_north 停更 202408 | 别当实时数据用 |
 > | 财务 parquet 单位=**元** | instrument_detail `J_*`=万元、`Zsz/Ltsz`=亿元 |
@@ -81,7 +67,7 @@ curl -s -H "$AUTH" "$BASE/api/v1/selection/negative"
 | 谨慎 | 强行业数不足 | 降低仓位预期 |
 | 空仓观望 | 无强行业 | 不参与 |
 
-板块热度交叉验证（页面版端点，`/api/v1/market-analysis/*`）：
+板块热度交叉验证（页面版市场分析端点，见下三条）：
 ```bash
 curl -s -H "$AUTH" "$BASE/api/v1/market-analysis/money-flow/period?period=5d&dimension=sector&category=shenwan&limit=25"
 curl -s -H "$AUTH" "$BASE/api/v1/market-analysis/heatmap?trade_date=2026-08-14"
@@ -103,9 +89,11 @@ curl -s -H "$AUTH" "$BASE/api/v1/market-analysis/tags/by-tag?tag=半导体"
 ### 3.1 数据采集（先全量拉取，再按需深挖）
 
 ```bash
-# ① 全维度特征（估值/技术/动量/波动/流动性/资金流/风格/行业/筹码/概念/微观结构/情绪，371 字段）
-#    注意：API 已换算单位（市值→亿元、flow*→百万元、totalMv→亿元），引用时注明
-curl -s -H "$AUTH" "$BASE/api/v1/research/features/600519.SH"
+# ① 全维度特征（估值/技术/动量/波动/流动性/资金流/风格/行业/筹码/概念/微观结构/情绪）
+#    注意：单股特征走 symbols/features（POST，body.symbols 数组；返回 data.items[] 快照）。
+#    API 已换算单位（市值→亿元、flow*→百万元、totalMv→亿元），引用时注明
+curl -s -X POST -H "$AUTH" -H "$CT" "$BASE/api/v1/research/symbols/features" \
+  -d '{"symbols":["600519.SH"]}'
 
 # ② K线（120 日，不复权价 + adj_factor）
 curl -s -H "$AUTH" "$BASE/api/v1/research/kline/600519.SH?days=120"
@@ -117,8 +105,9 @@ curl -s -H "$AUTH" "$BASE/api/v1/models"                    # 用户模型列表
 curl -s -H "$AUTH" "$BASE/api/v1/models/inference/stock/600519.SH/history?days=180"
 curl -s -H "$AUTH" "$BASE/api/v1/models/inference/stock/600519.SH/history?days=180&model_id=xxx"
 
-# ④ 风险评分卡（6 维度 + veto 项）
-curl -s -H "$AUTH" "$BASE/api/v1/risk/score/600519.SH"
+# ④ 风险初筛（无独立风险评分端点，用①特征 + ②K线本地判读后填§7.1 风险提示表；
+#    策略级回测风险走 [[backtest-center]] §6 /qlib/risk/{backtest_id}/metrics）
+#    本地看：估值分位（pe/pb vs 行业）、波动（volStd20）、流动性（金额/换手）、质押/商誉（财务层）、veto 项（ST/*ST/次新/长期停牌直接否决）
 
 # ⑤ 大盘环境（L0，先于一切）
 curl -s -H "$AUTH" "$BASE/api/v1/selection/daily"           # market_state 牛熊+仓位建议
@@ -149,7 +138,7 @@ curl -s -H "$AUTH" "$BASE/api/v1/news/articles?tickers=600519&sort=sentiment_bul
 
 ### 3.2 财务基本面（三表联动 + 每股指标，parquet 直读）
 
-财务数据在 parquet（单位=**元**，季频），`/research/features` 拿不到，
+财务数据在 parquet（单位=**元**，季频），symbols/features 快照拿不到，
 **必须 docker exec 直读**：
 
 ```bash
@@ -204,7 +193,7 @@ EOF
 ```
 
 - **注意**：valuation.dividend_rate 20260814 起才是百分数口径，此前为小数——历史分位计算必须先按日期统一口径（×10 归一）
-- 负 PE / 无盈利 → 用 PB/PS；行业相对：l1 `ind_relative_pe`（<1 = 相对行业折价，从 /research/features 的 industry 类取）
+- 负 PE / 无盈利 → 用 PB/PS；行业相对：l1 `ind_relative_pe`（<1 = 相对行业折价，从 symbols/features 快照的 industry 类取）
 - 一句话结论模板：`PE 23.1x = 近 5 年 18% 分位，行业相对 0.72 → 估值不构成风险`
 
 ### 3.4 技术分析（分层递进 + 关键价位）
@@ -306,15 +295,19 @@ EOF
 
 ### 5.2 导出个股全维度特征 CSV
 ```bash
-curl -s -H "$AUTH" "$BASE/api/v1/research/features/600519.SH" -o /tmp/stock_features.json
+curl -s -X POST -H "$AUTH" -H "$CT" "$BASE/api/v1/research/symbols/features" \
+  -d '{"symbols":["600519.SH"]}' -o /tmp/stock_features.json
 python3 <<'EOF'
 import json
 d = json.load(open('/tmp/stock_features.json')).get('data', {})
+snap = (d.get('items') or [d])[0]  # 快照：嵌套分类 {类: {字段: 值}} 或扁平字段
 rows = []
-for cat, fields in d.items():
+for cat, fields in snap.items():
     if isinstance(fields, dict):
         for k, v in fields.items():
             rows.append([cat, k, v])
+    elif cat not in ('code', 'symbol'):
+        rows.append(['base', cat, fields])
 with open('/tmp/stock_features.csv', 'w', newline='', encoding='utf-8-sig') as f:
     w = csv.writer(f)
     w.writerow(['类别','字段','值'])
@@ -341,19 +334,21 @@ print(f'导出 {len(d)} 只股票对比 → /tmp/stock_compare.csv')
 EOF
 ```
 
-### 5.4 导出风险评分卡 CSV
+### 5.4 导出风险相关字段 CSV（无独立风险评分端点：导出原始字段供§7.1 风险提示表打分）
 ```bash
-curl -s -X POST -H "$AUTH" -H "$CT" "$BASE/api/v1/risk/scores" \
-  -d '{"symbols":["600519.SH","000858.SZ","601318.SH"]}' -o /tmp/risk_batch.json
+curl -s -X POST -H "$AUTH" -H "$CT" "$BASE/api/v1/research/batch-features" \
+  -d '{"symbols":["600519.SH","000858.SZ","601318.SH"],"fields":["pe","pb","roe","totalMv","momRet20d","volStd20","mainFlow"]}' \
+  -o /tmp/risk_fields.json
 python3 <<'EOF'
 import json, csv
-d = json.load(open('/tmp/risk_batch.json')).get('data', {}).get('items', {})
-with open('/tmp/risk_scores.csv', 'w', newline='', encoding='utf-8-sig') as f:
+d = json.load(open('/tmp/risk_fields.json')).get('data', {}).get('items', [])
+with open('/tmp/risk_fields.csv', 'w', newline='', encoding='utf-8-sig') as f:
     w = csv.writer(f)
-    w.writerow(['代码','风险分','等级','否决','否决原因','日期'])
-    for sym, v in d.items():
-        w.writerow([sym, v.get('risk_score'), v.get('risk_level'), v.get('veto'), ';'.join(v.get('veto_reasons') or []), v.get('trade_date')])
-print(f'导出 {len(d)} 只风险评分 → /tmp/risk_scores.csv')
+    if d:
+        w.writerow(['代码'] + list(d[0].get('values', {}).keys()))
+        for it in d:
+            w.writerow([it.get('symbol')] + list(it.get('values', {}).values()))
+print(f'导出 {len(d)} 只风险字段 → /tmp/risk_fields.csv（评分按§7.1 风险提示表人工/模型判读，不虚构端点）')
 EOF
 ```
 

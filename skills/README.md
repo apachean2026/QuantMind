@@ -78,14 +78,23 @@ cp -r skills/<skill-name> ~/.claude/skills/
 
 - 富途 OpenD 网关：compose **未内置**该服务，按 [install-futu-opend](install-futu-opend/) 在本地/服务器安装启动（API 端口 11111）
 - IB Gateway：`docker compose up -d ib-gateway`（.env 配置 IB_ACCOUNT/IB_PASSWORD，端口 4001=实盘 / 4002=模拟）
-- QwenPaw（QuantBot）：`docker compose up -d qwenpaw`，端口 8088 **默认仅绑定 127.0.0.1**；需外部（浏览器/Electron）直连时在 `.env` 设 `QWENPAW_BIND=0.0.0.0` 并配合安全组限制来源 IP
+- QwenPaw（QuantBot）：`docker compose up -d qwenpaw`，端口 8088 绑定地址由 `.env` 的 `QWENPAW_BIND` 控制（默认 `0.0.0.0`，仅本机访问则设 `127.0.0.1`），配合云安全组/防火墙限制来源 IP
 
 ## 技能开发约定
 
-新增技能时：
+新增/改版技能时：
 
-1. 在 `skills/<skill-name>/` 下创建 `SKILL.md`
-2. `SKILL.md` 顶部 YAML frontmatter 必须包含 `name` 和 `description`（description 含触发词，供 AI 意图识别）
-3. 内容按「认证 → 端点 → 示例」组织，所有 API 统一走 `/api/v1` 前缀
-4. 涉及市场的操作，标注市场参数（CN/HK/US/CRYPTO/FUTURES）
-5. 更新本 README 的技能总览表
+1. 在 `skills/<skill-name>/` 下创建 `SKILL.md`（模板见 `_shared/SKILL_TEMPLATE.md`）
+2. `SKILL.md` 顶部 YAML frontmatter 必须包含 `name`（=目录名）和 `description`（含触发词，供 AI 意图识别；触发词避免与其他技能重复）
+3. **不要粘贴运行环境契约全文**：只保留 `_shared/env-contract.md` 的一行引用（契约改一处全局生效）
+4. 内容按「认证 → 端点 → 示例」组织，所有 API 统一走 `/api/v1` 前缀；股票代码用前缀式（如 `SH600036`）
+5. 涉及市场的操作，标注市场参数（CN/HK/US/CRYPTO/FUTURES）
+6. 提交前必须跑通：`python scripts/lint_skills.py --strict`（规范）与 `python scripts/check_skill_endpoints.py`（端点对照，0 死链）
+7. 确认是历史提及才允许进 `_shared/endpoint_allowlist.txt` 豁免；正常漂移一律修技能正文
+8. 更新本 README 的技能总览表
+
+## 同步与校验（唯一入口）
+
+- 更新技能后走 API 进技能池，**禁止手工拷贝**：服务器上 `bash scripts/quantbot_init.sh --skills-only`，再 `docker restart qwenpaw`
+- 验证：`docker exec qwenpaw qwenpaw skills list`（技能数与启用数一致）+ `docker exec qwenpaw qwenpaw skills test <name>`
+- 漂移基线：`skills/_shared/drift_report.md`（自动生成，勿手改）

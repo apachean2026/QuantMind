@@ -1,25 +1,10 @@
 ---
 name: trading-agents
-description: "个股深度投研分析（智能体自主版）— 拉取 QuantMind 本地数据（371维特征/风险评分/模型推理分数/新闻）→ 多空子代理辩论 → 综合研判 → 生成 md 报告 → 导出 PDF 到平台「股票报告」页。任何大模型（deepseek/qwen/glm/openai/minimax）都能执行，不依赖容器投研管线。在 QuantBot / Claude Code 中深度分析股票时使用。触发词：投研分析、深度分析、个股分析、股票报告、生成报告、多空分析、AI分析师"
+description: "个股深度投研分析（智能体自主版）— 拉取 QuantMind 本地数据（特征快照/模型推理分数/新闻）→ 多空子代理辩论 → 综合研判 → 生成 md 报告 → 导出 PDF 到平台「股票报告」页。任何大模型（deepseek/qwen/glm/openai/minimax）都能执行，不依赖容器投研管线。在 QuantBot / Claude Code 中深度分析股票时使用。触发词：投研分析、多空辩论、股票报告、生成报告、多空分析、AI分析师"
 ---
 
-> ## ⚙️ 运行环境契约（最高优先级，先于本文其余内容执行）
->
-> 本技能可能运行在 **QuantBot（QwenPaw 容器）** 或**宿主机/本地 Claude Code**。执行前先探测环境（`which docker`、API 连通性），并遵守以下映射规则：
->
-> 1. **后端 API 地址**：QwenPaw / 容器网络内一律用 `http://quantmind:8000`（`quantmind` 是 docker 网络别名）；仅宿主机调试用 `http://127.0.0.1:8000`。正文中出现的 `127.0.0.1:8000`、`localhost:800x`，在 QwenPaw 环境下自动替换为 `http://quantmind:8000`。
-> 2. **取数脚本执行**：凡 import 了 `pandas / duckdb / psycopg2 / numpy / sqlalchemy` 等重依赖或 `backend` 包的脚本，**必须在 quantmind 容器内执行**（QwenPaw 本地 venv 无这些依赖）：
->    ```bash
->    docker cp <脚本路径> quantmind:/tmp/<脚本名> && docker exec -w /app quantmind python3 /tmp/<脚本名> <参数>
->    ```
->    脚本源三选一：宿主机 repo `skills/<name>/scripts/`、QwenPaw 工作区 `/app/working/workspaces/default/skills/<name>/scripts/`、挂载目录 `/quantmind/skills/<name>/scripts/`。纯标准库脚本（无重依赖）可在 QwenPaw 本地直接跑。
-> 3. **报告落盘**：股票报告页可见的 MD/PDF 报告，直接写 `/data/reports/trading_agents/{市场或类别}/{股票名}/`（`/data` 是 QwenPaw 与 quantmind 容器共享的可读写挂载，**QwenPaw 直接 mkdir/cp 即可，不要 docker cp**）；过程数据 facts 写 `/data/reports/<类别>/`。
-> 4. **MD → PDF 转换（按优先级降级）**：
->    ① QwenPaw 本地直接跑 `python3 /app/backend/scripts/md_to_pdf_report.py <输入.md> <输出.pdf>`（扩展镜像已内置 reportlab + 中文字体，研报级排版，首选）；
->    ② QwenPaw 环境缺依赖时，`docker exec -w /app quantmind python3 backend/scripts/md_to_pdf_report.py <输入.md> <输出.pdf>`（扩展镜像已含 docker CLI）；
->    ③ 以上都不可用时，**改用 QwenPaw 内置 `pdf` 技能**把 MD 转成 PDF；
->    ④ 全部失败则只交付 MD，并明确告知用户 PDF 未能生成及原因。
-> 5. 本文中的 `~/.claude`、`cp -r ... ~/.claude/skills` 等说明仅适用于本地 Claude Code 维护者，**QuantBot 不要执行**。
+> ⚙️ 本技能遵循公共运行环境契约（最高优先级，先于本文其余内容执行）：
+> 详见 [_shared/env-contract.md](../_shared/env-contract.md)，执行前先读它。
 
 # 个股深度投研分析（智能体自主版）
 
@@ -34,8 +19,8 @@ description: "个股深度投研分析（智能体自主版）— 拉取 QuantMi
 ① 确认标的 + 市场（默认 A股）
   ↓
 ② 拉取本地数据（并行）：
-   - /research/features/{symbol}          371 维特征（估值/技术/动量/资金流/筹码/概念）
-   - /risk/score/{symbol}                 6 维风险评分卡
+   - POST /research/symbols/features {"symbols":[]}   特征快照（估值/技术/动量/资金流/筹码/概念）
+   - 本地风险初筛（特征+K线判读，无独立风险评分端点，见 3.2）
    - /models/inference/stock/{symbol}/history?days=180   模型推理分数历史
    - /research/kline/{symbol}?days=120    K线 + 均线
    - /news/articles?tickers=xxx           RSS 新闻（利好/利空）
@@ -65,23 +50,23 @@ CT="Content-Type: application/json"
 
 ## 三、数据拉取（智能体必做）
 
-### 3.1 个股 371 维特征
+### 3.1 个股特征快照
 
 ```bash
-curl -s -H "$AUTH" "$BASE/api/v1/research/features/600519.SH"
-# 返回 15 大类: valuation/technical/momentum/volatility/liquidity/fundFlow/
-#            fundamental/style/industry/chip/concept/microstructure/sentiment 等
-# 批量: POST /api/v1/research/batch-features {"symbols":["600519.SH","000858.SZ"]}
+curl -s -X POST -H "$AUTH" -H "$CT" "$BASE/api/v1/research/symbols/features" \
+  -d '{"symbols":["600519.SH"]}'
+# 返回 {"code":200,"data":{"items":[...]}}：research 池特征快照（分类取决于已同步内容）；
+# 需指定字段时用 POST /api/v1/research/batch-features {"symbols":[...],"fields":[...]}
 ```
 
 **symbol 格式**：A股 `600519.SH`；港股 `00700.HK`；美股 `AAPL`；区块链 `BTC`；期货 `Au99.99.FUT`。
 
-### 3.2 风险评分卡（6 维）
+### 3.2 风险初筛（本地判读，无独立风险评分端点）
 
-```bash
-curl -s -H "$AUTH" "$BASE/api/v1/risk/score/600519.SH"
-# 流动性/波动/趋势/过热/基本面/状态 6 维度 + risk_level + veto 否决项
-```
+用 3.1 特征快照（估值/波动/流动性）+ 3.5 K线（趋势/回撤）+ 3.4 市场状态，
+按 6 维度口径人工判定：流动性/波动/趋势/过热/基本面/状态 + veto 否决项
+（ST/*ST/次新/长期停牌直接否决），结论写入 §七 风险提示。
+策略级回测风险走 [[backtest-center]] §6（`/qlib/risk/{backtest_id}/metrics`）。
 
 ### 3.3 模型推理分数（历史趋势 + 最新 + 多模型）
 
@@ -207,7 +192,7 @@ curl -s -H "$AUTH" "$BASE/api/v1/news/articles?tickers=600519&sort=sentiment_bea
 （fundFlow 资金流向 + chip 筹码集中度）
 
 ## 七、风险提示
-（risk/score 的 6 维评分 + veto 否决项 + 风险等级）
+（3.2 本地 6 维初筛 + veto 否决项 + 风险等级）
 
 ## 八、新闻舆情
 （利好/利空/中性分类表格；无新闻则标注数据缺失并提醒加新闻源）

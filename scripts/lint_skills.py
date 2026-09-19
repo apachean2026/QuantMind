@@ -72,10 +72,13 @@ def main() -> int:
             errors.append(f"{d.name}: description 为空")
         m = re.search(r"触发词[:：](.+)", desc)
         if not m:
-            warnings.append(f"{d.name}: description 建议含'触发词：…'供意图识别")
+            # 第三方原样引入的技能保持上游描述，不强制加触发词
+            if d.name not in EXEMPT_CONTRACT:
+                warnings.append(f"{d.name}: description 建议含'触发词：…'供意图识别")
         else:
             seen_here: set[str] = set()
-            for tok in re.split(r"[、，,；; ]+", m.group(1).strip()):
+            # 只按顿号/逗号/分号切：含空格的触发词（如 quantdb 结构）保持整体，避免误拆出裸词
+            for tok in re.split(r"[、，,；;]+", m.group(1).strip()):
                 tok = tok.strip().strip("”").strip('"')
                 if tok and tok not in seen_here:
                     seen_here.add(tok)

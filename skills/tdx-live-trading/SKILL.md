@@ -1,24 +1,10 @@
 ---
 name: tdx-live-trading
-description: "TDX 通达信实盘交易 + 模拟/实盘全链路实时监控。覆盖：实时推理(L2)、策略选择、自动买卖(下单/挂单/卖出/撤单)、交易记录、持仓查询、桥健康/链路状态监控。用户说「实时推理」「自动买卖」「实盘下单」「挂单」「撤单」「卖出」「交易记录」「持仓」「实时监控」「链路状态」「TDX」「通达信」「监控交易」「今天交易怎么样」时使用：跑状态快照 → 判定异常 → 按需配置/下单/复核。触发词：实时推理、自动买卖、实盘、挂单、撤单、交易记录、持仓、实时监控、链路状态、TDX、通达信"
+description: "TDX 通达信实盘交易 + 模拟/实盘全链路实时监控。覆盖：实时推理(L2)、策略选择、自动买卖(下单/挂单/卖出/撤单)、实盘交易记录、持仓查询、桥健康/链路状态监控。用户说「实时推理」「自动买卖」「实盘下单」「挂单」「撤单」「卖出」「交易记录」「持仓」「实时监控」「链路状态」「TDX」「通达信」「监控交易」「今天交易怎么样」时使用：跑状态快照 → 判定异常 → 按需配置/下单/复核。触发词：实时推理、自动买卖、实盘、挂单、实盘撤单、实盘交易记录、持仓、实时监控、链路状态、TDX、通达信"
 ---
 
-> ## ⚙️ 运行环境契约（最高优先级，先于本文其余内容执行）
->
-> 本技能可能运行在 **QuantBot（QwenPaw 容器）** 或**宿主机/本地 Claude Code**。执行前先探测环境（`which docker`、API 连通性），并遵守以下映射规则：
->
-> 1. **后端 API 地址**：QwenPaw / 容器网络内一律用 `http://quantmind:8000`（`quantmind` 是 docker 网络别名）；仅宿主机调试用 `http://127.0.0.1:8000`。正文中出现的 `127.0.0.1:8000`、`localhost:800x`，在 QwenPaw 环境下自动替换为 `http://quantmind:8000`。
-> 2. **取数脚本执行**：凡 import 了 `pandas / duckdb / psycopg2 / numpy / sqlalchemy` 等重依赖或 `backend` 包的脚本，**必须在 quantmind 容器内执行**（QwenPaw 本地 venv 无这些依赖）：
->    ```bash
->    docker cp <脚本路径> quantmind:/tmp/<脚本名> && docker exec -w /app quantmind python3 /tmp/<脚本名> <参数>
->    ```
->    脚本源三选一：宿主机 repo `skills/<name>/scripts/`、QwenPaw 工作区 `/app/working/workspaces/default/skills/<name>/scripts/`、挂载目录 `/quantmind/skills/<name>/scripts/`。纯标准库脚本（无重依赖）可在 QwenPaw 本地直接跑。
-> 3. **报告落盘**：股票报告页可见的 MD/PDF 报告，直接写 `/data/reports/trading_agents/{市场或类别}/{股票名}/`（QwenPaw 对 `/app/db` 有写权限，**直接写文件，不要 docker cp**）；过程数据 facts 写 `/data/reports/<类别>/`（`/data` 可写）。
-> 4. **MD → PDF 转换（按优先级降级）**：
->    ① `docker exec -w /app quantmind python3 backend/scripts/md_to_pdf_report.py <输入.md> <输出.pdf>`（研报级排版，首选）；
->    ② docker 不可用时，**改用 QwenPaw 内置 `pdf` 技能**把 MD 转成 PDF；
->    ③ 两者都不可用则只交付 MD，并明确告知用户 PDF 未能生成及原因。
-> 5. 本文中的 `~/.claude`、`cp -r ... ~/.claude/skills` 等说明仅适用于本地 Claude Code 维护者，**QuantBot 不要执行**。
+> ⚙️ 本技能遵循公共运行环境契约（最高优先级，先于本文其余内容执行）：
+> 详见 [_shared/env-contract.md](../_shared/env-contract.md)，执行前先读它。
 
 # tdx-live-trading — TDX 实盘链路 + 模拟/实盘全链路实时监控
 
@@ -122,7 +108,7 @@ docker exec -i -w /app quantmind python - < skills/tdx-live-trading/scripts/tdx_
 
 - `execute_mode`: `off`=仅信号提示 / `tdx`=桥实盘 / `paper`=模拟盘（会员门控）
 - 规则：融合分 > 阈值 买入；≤ 阈值 卖出；**上证指数跌破 MA20 只卖不买**
-- 前端入口：交易 → 滚动买卖设置；API：`GET/POST /api/v1/trade/tdx/rolling-config`、`POST /api/v1/trade/tdx/rolling-signals`
+- 前端入口：交易 → 滚动买卖设置；API（网关口径，无 trade 中段）：`GET/PUT /api/v1/tdx/rolling-config`、`POST /api/v1/tdx/rolling-signals`
 
 ## 4. 下单 / 挂单 / 卖出 / 撤单
 

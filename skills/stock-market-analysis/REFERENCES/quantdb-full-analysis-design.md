@@ -186,7 +186,7 @@ curl -s -H "$AUTH" "$BASE/api/v1/selection/daily"
 # L0: 大盘 MA20（000001.SH 上证综指）
 curl -s -H "$AUTH" "$BASE/api/v1/market/index-kline?symbol=000001.SH&days=60"
 # L1-L5: 371 维特征一次拿全（valuation/technical/l1/l2 聚合；API 已换算：市值→亿元、flow→百万元）
-curl -s -H "$AUTH" "$BASE/api/v1/research/features/600519.SH"
+curl -s -X POST -H "$AUTH" -H "$CT" "$BASE/api/v1/research/symbols/features" -d '{"symbols":["600519.SH"]}'
 # L1 补充: 估值历史分位（parquet 直读，valuation Hive 分区）
 # L2: 财务三表 + 每股指标 + 分红 + 股东户数（parquet 直读，3_financial_data/ 按 symbol 平铺）
 # L4 补充: 融资融券（parquet 直读，2_base_sector/margin_trading/ Hive 分区，finance_*=万元）

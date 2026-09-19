@@ -244,6 +244,8 @@ def main() -> int:
     backend_routes: set[tuple[str, str]] = set()
     for mod, info in files.items():
         for var, method, path in info.routes:
+            if path == "":
+                path = "/"
             if not path.startswith("/"):
                 continue
             for ch in chains(mod, var):
