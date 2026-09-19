@@ -95,10 +95,8 @@ async def _aredis_set_json(key: str, value: dict[str, Any], ttl_seconds: int) ->
 
 
 def _sdl_redis_key(trade_date: date) -> str:
-    # v6：主源改为 features_daily 50 维宽表 parquet（PG stock_daily_latest 仅兜底补充字段），
-    # 并叠加 QuantDB instrument_list 的股票名称/行业兜底。
-    # v8：叠加 QuantDB 静态概念/指数标签（concept_tags/index_tags/is_hs300/is_csi500/is_csi1000）。
-    return f"qm:research:sdl:{trade_date.isoformat()}:v8"
+    # v9：CN 主源 features_daily + QuantDB 名称/标签；不再合并 PG stock_daily_latest。
+    return f"qm:research:sdl:{trade_date.isoformat()}:v9"
 
 
 async def _load_sdl_day_map(session, trade_date: date, market: str | None = None) -> dict[str, dict[str, Any]]:
@@ -111,61 +109,53 @@ async def _load_sdl_day_map(session, trade_date: date, market: str | None = None
         symbols = cached["symbols"]
         return symbols if isinstance(symbols, dict) else {}
 
-    # features_daily 50 维宽表 parquet 为主源（仅 CN 市场），PG stock_daily_latest 仅兜底补充
     is_cn = not market or market.upper() == "CN"
     features_map: dict[str, dict[str, Any]] = {}
     if is_cn:
         try:
             features_map = await _offload_sdl_read(_read_features_daily_day, trade_date)
         except Exception:
-            logger.warning("读取 features_daily parquet 失败，降级为仅 PG", exc_info=True)
+            logger.warning("读取 features_daily parquet 失败", exc_info=True)
             features_map = {}
 
-    pg_map = await _load_sdl_pg_map(session, trade_date, market)
+    # stock_daily_latest（CN）已弃用；非 CN 市场暂仍走对应 SDL 表。
+    pg_map: dict[str, dict[str, Any]] = {}
+    if not is_cn:
+        pg_map = await _load_sdl_pg_map(session, trade_date, market)
 
-    # 名称/行业兜底：stock_daily_latest 与 stocks 表可能为空，以 QuantDB 全量股票列表为准
     meta_map: dict[str, dict[str, Any]] = {}
+    labels_map: dict[str, dict[str, Any]] = {}
     if is_cn:
         try:
             meta_map = await _offload_sdl_read(_load_quantdb_name_industry)
         except Exception:
             logger.warning("加载 QuantDB 股票名称/行业失败", exc_info=True)
-            meta_map = {}
-
-    # 概念/指数标签兜底：PG 的 concept_*/idx_* 列近期未回填（恒空），以 QuantDB 静态标签为准
-    labels_map: dict[str, dict[str, Any]] = {}
-    if is_cn:
         try:
             labels_map = await _offload_sdl_read(_load_quantdb_labels)
         except Exception:
             logger.warning("加载 QuantDB 概念/指数标签失败", exc_info=True)
-            labels_map = {}
 
-    # 合并：PG 提供兜底字段（roe/指数归属/is_st 等 features_daily 缺失项），
-    # features_daily 覆盖同名指标（50 维宽表为准）。
     symbol_map: dict[str, dict[str, Any]] = {}
     for symbol in set(features_map) | set(pg_map) | set(meta_map) | set(labels_map):
         merged = dict(pg_map.get(symbol) or {})
         merged.update(features_map.get(symbol) or {})
         meta = meta_map.get(symbol)
         if meta:
-            # PG 的 industry/stock_name 近期未回填（序列化成空串），setdefault 对空串不生效，
-            # 故这里显式判空后以 QuantDB instrument_list 兜底。
             if not merged.get("stock_name"):
                 merged["stock_name"] = meta.get("stock_name") or ""
             if not merged.get("industry"):
                 merged["industry"] = meta.get("industry") or ""
         lbl = labels_map.get(symbol)
         if lbl:
-            # 概念/指数标签：PG 空时用 QuantDB 兜底
             if _is_empty_label(merged.get("concept_tags")):
                 merged["concept_tags"] = lbl.get("concepts") or []
             if _is_empty_label(merged.get("index_tags")):
                 merged["index_tags"] = lbl.get("indices") or []
-            # 指数成分布尔：PG idx 列未回填（恒 False），直接以 QuantDB 为准
             merged["is_hs300"] = bool(lbl.get("is_hs300"))
             merged["is_csi500"] = bool(lbl.get("is_csi500"))
             merged["is_csi1000"] = bool(lbl.get("is_csi1000"))
+            if "is_st" in lbl:
+                merged["is_st"] = bool(lbl.get("is_st"))
         symbol_map[symbol] = merged
 
     await _aredis_set_json(
@@ -467,9 +457,7 @@ def _is_empty_label(value: Any) -> bool:
 
 
 async def _load_sdl_pg_map(session, trade_date: date, market: str | None) -> dict[str, dict[str, Any]]:
-    """PG stock_daily_latest 兜底字段（features_daily 缺失项）：
-    roe/adj_factor/turnover_rate/amount/listed_days/is_st/指数归属/概念标签/资金流。
-    """
+    """非 CN 市场的 SDL 表截面（CN 已弃用，不再调用本函数）。"""
     sdl_table = _get_sdl_table(market)
     is_cn = not market or market.upper() == "CN"
     name_col = "stock_name" if is_cn else "name"
@@ -878,6 +866,7 @@ def _format_candidate_record(row: dict[str, Any]) -> dict[str, Any]:
         "return10d": return_10d,
         "return20d": return_20d,
         "return60d": return_60d,
+        # 资金流主源为 batch-features → l2_factors（已归一为元）；此处若有值按元→百万元
         "mainFlow": round(main_flow_raw / 1000000.0, 2) if main_flow_raw is not None else None,
         "flowNetAmount": round(flow_net_raw / 1000000.0, 2) if flow_net_raw is not None else None,
         "instOwnership": round(inst_own_raw / 1000000.0, 2) if inst_own_raw is not None else None,
@@ -895,29 +884,9 @@ def _format_candidate_record(row: dict[str, Any]) -> dict[str, Any]:
 async def _fetch_summary(
     session, where: str, params: dict[str, Any], include_market_stats: bool = True, market: str | None = None
 ) -> dict[str, Any]:
-    if include_market_stats:
-        sdl_tbl = _get_sdl_table(market)
-        summary_sql = f"""
-            SELECT
-                COUNT(*) AS total_count,
-                COUNT(*) FILTER (WHERE (sdl.close > 0)) AS tradable_count,
-                COUNT(*) FILTER (WHERE (sdl.idx_hs300 <> 0)) AS hs300_count,
-                COUNT(*) FILTER (WHERE (sdl.idx_zz1000 <> 0)) AS zz1000_count,
-                COUNT(*) FILTER (WHERE (sdl.idx_margin <> 0)) AS margin_count,
-                COUNT(*) FILTER (WHERE (sdl.idx_chinext <> 0)) AS chinext_count,
-                AVG(COALESCE(snap.fusion_score, 0)) AS avg_score,
-                COUNT(*) FILTER (WHERE COALESCE(snap.confidence_level, 'watch') = 'high') AS high_confidence_count,
-                COUNT(*) FILTER (WHERE COALESCE(snap.fusion_score, 0) >= 0.05) AS strong_count,
-                MAX(snap.updated_at) AS last_updated_at
-            FROM qm_research_candidate_snapshot snap
-            LEFT JOIN {sdl_tbl} sdl ON (
-                {_norm_symbol_sql("sdl.symbol")} = {_norm_symbol_sql("snap.symbol")}
-                AND sdl.trade_date = snap.data_trade_date
-            )
-            WHERE {where}
-        """
-    else:
-        summary_sql = f"""
+    # stock_daily_latest 已弃用：不再 JOIN 取 hs300/margin 等市场统计。
+    _ = include_market_stats, market
+    summary_sql = f"""
             SELECT
                 COUNT(*) AS total_count,
                 COUNT(*) AS tradable_count,
@@ -1001,8 +970,14 @@ async def _do_get_overview(
     include_market_stats: bool = True,
     market: str | None = None,
 ) -> dict[str, Any]:
+    """候选池概览。
+
+    CN：不再 JOIN `stock_daily_latest`（已弃用），用 snapshot + features_daily/QuantDB 标签合并。
+    非 CN：仍读对应市场 SDL 表（暂无 features_daily 主源）。
+    """
+    _ = include_market_stats  # 市场统计曾依赖 SDL idx_*，CN 已弃用后统一走无 SDL 口径
     where = "snap.tenant_id = :tid AND snap.user_id = :uid"
-    params = {"tid": tid, "uid": uid, "limit": limit, "offset": offset}
+    params: dict[str, Any] = {"tid": tid, "uid": uid, "limit": limit, "offset": offset}
     if model_id:
         where += " AND snap.model_id = :mid"
         params["mid"] = model_id
@@ -1010,31 +985,45 @@ async def _do_get_overview(
         where += " AND snap.run_id = :rid"
         params["rid"] = run_id
 
-    sdl_table = _get_sdl_table(market)
     is_cn = not market or market.upper() == "CN"
-
-    async with get_session(read_only=True) as session:
-        # Non-CN tables have simpler schema — use lightweight SDL columns
-        if is_cn:
-            sdl_columns = """
-                sdl.stock_name, sdl.industry, sdl.close, sdl.pct_change,
-                sdl.pe_ttm, sdl.pb, sdl.roe, sdl.adj_factor,
-                sdl.turnover_rate, sdl.amount, sdl.total_mv, sdl.float_mv,
-                sdl.listed_days, sdl.is_st,
-                sdl.idx_hs300, 0 AS idx_zz500, sdl.idx_zz1000,
-                sdl.idx_chinext, sdl.idx_margin, sdl.idx_all,
-                sdl.ma5, sdl.ma10, sdl.ma_gap_5, sdl.ma_gap_10, sdl.ma_gap_20,
-                sdl.rsi_14, sdl.rsi_6, sdl.vol_atr_14, sdl.macd_hist,
-                sdl.volume_ratio_5, sdl.volume_ratio_20, sdl.volume_trend_3d,
-                sdl.main_flow, sdl.flow_net_amount, sdl.inst_ownership,
-                sdl.profit_growth,
-                sdl.concept_ai, sdl.concept_chip, sdl.concept_new_energy,
-                sdl.concept_pv, sdl.concept_lithium, sdl.concept_military,
-                sdl.concept_medical, sdl.concept_fintech, sdl.concept_consumption,
-                sdl.concept_state_owned, sdl.consecutive_limit_up_days,
+    if is_cn:
+        async with get_session(read_only=True) as session:
+            snap_sql = f"""
+                SELECT snap.*
+                FROM qm_research_candidate_snapshot snap
+                WHERE {where}
+                ORDER BY snap.score_rank ASC
+                LIMIT :limit OFFSET :offset
             """
-        else:
-            sdl_columns = """
+            snap_rows = (await session.execute(text(snap_sql), params)).mappings().all()
+            summary = await _fetch_summary(session, where, params, include_market_stats=False)
+            if not snap_rows:
+                return {"items": [], "summary": summary}
+
+            by_date: dict[Any, list[dict[str, Any]]] = {}
+            for row in snap_rows:
+                td = row.get("data_trade_date")
+                by_date.setdefault(td, []).append(dict(row))
+
+            merged_rows: list[dict[str, Any]] = []
+            for td, rows in by_date.items():
+                sdl_map: dict[str, dict[str, Any]] = {}
+                if isinstance(td, date) and td.year == _SDL_REDIS_YEAR:
+                    sdl_map = await _load_sdl_day_map(session, td, market=market)
+                for snap in rows:
+                    symbol = StockCodeUtil.to_prefix(str(snap.get("symbol") or ""))
+                    merged = dict(snap)
+                    sdl = sdl_map.get(symbol)
+                    if sdl:
+                        merged.update(sdl)
+                    merged_rows.append(merged)
+            items = [_format_candidate_record(r) for r in merged_rows]
+            return {"items": items, "summary": summary}
+
+    # ---- 非 CN：仍 JOIN 市场 SDL 表 ----
+    sdl_table = _get_sdl_table(market)
+    async with get_session(read_only=True) as session:
+        sdl_columns = """
                 sdl.name AS stock_name, sdl.industry, sdl.close, COALESCE(sdl.pct_change, 0) AS pct_change,
                 sdl.pe_ttm, sdl.pb, sdl.roe, sdl.adj_factor,
                 sdl.turnover_rate, sdl.amount, sdl.total_mv, sdl.float_mv,
@@ -1044,26 +1033,14 @@ async def _do_get_overview(
                 sdl.ma5, sdl.ma10, sdl.ma_gap_5, sdl.ma_gap_10, sdl.ma_gap_20,
                 sdl.rsi_14, sdl.rsi_6, sdl.vol_atr_14, sdl.macd_hist,
                 sdl.volume_ratio_5, sdl.volume_ratio_20, 0 AS volume_trend_3d,
-                0 AS main_flow, sdl.flow_net_amount, 0 AS inst_ownership,
+                0 AS main_flow, 0 AS flow_net_amount, 0 AS inst_ownership,
                 0 AS profit_growth,
                 0 AS concept_ai, 0 AS concept_chip, 0 AS concept_new_energy,
                 0 AS concept_pv, 0 AS concept_lithium, 0 AS concept_military,
                 0 AS concept_medical, 0 AS concept_fintech, 0 AS concept_consumption,
                 0 AS concept_state_owned, 0 AS consecutive_limit_up_days,
             """
-
-        # 去重优先级：CN 表用“指标非空个数”挑出信息最全的那一行；
-        # 其他市场表的指标列可能不存在，退化为按 symbol 排序（保证结果稳定即可）。
-        if is_cn:
-            dedup_rank_expr = """(
-                               (CASE WHEN sdl.pe_ttm IS NULL THEN 0 ELSE 1 END)
-                             + (CASE WHEN sdl.rsi_14 IS NULL THEN 0 ELSE 1 END)
-                             + (CASE WHEN sdl.total_mv IS NULL THEN 0 ELSE 1 END)
-                             + (CASE WHEN sdl.turnover_rate IS NULL THEN 0 ELSE 1 END)
-                           ) DESC, sdl.symbol ASC"""
-        else:
-            dedup_rank_expr = "sdl.symbol ASC"
-
+        dedup_rank_expr = "sdl.symbol ASC"
         sql = f"""
         WITH snap_page AS (
             SELECT snap.*
@@ -1083,14 +1060,6 @@ async def _do_get_overview(
             FROM snap_page snap
         ),
         sdl_dedup AS (
-            /*
-             * stock_daily_latest 每只股票每天可能有两行：前缀格式（SZ002082）与后缀格式
-             * （002082.SZ）。前缀行带全部指标（PE/ROE/RSI/均线/市值/换手），后缀行只有
-             * 收盘价与成交量——2026-06-17 实测：前缀 5529 行指标齐备，后缀 5524 行全为 NULL。
-             * 归一化 symbol 后两行都能命中 JOIN，若不去重则由 Postgres 任意选一行，
-             * 选中后缀行时前端就会看到 “PE 0.0 / ROE 0.0% / RSI 0.0”。
-             * 因此这里按归一化代码 + 交易日去重，并优先保留指标非空的那一行。
-             */
             SELECT * FROM (
                 SELECT sdl.*,
                        ROW_NUMBER() OVER (
@@ -1100,8 +1069,7 @@ async def _do_get_overview(
                 FROM {sdl_table} sdl
                 INNER JOIN snap_symbols ss ON {_norm_symbol_sql("ss.symbol")} = {_norm_symbol_sql("sdl.symbol")}
                 CROSS JOIN snap_date_bounds b
-                WHERE sdl.volume > 0
-                  AND sdl.trade_date >= (b.min_trade_date - INTERVAL '10 day')
+                WHERE sdl.trade_date >= (b.min_trade_date - INTERVAL '10 day')
                   AND sdl.trade_date <= (b.max_trade_date + INTERVAL '20 day')
             ) ranked WHERE _rank = 1
         ),
@@ -1110,12 +1078,7 @@ async def _do_get_overview(
                 sdl.symbol,
                 sdl.trade_date,
                 {sdl_columns}
-                CASE
-                    WHEN LAG(sdl.volume, 3) OVER (PARTITION BY sdl.symbol ORDER BY sdl.trade_date) > 0
-                    THEN (sdl.volume::double precision - LAG(sdl.volume, 3) OVER (PARTITION BY sdl.symbol ORDER BY sdl.trade_date)::double precision)
-                         / LAG(sdl.volume, 3) OVER (PARTITION BY sdl.symbol ORDER BY sdl.trade_date)::double precision
-                    ELSE NULL
-                END AS volume_trend_3d_calc,
+                NULL::double precision AS volume_trend_3d_calc,
                 LEAD(sdl.close, 1) OVER (PARTITION BY sdl.symbol ORDER BY sdl.trade_date) AS close_next_1d,
                 LEAD(sdl.close, 3) OVER (PARTITION BY sdl.symbol ORDER BY sdl.trade_date) AS close_next_3d
             FROM sdl_dedup sdl
@@ -1125,13 +1088,13 @@ async def _do_get_overview(
         LEFT JOIN sdl_run
             ON {_norm_symbol_sql("sdl_run.symbol")} = {_norm_symbol_sql("snap.symbol")}
            AND sdl_run.trade_date = snap.data_trade_date
-        {"LEFT JOIN stocks st ON " + _norm_symbol_sql("st.symbol") + " = " + _norm_symbol_sql("snap.symbol") if is_cn else ""}
         ORDER BY snap.score_rank ASC
         """
         result = await session.execute(text(sql), params)
         items = [_format_candidate_record(dict(r)) for r in result.mappings()]
-        summary = await _fetch_summary(session, where, params, include_market_stats=include_market_stats and is_cn, market=market)
+        summary = await _fetch_summary(session, where, params, include_market_stats=False, market=market)
     return {"items": items, "summary": summary}
+
 
 
 def _humanize_model_name(model_id: str) -> str:
@@ -2245,102 +2208,30 @@ async def get_symbols_features(tid: str, uid: str, symbols: list[str], lite: boo
             snap["code"] = r["symbol"]
             items.append(snap)
 
-        # 对于没有 features_snapshot 的股票，从 stock_daily_latest 补充基础数据
+        # 无 snapshot 时用 QuantDB 名称/行业骨架（不再读已弃用的 stock_daily_latest）
         if missing_symbols:
-            sdl_vals = ", ".join(f"('{s}')" for s in missing_symbols)
-            sdl_norm = _norm_symbol_sql("sdl.symbol")
-            # 注意：latest 行可能缺 stock_name / total_mv / pe_ttm（数据源未回填）
-            # 改为分组取每个字段的最近非空值，否则前端市值/PE 全部显示为 "--"
-            sdl_sql = f"""
-                WITH miss(raw_symbol) AS (VALUES {sdl_vals}),
-                joined AS (
-                    SELECT
-                        miss.raw_symbol AS raw_symbol,
-                        sdl.trade_date,
-                        sdl.stock_name,
-                        sdl.industry,
-                        sdl.close,
-                        sdl.pe_ttm,
-                        sdl.pb,
-                        sdl.roe,
-                        sdl.total_mv,
-                        sdl.float_mv,
-                        sdl.pct_change,
-                        sdl.turnover_rate,
-                        sdl.amount
-                    FROM miss
-                    LEFT JOIN stock_daily_latest sdl ON ({sdl_norm}) = miss.raw_symbol
-                ),
-                latest AS (
-                    SELECT DISTINCT ON (raw_symbol)
-                        raw_symbol, close, pct_change, turnover_rate, amount
-                    FROM joined
-                    ORDER BY raw_symbol, trade_date DESC NULLS LAST
-                ),
-                latest_name AS (
-                    SELECT DISTINCT ON (raw_symbol) raw_symbol, stock_name, industry
-                    FROM joined
-                    WHERE stock_name IS NOT NULL AND stock_name <> ''
-                    ORDER BY raw_symbol, trade_date DESC
-                ),
-                latest_mv AS (
-                    SELECT DISTINCT ON (raw_symbol)
-                        raw_symbol, total_mv, float_mv, pe_ttm, pb, roe
-                    FROM joined
-                    WHERE total_mv IS NOT NULL AND total_mv > 0
-                    ORDER BY raw_symbol, trade_date DESC
-                ),
-                stocks_name AS (
-                    SELECT DISTINCT ON ({_norm_symbol_sql("symbol")})
-                        {_norm_symbol_sql("symbol")} AS raw_symbol, name AS stock_name
-                    FROM stocks
-                    WHERE {_norm_symbol_sql("symbol")} IN (SELECT raw_symbol FROM miss)
-                    ORDER BY {_norm_symbol_sql("symbol")}
+            try:
+                quantdb_names = _load_quantdb_stock_names()
+                quantdb_meta = _load_quantdb_name_industry()
+            except Exception:  # noqa: BLE001
+                quantdb_names, quantdb_meta = {}, {}
+            for raw_sym in missing_symbols:
+                suffix = StockCodeUtil.to_suffix(raw_sym)
+                meta = quantdb_meta.get(raw_sym) or quantdb_meta.get(suffix) or {}
+                stock_name = (
+                    quantdb_names.get(suffix)
+                    or quantdb_names.get(raw_sym)
+                    or meta.get("stock_name")
+                    or raw_sym
                 )
-                SELECT
-                    l.raw_symbol,
-                    COALESCE(n.stock_name, sn.stock_name) AS stock_name,
-                    COALESCE(n.industry, '') AS industry,
-                    l.close,
-                    mv.pe_ttm, mv.pb, mv.roe,
-                    mv.total_mv, mv.float_mv,
-                    l.pct_change, l.turnover_rate, l.amount
-                FROM latest l
-                LEFT JOIN latest_name n USING (raw_symbol)
-                LEFT JOIN latest_mv   mv USING (raw_symbol)
-                LEFT JOIN stocks_name sn USING (raw_symbol)
-            """
-            sdl_result = await session.execute(text(sdl_sql))
-            # QuantDB instrument_detail 提供权威股票简称，用于回填 stock_daily_latest 缺失的 stock_name
-            quantdb_names: dict[str, str] = _load_quantdb_stock_names()
-            for r in sdl_result.mappings():
-                raw_sym = r["raw_symbol"]
-                stock_name = r.get("stock_name")
-                if not stock_name:
-                    suffix = StockCodeUtil.to_suffix(raw_sym)
-                    stock_name = quantdb_names.get(suffix) or quantdb_names.get(raw_sym) or raw_sym
-                close_price = float(r.get("close") or 0)
-                total_mv = float(r.get("total_mv") or 0)
-                pe_val = float(r.get("pe_ttm") or 0)
-                snap = {
-                    "code": raw_sym,
-                    "name": stock_name,
-                    "marketCap": round(total_mv / 1e8, 2) if total_mv else 0,
-                    "totalMv": round(total_mv / 1e8, 2) if total_mv else 0,
-                    "pe": pe_val,
-                    "pe_ttm": pe_val,
-                    "pb": float(r.get("pb") or 0),
-                    "roe": float(r.get("roe") or 0),
-                    "closePrice": close_price,
-                    "price": close_price,
-                    "sector": r.get("industry") or "",
-                    "industry": r.get("industry") or "",
-                    "latestChange": float(r.get("pct_change") or 0),
-                    "turnoverRate": float(r.get("turnover_rate") or 0) * 100,
-                    "amount": float(r.get("amount") or 0),
-                    "floatMv": round(float(r.get("float_mv") or 0) / 1e8, 2) if r.get("float_mv") else 0,
-                }
-                items.append(snap)
+                items.append(
+                    {
+                        "code": raw_sym,
+                        "name": stock_name,
+                        "sector": meta.get("industry") or "",
+                        "industry": meta.get("industry") or "",
+                    }
+                )
 
         return {"code": 200, "data": {"items": items}}
 
@@ -2441,57 +2332,7 @@ async def get_stock_kline(
     if cached is not None:
         return cached
 
-    # 表里 stock_daily_latest.symbol 实际可能是后缀格式（"600519.SH"）或前缀格式
-    # （"SH600519"）。统一两边都走 _norm_symbol_sql 归一化为前缀格式后再比较，
-    # 才能匹配上当前数据（5536 个股票全部为后缀格式存储）。
-    # 有起始日时返回 [起始日, 截止日] 全窗口（升序，上限 2000 根），供图表展示
-    # 基准日之后实际走势；无起始日时保持“最近 days 根”语义。
-    window_cap = 2000 if start_s else days
-    if start_s:
-        sql = f"""
-            SELECT trade_date, open, high, low, close, volume, adj_factor
-            FROM stock_daily_latest
-            WHERE {_norm_symbol_sql("symbol")} = {_norm_symbol_sql(":s")}
-            AND trade_date >= :st
-            {"AND trade_date <= :e" if end_s else ""}
-            ORDER BY trade_date ASC LIMIT :l
-        """
-        sql_params = {"s": normalized_symbol, "l": window_cap, "st": start_s}
-        if end_s:
-            sql_params["e"] = end_s
-    else:
-        end_filter = "AND trade_date <= :e" if end_s else ""
-        sql = f"""
-            SELECT trade_date, open, high, low, close, volume, adj_factor
-            FROM stock_daily_latest
-            WHERE {_norm_symbol_sql("symbol")} = {_norm_symbol_sql(":s")}
-            {end_filter}
-            ORDER BY trade_date DESC LIMIT :l
-        """
-        sql_params = {"s": normalized_symbol, "l": days}
-        if end_s:
-            sql_params["e"] = end_s
-
-    items = []
-    try:
-        async with get_session(read_only=True) as session:
-            res = await session.execute(text(sql), sql_params)
-            for r in res:
-                adj_factor = r[6]
-                items.append(
-                    {
-                        "date": str(r[0]),
-                        "open": _to_nominal_price(r[1], adj_factor),
-                        "high": _to_nominal_price(r[2], adj_factor),
-                        "low": _to_nominal_price(r[3], adj_factor),
-                        "close": _to_nominal_price(r[4], adj_factor),
-                        "volume": float(r[5]),
-                    }
-                )
-            if not start_s:
-                items.reverse()
-    except Exception as exc:
-        logger.warning(f"[get_stock_kline] DB query failed: {exc}")
+    items: list[dict[str, Any]] = []
 
     # 若 DB 暂无行情数据，自动通过实时行情源拉取真实 K 线。
     # 腾讯 fqkline 支持起止日期（param=code,day,start,end,count,qfq）：无起始日
@@ -2715,55 +2556,23 @@ async def predict_single_stock(
     """单只股票未来走势与区间分位数预测服务。"""
     normalized_symbol = StockCodeUtil.to_prefix(symbol)
 
-    # 1. 查询股票最新行情 + 真实波动率/均线（用于推导分位数锥与因子归因）
+    # 1. 名称/价格/波动一律走 QuantDB（stock_daily_latest 已弃用）
     stock_name = normalized_symbol
     latest_close = 0.0
     latest_date = target_date or datetime.now().strftime("%Y-%m-%d")
-    # 日波动率(小数)与均线乖离(百分数)兜底
     daily_vol_pct = 0.025
     ma_gap_5 = 0.0
     ma_gap_20 = 0.0
     main_flow = 0.0
+    _ = market
+    try:
+        quantdb_names = _load_quantdb_stock_names()
+        suffix = StockCodeUtil.to_suffix(normalized_symbol)
+        stock_name = quantdb_names.get(suffix) or quantdb_names.get(normalized_symbol) or stock_name
+    except Exception:  # noqa: BLE001
+        pass
 
-    sdl_table = _get_sdl_table(market)
-    async with get_session(read_only=True) as session:
-        # stock_daily_latest.stock_name 全表为空，名称回退 stocks 表
-        res = await session.execute(
-            text(
-                f"SELECT sdl.stock_name, sdl.close, sdl.trade_date, "
-                f"       sdl.vol_std_20, sdl.vol_atr_14, "
-                f"       sdl.ma_gap_5, sdl.ma_gap_20, sdl.main_flow, "
-                f"       sdl.adj_factor, "
-                f"       (SELECT st.name FROM stocks st "
-                f"        WHERE {_norm_symbol_sql('st.symbol')} = {_norm_symbol_sql('sdl.symbol')} "
-                f"        LIMIT 1) AS name_fallback "
-                f"FROM {sdl_table} sdl "
-                f"WHERE {_norm_symbol_sql('sdl.symbol')} = {_norm_symbol_sql(':s')} "
-                f"ORDER BY sdl.trade_date DESC LIMIT 1"
-            ),
-            {"s": normalized_symbol},
-        )
-        row = res.first()
-        if row:
-            stock_name = (row[0] or row[9] or stock_name).strip() or stock_name
-            # K 线与行情一致还原为真实不复权价：DB close 为前复权价(adj_factor<1)，
-            # 与 get_stock_kline 的 _to_nominal_price(close, adj_factor) 保持同口径。
-            latest_close = _to_nominal_price(row[1], row[8])
-            if not target_date and row[2]:
-                latest_date = str(row[2])
-            # vol_std_20 在 stock_daily_latest 为百分数口径(2.78=2.78%)；
-            # vol_atr_14 为绝对价格 ATR。优先 vol_std，回退 ATR/close
-            vol_std = float(row[3] or 0.0)
-            atr = float(row[4] or 0.0)
-            _ma_gap_5_unused = float(row[5] or 0.0)  # row[5]=ma_gap_5，仅保位（SELECT 按位取值）
-            ma_gap_20 = float(row[6] or 0.0)
-            main_flow = float(row[7] or 0.0) or 0.0
-            if vol_std and vol_std > 0.3:
-                daily_vol_pct = vol_std / 100.0
-            elif latest_close > 0 and atr > 0:
-                daily_vol_pct = atr / latest_close
-
-    # 当前价格统一走 QuantDB（不复权真实价），与前端 K 线同口径；聚合表仅作回退。
+    # 当前价格统一走 QuantDB（不复权真实价），与前端 K 线同口径。
     # 有明确目标日时 K 线按目标日截断：基准价格/波动率/均线乖离都取目标日当时
     # 的值，否则盲测的预测扇形锚点是最新价，历史视角失真（前视泄露）。
     qd_items = _quantdb_kline_items(normalized_symbol, days=30, end_date=target_date)

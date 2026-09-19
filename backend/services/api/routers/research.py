@@ -163,7 +163,7 @@ async def remove_from_research_pool(symbol: str, current_user: dict = Depends(ge
 @router.post("/symbols/features")
 async def get_symbols_features(
     req: SymbolsFeaturesRequest,
-    lite: bool = Query(False, description="轻量模式：仅查询 stock_daily_latest 最新交易日核心字段"),
+    lite: bool = Query(False, description="保留兼容参数；CN 已不再读 stock_daily_latest"),
     current_user: dict = Depends(get_current_user),
 ):
     tid, uid = str(current_user["tenant_id"]), str(current_user["user_id"])

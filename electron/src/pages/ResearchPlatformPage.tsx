@@ -513,7 +513,7 @@ const SORT_OPTIONS: Array<{ key: SortKey; label: string; field: keyof ResearchSt
 /**
  * 需要向 QuantDB 投影请求的字段集合。
  *
- * `/research/universe` 只返回 PG `stock_daily_latest` 的约 50 个字段，而筛选条件和
+ * `/research/universe` 主路径已改为 pred + QuantDB 宽表投影，不再依赖 PG `stock_daily_latest`；
  * 表格列引用了 100+ 字段——差额全部来自 QuantDB parquet。因此这里由筛选绑定、
  * 表格列、排序字段共同推导出请求字段，避免手工维护列表与 UI 脱节。
  */
