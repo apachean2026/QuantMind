@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-13T17:34:56.380035Z",
-  "count": 5220,
+  "generated_at": "2026-09-20T14:54:34.586798Z",
+  "count": 5565,
   "items": [
     {
       "symbol": "000001.SZ",
@@ -14,7 +14,7 @@
       "symbol": "000002.SZ",
       "code": "000002",
       "exchange": "SZ",
-      "name": "万 科Ａ",
+      "name": "万  科Ａ",
       "abbr": "000002",
       "pinyin": "wk"
     },
@@ -70,7 +70,7 @@
       "symbol": "000012.SZ",
       "code": "000012",
       "exchange": "SZ",
-      "name": "南 玻Ａ",
+      "name": "南  玻Ａ",
       "abbr": "000012",
       "pinyin": "nb"
     },
@@ -126,7 +126,7 @@
       "symbol": "000025.SZ",
       "code": "000025",
       "exchange": "SZ",
-      "name": "特 力Ａ",
+      "name": "特  力Ａ",
       "abbr": "000025",
       "pinyin": "tl"
     },
@@ -870,7 +870,7 @@
       "symbol": "000528.SZ",
       "code": "000528",
       "exchange": "SZ",
-      "name": "柳 工",
+      "name": "柳    工",
       "abbr": "000528",
       "pinyin": "lg"
     },
@@ -1822,9 +1822,9 @@
       "symbol": "000711.SZ",
       "code": "000711",
       "exchange": "SZ",
-      "name": "ST京蓝",
+      "name": "京蓝科技",
       "abbr": "000711",
-      "pinyin": "stjl"
+      "pinyin": "jlkj"
     },
     {
       "symbol": "000712.SZ",
@@ -1926,7 +1926,7 @@
       "symbol": "000726.SZ",
       "code": "000726",
       "exchange": "SZ",
-      "name": "鲁 泰Ａ",
+      "name": "鲁  泰Ａ",
       "abbr": "000726",
       "pinyin": "lt"
     },
@@ -2582,7 +2582,7 @@
       "symbol": "000869.SZ",
       "code": "000869",
       "exchange": "SZ",
-      "name": "张 裕Ａ",
+      "name": "张  裕Ａ",
       "abbr": "000869",
       "pinyin": "zy"
     },
@@ -3582,9 +3582,9 @@
       "symbol": "001248.SZ",
       "code": "001248",
       "exchange": "SZ",
-      "name": "华润新能",
+      "name": "华润新能源",
       "abbr": "001248",
-      "pinyin": "hrxn"
+      "pinyin": "hrxny"
     },
     {
       "symbol": "001255.SZ",
@@ -8646,9 +8646,9 @@
       "symbol": "002586.SZ",
       "code": "002586",
       "exchange": "SZ",
-      "name": "ST围海",
+      "name": "围海股份",
       "abbr": "002586",
-      "pinyin": "stwh"
+      "pinyin": "whgf"
     },
     {
       "symbol": "002587.SZ",
@@ -9790,9 +9790,9 @@
       "symbol": "002743.SZ",
       "code": "002743",
       "exchange": "SZ",
-      "name": "富煌钢构",
+      "name": "ST富煌",
       "abbr": "002743",
-      "pinyin": "fhgg"
+      "pinyin": "stfh"
     },
     {
       "symbol": "002745.SZ",
@@ -14126,9 +14126,9 @@
       "symbol": "300295.SZ",
       "code": "300295",
       "exchange": "SZ",
-      "name": "*ST三六",
+      "name": "*ST三六五",
       "abbr": "300295",
-      "pinyin": "stsl"
+      "pinyin": "stslw"
     },
     {
       "symbol": "300296.SZ",
@@ -15414,7 +15414,7 @@
       "symbol": "300472.SZ",
       "code": "300472",
       "exchange": "SZ",
-      "name": "*ST新元",
+      "name": "ST新元",
       "abbr": "300472",
       "pinyin": "stxy"
     },
@@ -16102,9 +16102,9 @@
       "symbol": "300562.SZ",
       "code": "300562",
       "exchange": "SZ",
-      "name": "乐心医疗",
+      "name": "乐心股份",
       "abbr": "300562",
-      "pinyin": "lxyl"
+      "pinyin": "lxgf"
     },
     {
       "symbol": "300563.SZ",
@@ -22638,9 +22638,9 @@
       "symbol": "301560.SZ",
       "code": "301560",
       "exchange": "SZ",
-      "name": "众捷汽车",
+      "name": "众捷股份",
       "abbr": "301560",
-      "pinyin": "zjqc"
+      "pinyin": "zjgf"
     },
     {
       "symbol": "301563.SZ",
@@ -23147,6 +23147,14 @@
       "pinyin": "xgy"
     },
     {
+      "symbol": "301688.SZ",
+      "code": "301688",
+      "exchange": "SZ",
+      "name": "格林生物",
+      "abbr": "301688",
+      "pinyin": "glsw"
+    },
+    {
       "symbol": "301689.SZ",
       "code": "301689",
       "exchange": "SZ",
@@ -23161,6 +23169,22 @@
       "name": "三瑞智能",
       "abbr": "301696",
       "pinyin": "srzn"
+    },
+    {
+      "symbol": "301697.SZ",
+      "code": "301697",
+      "exchange": "SZ",
+      "name": "贝特利",
+      "abbr": "301697",
+      "pinyin": "btl"
+    },
+    {
+      "symbol": "301699.SZ",
+      "code": "301699",
+      "exchange": "SZ",
+      "name": "洛轴股份",
+      "abbr": "301699",
+      "pinyin": "lzgf"
     },
     {
       "symbol": "301707.SZ",
@@ -23185,30 +23209,6 @@
       "name": "中航成飞",
       "abbr": "302132",
       "pinyin": "zhcf"
-    },
-    {
-      "symbol": "301688.SZ",
-      "code": "301688",
-      "exchange": "SZ",
-      "name": "格林生物",
-      "abbr": "301688",
-      "pinyin": "glsw"
-    },
-    {
-      "symbol": "301697.SZ",
-      "code": "301697",
-      "exchange": "SZ",
-      "name": "贝特利",
-      "abbr": "301697",
-      "pinyin": "btl"
-    },
-    {
-      "symbol": "301699.SZ",
-      "code": "301699",
-      "exchange": "SZ",
-      "name": "洛轴股份",
-      "abbr": "301699",
-      "pinyin": "lzgf"
     },
     {
       "symbol": "600000.SH",
@@ -24262,9 +24262,9 @@
       "symbol": "600177.SH",
       "code": "600177",
       "exchange": "SH",
-      "name": "雅戈尔",
+      "name": "XD雅戈尔",
       "abbr": "600177",
-      "pinyin": "yge"
+      "pinyin": "xdyge"
     },
     {
       "symbol": "600178.SH",
@@ -25694,9 +25694,9 @@
       "symbol": "600420.SH",
       "code": "600420",
       "exchange": "SH",
-      "name": "国药现代",
+      "name": "XD国药现",
       "abbr": "600420",
-      "pinyin": "gyxd"
+      "pinyin": "xdgyx"
     },
     {
       "symbol": "600422.SH",
@@ -28166,9 +28166,9 @@
       "symbol": "600817.SH",
       "code": "600817",
       "exchange": "SH",
-      "name": "XD宇通重",
+      "name": "宇通重工",
       "abbr": "600817",
-      "pinyin": "xdytz"
+      "pinyin": "ytzg"
     },
     {
       "symbol": "600818.SH",
@@ -28190,9 +28190,9 @@
       "symbol": "600820.SH",
       "code": "600820",
       "exchange": "SH",
-      "name": "隧道股份",
+      "name": "XD隧道股",
       "abbr": "600820",
-      "pinyin": "sdgf"
+      "pinyin": "xdsdg"
     },
     {
       "symbol": "600821.SH",
@@ -29459,12 +29459,20 @@
       "pinyin": "fyyy"
     },
     {
+      "symbol": "601091.SH",
+      "code": "601091",
+      "exchange": "SH",
+      "name": "C沈鼓",
+      "abbr": "601091",
+      "pinyin": "csg"
+    },
+    {
       "symbol": "601096.SH",
       "code": "601096",
       "exchange": "SH",
-      "name": "宏盛华源",
+      "name": "XD宏盛华",
       "abbr": "601096",
-      "pinyin": "hshy"
+      "pinyin": "xdhsh"
     },
     {
       "symbol": "601098.SH",
@@ -29577,6 +29585,14 @@
       "name": "宝地矿业",
       "abbr": "601121",
       "pinyin": "bdky"
+    },
+    {
+      "symbol": "601123.SH",
+      "code": "601123",
+      "exchange": "SH",
+      "name": "马矿股份",
+      "abbr": "601123",
+      "pinyin": "mkgf"
     },
     {
       "symbol": "601126.SH",
@@ -30222,9 +30238,9 @@
       "symbol": "601607.SH",
       "code": "601607",
       "exchange": "SH",
-      "name": "上海医药",
+      "name": "XD上海医",
       "abbr": "601607",
-      "pinyin": "shyy"
+      "pinyin": "xdshy"
     },
     {
       "symbol": "601608.SH",
@@ -30486,9 +30502,9 @@
       "symbol": "601788.SH",
       "code": "601788",
       "exchange": "SH",
-      "name": "XD光大证",
+      "name": "光大证券",
       "abbr": "601788",
-      "pinyin": "xdgdz"
+      "pinyin": "gdzq"
     },
     {
       "symbol": "601789.SH",
@@ -30590,9 +30606,9 @@
       "symbol": "601838.SH",
       "code": "601838",
       "exchange": "SH",
-      "name": "成都银行",
+      "name": "XD成都银",
       "abbr": "601838",
-      "pinyin": "cdyh"
+      "pinyin": "xdcdy"
     },
     {
       "symbol": "601857.SH",
@@ -31278,9 +31294,9 @@
       "symbol": "603039.SH",
       "code": "603039",
       "exchange": "SH",
-      "name": "泛微网络",
+      "name": "XD泛微网",
       "abbr": "603039",
-      "pinyin": "fwwl"
+      "pinyin": "xdfww"
     },
     {
       "symbol": "603040.SH",
@@ -31774,9 +31790,9 @@
       "symbol": "603111.SH",
       "code": "603111",
       "exchange": "SH",
-      "name": "康尼机电",
+      "name": "XD康尼机",
       "abbr": "603111",
-      "pinyin": "knjd"
+      "pinyin": "xdknj"
     },
     {
       "symbol": "603112.SH",
@@ -32062,9 +32078,9 @@
       "symbol": "603163.SH",
       "code": "603163",
       "exchange": "SH",
-      "name": "圣晖集成",
+      "name": "XD圣晖集",
       "abbr": "603163",
-      "pinyin": "shjc"
+      "pinyin": "xdshj"
     },
     {
       "symbol": "603165.SH",
@@ -33062,9 +33078,9 @@
       "symbol": "603319.SH",
       "code": "603319",
       "exchange": "SH",
-      "name": "美湖股份",
+      "name": "XD美湖股",
       "abbr": "603319",
-      "pinyin": "mhgf"
+      "pinyin": "xdmhg"
     },
     {
       "symbol": "603320.SH",
@@ -33494,9 +33510,9 @@
       "symbol": "603387.SH",
       "code": "603387",
       "exchange": "SH",
-      "name": "基蛋生物",
+      "name": "XD基蛋生",
       "abbr": "603387",
-      "pinyin": "jdsw"
+      "pinyin": "xdjds"
     },
     {
       "symbol": "603389.SH",
@@ -33673,6 +33689,14 @@
       "name": "吉比特",
       "abbr": "603444",
       "pinyin": "jbt"
+    },
+    {
+      "symbol": "603448.SH",
+      "code": "603448",
+      "exchange": "SH",
+      "name": "天博智能",
+      "abbr": "603448",
+      "pinyin": "tbzn"
     },
     {
       "symbol": "603456.SH",
@@ -34606,9 +34630,9 @@
       "symbol": "603698.SH",
       "code": "603698",
       "exchange": "SH",
-      "name": "航天工程",
+      "name": "XD航天工",
       "abbr": "603698",
-      "pinyin": "htgc"
+      "pinyin": "xdhtg"
     },
     {
       "symbol": "603699.SH",
@@ -34838,9 +34862,9 @@
       "symbol": "603757.SH",
       "code": "603757",
       "exchange": "SH",
-      "name": "大元泵业",
+      "name": "XD大元泵",
       "abbr": "603757",
-      "pinyin": "dyby"
+      "pinyin": "xddyb"
     },
     {
       "symbol": "603758.SH",
@@ -35262,9 +35286,9 @@
       "symbol": "603867.SH",
       "code": "603867",
       "exchange": "SH",
-      "name": "新化股份",
+      "name": "XD新化股",
       "abbr": "603867",
-      "pinyin": "xhgf"
+      "pinyin": "xdxhg"
     },
     {
       "symbol": "603868.SH",
@@ -35574,9 +35598,9 @@
       "symbol": "603927.SH",
       "code": "603927",
       "exchange": "SH",
-      "name": "中科软",
+      "name": "XD中科软",
       "abbr": "603927",
-      "pinyin": "zkr"
+      "pinyin": "xdzkr"
     },
     {
       "symbol": "603928.SH",
@@ -36806,17 +36830,17 @@
       "symbol": "688001.SH",
       "code": "688001",
       "exchange": "SH",
-      "name": "华兴源创",
+      "name": "XD华兴源",
       "abbr": "688001",
-      "pinyin": "hxyc"
+      "pinyin": "xdhxy"
     },
     {
       "symbol": "688002.SH",
       "code": "688002",
       "exchange": "SH",
-      "name": "睿创微纳",
+      "name": "XD睿创微",
       "abbr": "688002",
-      "pinyin": "rcwn"
+      "pinyin": "xdrcw"
     },
     {
       "symbol": "688003.SH",
@@ -36846,9 +36870,9 @@
       "symbol": "688006.SH",
       "code": "688006",
       "exchange": "SH",
-      "name": "杭可科技",
+      "name": "XD杭可科",
       "abbr": "688006",
-      "pinyin": "hkkj"
+      "pinyin": "xdhkk"
     },
     {
       "symbol": "688007.SH",
@@ -37030,9 +37054,9 @@
       "symbol": "688031.SH",
       "code": "688031",
       "exchange": "SH",
-      "name": "星环科技-U",
+      "name": "星环科技",
       "abbr": "688031",
-      "pinyin": "xhkju"
+      "pinyin": "xhkj"
     },
     {
       "symbol": "688032.SH",
@@ -37230,9 +37254,9 @@
       "symbol": "688062.SH",
       "code": "688062",
       "exchange": "SH",
-      "name": "迈威生物-U",
+      "name": "迈威生物",
       "abbr": "688062",
-      "pinyin": "mwswu"
+      "pinyin": "mwsw"
     },
     {
       "symbol": "688063.SH",
@@ -37894,9 +37918,9 @@
       "symbol": "688158.SH",
       "code": "688158",
       "exchange": "SH",
-      "name": "优刻得-W",
+      "name": "优刻得",
       "abbr": "688158",
-      "pinyin": "ykdw"
+      "pinyin": "ykd"
     },
     {
       "symbol": "688159.SH",
@@ -37942,9 +37966,9 @@
       "symbol": "688165.SH",
       "code": "688165",
       "exchange": "SH",
-      "name": "埃夫特-U",
+      "name": "埃夫特",
       "abbr": "688165",
-      "pinyin": "aftu"
+      "pinyin": "aft"
     },
     {
       "symbol": "688166.SH",
@@ -38022,9 +38046,9 @@
       "symbol": "688176.SH",
       "code": "688176",
       "exchange": "SH",
-      "name": "亚虹医药-U",
+      "name": "亚虹医药",
       "abbr": "688176",
-      "pinyin": "yhyyu"
+      "pinyin": "yhyy"
     },
     {
       "symbol": "688177.SH",
@@ -38054,9 +38078,9 @@
       "symbol": "688180.SH",
       "code": "688180",
       "exchange": "SH",
-      "name": "君实生物-U",
+      "name": "君实生物",
       "abbr": "688180",
-      "pinyin": "jsswu"
+      "pinyin": "jssw"
     },
     {
       "symbol": "688181.SH",
@@ -38150,9 +38174,9 @@
       "symbol": "688192.SH",
       "code": "688192",
       "exchange": "SH",
-      "name": "迪哲医药-U",
+      "name": "迪哲医药",
       "abbr": "688192",
-      "pinyin": "dzyyu"
+      "pinyin": "dzyy"
     },
     {
       "symbol": "688193.SH",
@@ -38182,9 +38206,9 @@
       "symbol": "688197.SH",
       "code": "688197",
       "exchange": "SH",
-      "name": "首药控股-U",
+      "name": "首药控股",
       "abbr": "688197",
-      "pinyin": "sykgu"
+      "pinyin": "sykg"
     },
     {
       "symbol": "688198.SH",
@@ -38302,9 +38326,9 @@
       "symbol": "688213.SH",
       "code": "688213",
       "exchange": "SH",
-      "name": "思特威-W",
+      "name": "思特威",
       "abbr": "688213",
-      "pinyin": "stww"
+      "pinyin": "stw"
     },
     {
       "symbol": "688215.SH",
@@ -38350,17 +38374,17 @@
       "symbol": "688220.SH",
       "code": "688220",
       "exchange": "SH",
-      "name": "翱捷科技-U",
+      "name": "翱捷科技",
       "abbr": "688220",
-      "pinyin": "ajkju"
+      "pinyin": "ajkj"
     },
     {
       "symbol": "688221.SH",
       "code": "688221",
       "exchange": "SH",
-      "name": "前沿生物-U",
+      "name": "前沿生物",
       "abbr": "688221",
-      "pinyin": "qyswu"
+      "pinyin": "qysw"
     },
     {
       "symbol": "688222.SH",
@@ -38638,9 +38662,9 @@
       "symbol": "688266.SH",
       "code": "688266",
       "exchange": "SH",
-      "name": "泽璟制药-U",
+      "name": "泽璟制药",
       "abbr": "688266",
-      "pinyin": "zjzyu"
+      "pinyin": "zjzy"
     },
     {
       "symbol": "688267.SH",
@@ -38718,9 +38742,9 @@
       "symbol": "688277.SH",
       "code": "688277",
       "exchange": "SH",
-      "name": "天智航-U",
+      "name": "天智航",
       "abbr": "688277",
-      "pinyin": "tzhu"
+      "pinyin": "tzh"
     },
     {
       "symbol": "688278.SH",
@@ -38742,9 +38766,9 @@
       "symbol": "688280.SH",
       "code": "688280",
       "exchange": "SH",
-      "name": "精进电动-W",
+      "name": "精进电动",
       "abbr": "688280",
-      "pinyin": "jjddw"
+      "pinyin": "jjdd"
     },
     {
       "symbol": "688281.SH",
@@ -38894,9 +38918,9 @@
       "symbol": "688302.SH",
       "code": "688302",
       "exchange": "SH",
-      "name": "海创药业-U",
+      "name": "海创药业",
       "abbr": "688302",
-      "pinyin": "hcyyu"
+      "pinyin": "hcyy"
     },
     {
       "symbol": "688303.SH",
@@ -38998,9 +39022,9 @@
       "symbol": "688316.SH",
       "code": "688316",
       "exchange": "SH",
-      "name": "青云科技-U",
+      "name": "青云科技",
       "abbr": "688316",
-      "pinyin": "qykju"
+      "pinyin": "qykj"
     },
     {
       "symbol": "688317.SH",
@@ -39046,9 +39070,9 @@
       "symbol": "688322.SH",
       "code": "688322",
       "exchange": "SH",
-      "name": "奥比中光-W",
+      "name": "奥比中光",
       "abbr": "688322",
-      "pinyin": "abzgw"
+      "pinyin": "abzg"
     },
     {
       "symbol": "688323.SH",
@@ -39070,17 +39094,17 @@
       "symbol": "688326.SH",
       "code": "688326",
       "exchange": "SH",
-      "name": "经纬恒润-W",
+      "name": "经纬恒润",
       "abbr": "688326",
-      "pinyin": "jwhrw"
+      "pinyin": "jwhr"
     },
     {
       "symbol": "688327.SH",
       "code": "688327",
       "exchange": "SH",
-      "name": "云从科技-UW",
+      "name": "云从科技",
       "abbr": "688327",
-      "pinyin": "yckjuw"
+      "pinyin": "yckj"
     },
     {
       "symbol": "688328.SH",
@@ -39174,17 +39198,17 @@
       "symbol": "688339.SH",
       "code": "688339",
       "exchange": "SH",
-      "name": "亿华通-U",
+      "name": "亿华通",
       "abbr": "688339",
-      "pinyin": "yhtu"
+      "pinyin": "yht"
     },
     {
       "symbol": "688343.SH",
       "code": "688343",
       "exchange": "SH",
-      "name": "云天励飞-U",
+      "name": "云天励飞",
       "abbr": "688343",
-      "pinyin": "ytlfu"
+      "pinyin": "ytlf"
     },
     {
       "symbol": "688345.SH",
@@ -39334,9 +39358,9 @@
       "symbol": "688366.SH",
       "code": "688366",
       "exchange": "SH",
-      "name": "昊海生科",
+      "name": "XD昊海生",
       "abbr": "688366",
-      "pinyin": "hhsk"
+      "pinyin": "xdhhs"
     },
     {
       "symbol": "688367.SH",
@@ -39390,9 +39414,9 @@
       "symbol": "688373.SH",
       "code": "688373",
       "exchange": "SH",
-      "name": "盟科药业-U",
+      "name": "盟科药业",
       "abbr": "688373",
-      "pinyin": "mkyyu"
+      "pinyin": "mkyy"
     },
     {
       "symbol": "688375.SH",
@@ -39454,9 +39478,9 @@
       "symbol": "688382.SH",
       "code": "688382",
       "exchange": "SH",
-      "name": "益方生物-U",
+      "name": "益方生物",
       "abbr": "688382",
-      "pinyin": "yfswu"
+      "pinyin": "yfsw"
     },
     {
       "symbol": "688383.SH",
@@ -39486,9 +39510,9 @@
       "symbol": "688387.SH",
       "code": "688387",
       "exchange": "SH",
-      "name": "信科移动-U",
+      "name": "信科移动",
       "abbr": "688387",
-      "pinyin": "xkydu"
+      "pinyin": "xkyd"
     },
     {
       "symbol": "688388.SH",
@@ -39726,9 +39750,9 @@
       "symbol": "688443.SH",
       "code": "688443",
       "exchange": "SH",
-      "name": "智翔金泰-U",
+      "name": "智翔金泰",
       "abbr": "688443",
-      "pinyin": "zxjtu"
+      "pinyin": "zxjt"
     },
     {
       "symbol": "688448.SH",
@@ -39806,9 +39830,9 @@
       "symbol": "688469.SH",
       "code": "688469",
       "exchange": "SH",
-      "name": "芯联集成-U",
+      "name": "芯联集成",
       "abbr": "688469",
-      "pinyin": "xljcu"
+      "pinyin": "xljc"
     },
     {
       "symbol": "688472.SH",
@@ -40006,9 +40030,9 @@
       "symbol": "688512.SH",
       "code": "688512",
       "exchange": "SH",
-      "name": "慧智微-U",
+      "name": "慧智微",
       "abbr": "688512",
-      "pinyin": "hzwu"
+      "pinyin": "hzw"
     },
     {
       "symbol": "688513.SH",
@@ -40022,9 +40046,9 @@
       "symbol": "688515.SH",
       "code": "688515",
       "exchange": "SH",
-      "name": "裕太微-U",
+      "name": "裕太微",
       "abbr": "688515",
-      "pinyin": "ytwu"
+      "pinyin": "ytw"
     },
     {
       "symbol": "688516.SH",
@@ -40094,9 +40118,9 @@
       "symbol": "688525.SH",
       "code": "688525",
       "exchange": "SH",
-      "name": "佰维存储",
+      "name": "XD佰维存",
       "abbr": "688525",
-      "pinyin": "bwcc"
+      "pinyin": "xdbwc"
     },
     {
       "symbol": "688526.SH",
@@ -40166,9 +40190,9 @@
       "symbol": "688538.SH",
       "code": "688538",
       "exchange": "SH",
-      "name": "和辉光电-U",
+      "name": "和辉光电",
       "abbr": "688538",
-      "pinyin": "hhgdu"
+      "pinyin": "hhgd"
     },
     {
       "symbol": "688539.SH",
@@ -40206,9 +40230,9 @@
       "symbol": "688549.SH",
       "code": "688549",
       "exchange": "SH",
-      "name": "中巨芯-U",
+      "name": "中巨芯",
       "abbr": "688549",
-      "pinyin": "zjxu"
+      "pinyin": "zjx"
     },
     {
       "symbol": "688550.SH",
@@ -40238,9 +40262,9 @@
       "symbol": "688553.SH",
       "code": "688553",
       "exchange": "SH",
-      "name": "汇宇制药-W",
+      "name": "汇宇制药",
       "abbr": "688553",
-      "pinyin": "hyzyw"
+      "pinyin": "hyzy"
     },
     {
       "symbol": "688556.SH",
@@ -40286,9 +40310,9 @@
       "symbol": "688561.SH",
       "code": "688561",
       "exchange": "SH",
-      "name": "奇安信-U",
+      "name": "奇安信",
       "abbr": "688561",
-      "pinyin": "qaxu"
+      "pinyin": "qax"
     },
     {
       "symbol": "688562.SH",
@@ -40606,9 +40630,9 @@
       "symbol": "688607.SH",
       "code": "688607",
       "exchange": "SH",
-      "name": "康众医疗",
+      "name": "康众科技",
       "abbr": "688607",
-      "pinyin": "kzyl"
+      "pinyin": "kzkj"
     },
     {
       "symbol": "688608.SH",
@@ -41174,9 +41198,9 @@
       "symbol": "688702.SH",
       "code": "688702",
       "exchange": "SH",
-      "name": "盛科通信-U",
+      "name": "盛科通信",
       "abbr": "688702",
-      "pinyin": "sktxu"
+      "pinyin": "sktx"
     },
     {
       "symbol": "688707.SH",
@@ -41374,17 +41398,17 @@
       "symbol": "688759.SH",
       "code": "688759",
       "exchange": "SH",
-      "name": "必贝特-U",
+      "name": "必贝特",
       "abbr": "688759",
-      "pinyin": "bbtu"
+      "pinyin": "bbt"
     },
     {
       "symbol": "688765.SH",
       "code": "688765",
       "exchange": "SH",
-      "name": "禾元生物-U",
+      "name": "禾元生物",
       "abbr": "688765",
-      "pinyin": "hyswu"
+      "pinyin": "hysw"
     },
     {
       "symbol": "688766.SH",
@@ -41462,17 +41486,17 @@
       "symbol": "688781.SH",
       "code": "688781",
       "exchange": "SH",
-      "name": "视涯科技-UW",
+      "name": "视涯科技",
       "abbr": "688781",
-      "pinyin": "sykjuw"
+      "pinyin": "sykj"
     },
     {
       "symbol": "688783.SH",
       "code": "688783",
       "exchange": "SH",
-      "name": "西安奕材-U",
+      "name": "西安奕材",
       "abbr": "688783",
-      "pinyin": "xaycu"
+      "pinyin": "xayc"
     },
     {
       "symbol": "688785.SH",
@@ -41518,9 +41542,9 @@
       "symbol": "688790.SH",
       "code": "688790",
       "exchange": "SH",
-      "name": "昂瑞微-UW",
+      "name": "昂瑞微",
       "abbr": "688790",
-      "pinyin": "arwuw"
+      "pinyin": "arw"
     },
     {
       "symbol": "688793.SH",
@@ -41534,9 +41558,9 @@
       "symbol": "688795.SH",
       "code": "688795",
       "exchange": "SH",
-      "name": "摩尔线程-U",
+      "name": "摩尔线程",
       "abbr": "688795",
-      "pinyin": "mexcu"
+      "pinyin": "mexc"
     },
     {
       "symbol": "688796.SH",
@@ -41579,12 +41603,20 @@
       "pinyin": "rkd"
     },
     {
+      "symbol": "688801.SH",
+      "code": "688801",
+      "exchange": "SH",
+      "name": "燧原科技",
+      "abbr": "688801",
+      "pinyin": "sykj"
+    },
+    {
       "symbol": "688802.SH",
       "code": "688802",
       "exchange": "SH",
-      "name": "沐曦股份-U",
+      "name": "沐曦股份",
       "abbr": "688802",
-      "pinyin": "mxgfu"
+      "pinyin": "mxgf"
     },
     {
       "symbol": "688805.SH",
@@ -41598,9 +41630,9 @@
       "symbol": "688806.SH",
       "code": "688806",
       "exchange": "SH",
-      "name": "泰诺麦博-U",
+      "name": "泰诺麦博",
       "abbr": "688806",
-      "pinyin": "tnmbu"
+      "pinyin": "tnmb"
     },
     {
       "symbol": "688807.SH",
@@ -41694,25 +41726,33 @@
       "symbol": "688828.SH",
       "code": "688828",
       "exchange": "SH",
-      "name": "国仪公司-U",
+      "name": "国仪公司",
       "abbr": "688828",
-      "pinyin": "gygsu"
+      "pinyin": "gygs"
     },
     {
       "symbol": "688835.SH",
       "code": "688835",
       "exchange": "SH",
-      "name": "C高凯",
+      "name": "高凯技术",
       "abbr": "688835",
-      "pinyin": "cgk"
+      "pinyin": "gkjs"
     },
     {
       "symbol": "688836.SH",
       "code": "688836",
       "exchange": "SH",
-      "name": "宇树科技-W",
+      "name": "宇树科技",
       "abbr": "688836",
-      "pinyin": "yskjw"
+      "pinyin": "yskj"
+    },
+    {
+      "symbol": "688837.SH",
+      "code": "688837",
+      "exchange": "SH",
+      "name": "C信诺维",
+      "abbr": "688837",
+      "pinyin": "cxnw"
     },
     {
       "symbol": "688981.SH",
@@ -41726,41 +41766,2761 @@
       "symbol": "689009.SH",
       "code": "689009",
       "exchange": "SH",
-      "name": "九号公司-WD",
+      "name": "九号公司",
       "abbr": "689009",
-      "pinyin": "jhgswd"
+      "pinyin": "jhgs"
     },
     {
-      "symbol": "601123.SH",
-      "code": "601123",
-      "exchange": "SH",
-      "name": "马矿股份",
-      "abbr": "601123",
-      "pinyin": "mkgf"
+      "symbol": "920000.BJ",
+      "code": "920000",
+      "exchange": "BJ",
+      "name": "安徽凤凰",
+      "abbr": "920000",
+      "pinyin": "ahfh"
     },
     {
-      "symbol": "603448.SH",
-      "code": "603448",
-      "exchange": "SH",
-      "name": "天博智能",
-      "abbr": "603448",
-      "pinyin": "tbzn"
+      "symbol": "920001.BJ",
+      "code": "920001",
+      "exchange": "BJ",
+      "name": "纬达光电",
+      "abbr": "920001",
+      "pinyin": "wdgd"
     },
     {
-      "symbol": "688801.SH",
-      "code": "688801",
-      "exchange": "SH",
-      "name": "燧原科技",
-      "abbr": "688801",
+      "symbol": "920002.BJ",
+      "code": "920002",
+      "exchange": "BJ",
+      "name": "万达轴承",
+      "abbr": "920002",
+      "pinyin": "wdzc"
+    },
+    {
+      "symbol": "920003.BJ",
+      "code": "920003",
+      "exchange": "BJ",
+      "name": "中诚咨询",
+      "abbr": "920003",
+      "pinyin": "zczx"
+    },
+    {
+      "symbol": "920005.BJ",
+      "code": "920005",
+      "exchange": "BJ",
+      "name": "鼎佳精密",
+      "abbr": "920005",
+      "pinyin": "djjm"
+    },
+    {
+      "symbol": "920006.BJ",
+      "code": "920006",
+      "exchange": "BJ",
+      "name": "晟楠科技",
+      "abbr": "920006",
+      "pinyin": "cnkj"
+    },
+    {
+      "symbol": "920007.BJ",
+      "code": "920007",
+      "exchange": "BJ",
+      "name": "酉立智能",
+      "abbr": "920007",
+      "pinyin": "ylzn"
+    },
+    {
+      "symbol": "920008.BJ",
+      "code": "920008",
+      "exchange": "BJ",
+      "name": "成电光信",
+      "abbr": "920008",
+      "pinyin": "cdgx"
+    },
+    {
+      "symbol": "920009.BJ",
+      "code": "920009",
+      "exchange": "BJ",
+      "name": "丹娜生物",
+      "abbr": "920009",
+      "pinyin": "dnsw"
+    },
+    {
+      "symbol": "920010.BJ",
+      "code": "920010",
+      "exchange": "BJ",
+      "name": "凯添燃气",
+      "abbr": "920010",
+      "pinyin": "ktrq"
+    },
+    {
+      "symbol": "920011.BJ",
+      "code": "920011",
+      "exchange": "BJ",
+      "name": "晨光电机",
+      "abbr": "920011",
+      "pinyin": "cgdj"
+    },
+    {
+      "symbol": "920012.BJ",
+      "code": "920012",
+      "exchange": "BJ",
+      "name": "创达新材",
+      "abbr": "920012",
+      "pinyin": "cdxc"
+    },
+    {
+      "symbol": "920014.BJ",
+      "code": "920014",
+      "exchange": "BJ",
+      "name": "特瑞斯",
+      "abbr": "920014",
+      "pinyin": "trs"
+    },
+    {
+      "symbol": "920015.BJ",
+      "code": "920015",
+      "exchange": "BJ",
+      "name": "锦华新材",
+      "abbr": "920015",
+      "pinyin": "jhxc"
+    },
+    {
+      "symbol": "920016.BJ",
+      "code": "920016",
+      "exchange": "BJ",
+      "name": "中草香料",
+      "abbr": "920016",
+      "pinyin": "zcxl"
+    },
+    {
+      "symbol": "920017.BJ",
+      "code": "920017",
+      "exchange": "BJ",
+      "name": "星昊医药",
+      "abbr": "920017",
+      "pinyin": "xhyy"
+    },
+    {
+      "symbol": "920018.BJ",
+      "code": "920018",
+      "exchange": "BJ",
+      "name": "宏远股份",
+      "abbr": "920018",
+      "pinyin": "hygf"
+    },
+    {
+      "symbol": "920019.BJ",
+      "code": "920019",
+      "exchange": "BJ",
+      "name": "铜冠矿建",
+      "abbr": "920019",
+      "pinyin": "tgkj"
+    },
+    {
+      "symbol": "920020.BJ",
+      "code": "920020",
+      "exchange": "BJ",
+      "name": "泰凯英",
+      "abbr": "920020",
+      "pinyin": "tky"
+    },
+    {
+      "symbol": "920021.BJ",
+      "code": "920021",
+      "exchange": "BJ",
+      "name": "流金科技",
+      "abbr": "920021",
+      "pinyin": "ljkj"
+    },
+    {
+      "symbol": "920022.BJ",
+      "code": "920022",
+      "exchange": "BJ",
+      "name": "世昌股份",
+      "abbr": "920022",
+      "pinyin": "scgf"
+    },
+    {
+      "symbol": "920023.BJ",
+      "code": "920023",
+      "exchange": "BJ",
+      "name": "*ST田野",
+      "abbr": "920023",
+      "pinyin": "stty"
+    },
+    {
+      "symbol": "920026.BJ",
+      "code": "920026",
+      "exchange": "BJ",
+      "name": "卓兆点胶",
+      "abbr": "920026",
+      "pinyin": "zzdj"
+    },
+    {
+      "symbol": "920027.BJ",
+      "code": "920027",
+      "exchange": "BJ",
+      "name": "交大铁发",
+      "abbr": "920027",
+      "pinyin": "jdtf"
+    },
+    {
+      "symbol": "920028.BJ",
+      "code": "920028",
+      "exchange": "BJ",
+      "name": "新恒泰",
+      "abbr": "920028",
+      "pinyin": "xht"
+    },
+    {
+      "symbol": "920029.BJ",
+      "code": "920029",
+      "exchange": "BJ",
+      "name": "开发科技",
+      "abbr": "920029",
+      "pinyin": "kfkj"
+    },
+    {
+      "symbol": "920030.BJ",
+      "code": "920030",
+      "exchange": "BJ",
+      "name": "德众汽车",
+      "abbr": "920030",
+      "pinyin": "dzqc"
+    },
+    {
+      "symbol": "920033.BJ",
+      "code": "920033",
+      "exchange": "BJ",
+      "name": "康普化学",
+      "abbr": "920033",
+      "pinyin": "kphx"
+    },
+    {
+      "symbol": "920035.BJ",
+      "code": "920035",
+      "exchange": "BJ",
+      "name": "精创电气",
+      "abbr": "920035",
+      "pinyin": "jcdq"
+    },
+    {
+      "symbol": "920036.BJ",
+      "code": "920036",
+      "exchange": "BJ",
+      "name": "觅睿科技",
+      "abbr": "920036",
+      "pinyin": "mrkj"
+    },
+    {
+      "symbol": "920037.BJ",
+      "code": "920037",
+      "exchange": "BJ",
+      "name": "广信科技",
+      "abbr": "920037",
+      "pinyin": "gxkj"
+    },
+    {
+      "symbol": "920038.BJ",
+      "code": "920038",
+      "exchange": "BJ",
+      "name": "森合高科",
+      "abbr": "920038",
+      "pinyin": "shgk"
+    },
+    {
+      "symbol": "920039.BJ",
+      "code": "920039",
+      "exchange": "BJ",
+      "name": "国义招标",
+      "abbr": "920039",
+      "pinyin": "gyzb"
+    },
+    {
+      "symbol": "920045.BJ",
+      "code": "920045",
+      "exchange": "BJ",
+      "name": "蘅东光",
+      "abbr": "920045",
+      "pinyin": "hdg"
+    },
+    {
+      "symbol": "920046.BJ",
+      "code": "920046",
+      "exchange": "BJ",
+      "name": "亿能电力",
+      "abbr": "920046",
+      "pinyin": "yndl"
+    },
+    {
+      "symbol": "920047.BJ",
+      "code": "920047",
+      "exchange": "BJ",
+      "name": "诺思兰德",
+      "abbr": "920047",
+      "pinyin": "nsld"
+    },
+    {
+      "symbol": "920050.BJ",
+      "code": "920050",
+      "exchange": "BJ",
+      "name": "爱伦医疗",
+      "abbr": "920050",
+      "pinyin": "alyl"
+    },
+    {
+      "symbol": "920055.BJ",
+      "code": "920055",
+      "exchange": "BJ",
+      "name": "隆源股份",
+      "abbr": "920055",
+      "pinyin": "lygf"
+    },
+    {
+      "symbol": "920056.BJ",
+      "code": "920056",
+      "exchange": "BJ",
+      "name": "能之光",
+      "abbr": "920056",
+      "pinyin": "nzg"
+    },
+    {
+      "symbol": "920057.BJ",
+      "code": "920057",
+      "exchange": "BJ",
+      "name": "百甲科技",
+      "abbr": "920057",
+      "pinyin": "bjkj"
+    },
+    {
+      "symbol": "920058.BJ",
+      "code": "920058",
+      "exchange": "BJ",
+      "name": "华洋赛车",
+      "abbr": "920058",
+      "pinyin": "hysc"
+    },
+    {
+      "symbol": "920059.BJ",
+      "code": "920059",
+      "exchange": "BJ",
+      "name": "双英集团",
+      "abbr": "920059",
+      "pinyin": "syjt"
+    },
+    {
+      "symbol": "920060.BJ",
+      "code": "920060",
+      "exchange": "BJ",
+      "name": "万源通",
+      "abbr": "920060",
+      "pinyin": "wyt"
+    },
+    {
+      "symbol": "920061.BJ",
+      "code": "920061",
+      "exchange": "BJ",
+      "name": "西磁科技",
+      "abbr": "920061",
+      "pinyin": "xckj"
+    },
+    {
+      "symbol": "920062.BJ",
+      "code": "920062",
+      "exchange": "BJ",
+      "name": "科润智控",
+      "abbr": "920062",
+      "pinyin": "krzk"
+    },
+    {
+      "symbol": "920065.BJ",
+      "code": "920065",
+      "exchange": "BJ",
+      "name": "千岸科技",
+      "abbr": "920065",
+      "pinyin": "qakj"
+    },
+    {
+      "symbol": "920066.BJ",
+      "code": "920066",
+      "exchange": "BJ",
+      "name": "科拜尔",
+      "abbr": "920066",
+      "pinyin": "kbe"
+    },
+    {
+      "symbol": "920068.BJ",
+      "code": "920068",
+      "exchange": "BJ",
+      "name": "天工股份",
+      "abbr": "920068",
+      "pinyin": "tggf"
+    },
+    {
+      "symbol": "920069.BJ",
+      "code": "920069",
+      "exchange": "BJ",
+      "name": "普昂医疗",
+      "abbr": "920069",
+      "pinyin": "payl"
+    },
+    {
+      "symbol": "920071.BJ",
+      "code": "920071",
+      "exchange": "BJ",
+      "name": "金钛股份",
+      "abbr": "920071",
+      "pinyin": "jtgf"
+    },
+    {
+      "symbol": "920072.BJ",
+      "code": "920072",
+      "exchange": "BJ",
+      "name": "科莱瑞迪",
+      "abbr": "920072",
+      "pinyin": "klrd"
+    },
+    {
+      "symbol": "920075.BJ",
+      "code": "920075",
+      "exchange": "BJ",
+      "name": "柏星龙",
+      "abbr": "920075",
+      "pinyin": "bxl"
+    },
+    {
+      "symbol": "920076.BJ",
+      "code": "920076",
+      "exchange": "BJ",
+      "name": "国亮新材",
+      "abbr": "920076",
+      "pinyin": "glxc"
+    },
+    {
+      "symbol": "920077.BJ",
+      "code": "920077",
+      "exchange": "BJ",
+      "name": "吉林碳谷",
+      "abbr": "920077",
+      "pinyin": "jltg"
+    },
+    {
+      "symbol": "920078.BJ",
+      "code": "920078",
+      "exchange": "BJ",
+      "name": "族兴新材",
+      "abbr": "920078",
+      "pinyin": "zxxc"
+    },
+    {
+      "symbol": "920079.BJ",
+      "code": "920079",
+      "exchange": "BJ",
+      "name": "乔路铭",
+      "abbr": "920079",
+      "pinyin": "qlm"
+    },
+    {
+      "symbol": "920080.BJ",
+      "code": "920080",
+      "exchange": "BJ",
+      "name": "奥美森",
+      "abbr": "920080",
+      "pinyin": "ams"
+    },
+    {
+      "symbol": "920081.BJ",
+      "code": "920081",
+      "exchange": "BJ",
+      "name": "欧伦电气",
+      "abbr": "920081",
+      "pinyin": "oldq"
+    },
+    {
+      "symbol": "920082.BJ",
+      "code": "920082",
+      "exchange": "BJ",
+      "name": "方正阀门",
+      "abbr": "920082",
+      "pinyin": "fzfm"
+    },
+    {
+      "symbol": "920083.BJ",
+      "code": "920083",
+      "exchange": "BJ",
+      "name": "金戈新材",
+      "abbr": "920083",
+      "pinyin": "jgxc"
+    },
+    {
+      "symbol": "920086.BJ",
+      "code": "920086",
+      "exchange": "BJ",
+      "name": "科马材料",
+      "abbr": "920086",
+      "pinyin": "kmcl"
+    },
+    {
+      "symbol": "920087.BJ",
+      "code": "920087",
+      "exchange": "BJ",
+      "name": "秋乐种业",
+      "abbr": "920087",
+      "pinyin": "qlzy"
+    },
+    {
+      "symbol": "920088.BJ",
+      "code": "920088",
+      "exchange": "BJ",
+      "name": "科力股份",
+      "abbr": "920088",
+      "pinyin": "klgf"
+    },
+    {
+      "symbol": "920089.BJ",
+      "code": "920089",
+      "exchange": "BJ",
+      "name": "禾昌聚合",
+      "abbr": "920089",
+      "pinyin": "hcjh"
+    },
+    {
+      "symbol": "920090.BJ",
+      "code": "920090",
+      "exchange": "BJ",
+      "name": "*ST同辉",
+      "abbr": "920090",
+      "pinyin": "stth"
+    },
+    {
+      "symbol": "920091.BJ",
+      "code": "920091",
+      "exchange": "BJ",
+      "name": "大鹏工业",
+      "abbr": "920091",
+      "pinyin": "dpgy"
+    },
+    {
+      "symbol": "920092.BJ",
+      "code": "920092",
+      "exchange": "BJ",
+      "name": "汉鑫科技",
+      "abbr": "920092",
+      "pinyin": "hxkj"
+    },
+    {
+      "symbol": "920093.BJ",
+      "code": "920093",
+      "exchange": "BJ",
+      "name": "信胜科技",
+      "abbr": "920093",
+      "pinyin": "xskj"
+    },
+    {
+      "symbol": "920096.BJ",
+      "code": "920096",
+      "exchange": "BJ",
+      "name": "嘉晨智能",
+      "abbr": "920096",
+      "pinyin": "jczn"
+    },
+    {
+      "symbol": "920098.BJ",
+      "code": "920098",
+      "exchange": "BJ",
+      "name": "科隆新材",
+      "abbr": "920098",
+      "pinyin": "klxc"
+    },
+    {
+      "symbol": "920099.BJ",
+      "code": "920099",
+      "exchange": "BJ",
+      "name": "瑞华技术",
+      "abbr": "920099",
+      "pinyin": "rhjs"
+    },
+    {
+      "symbol": "920100.BJ",
+      "code": "920100",
+      "exchange": "BJ",
+      "name": "三协电机",
+      "abbr": "920100",
+      "pinyin": "sxdj"
+    },
+    {
+      "symbol": "920101.BJ",
+      "code": "920101",
+      "exchange": "BJ",
+      "name": "志高机械",
+      "abbr": "920101",
+      "pinyin": "zgjx"
+    },
+    {
+      "symbol": "920106.BJ",
+      "code": "920106",
+      "exchange": "BJ",
+      "name": "林泰新材",
+      "abbr": "920106",
+      "pinyin": "ltxc"
+    },
+    {
+      "symbol": "920107.BJ",
+      "code": "920107",
+      "exchange": "BJ",
+      "name": "恒兴股份",
+      "abbr": "920107",
+      "pinyin": "hxgf"
+    },
+    {
+      "symbol": "920108.BJ",
+      "code": "920108",
+      "exchange": "BJ",
+      "name": "宏海科技",
+      "abbr": "920108",
+      "pinyin": "hhkj"
+    },
+    {
+      "symbol": "920110.BJ",
+      "code": "920110",
+      "exchange": "BJ",
+      "name": "雷特科技",
+      "abbr": "920110",
+      "pinyin": "ltkj"
+    },
+    {
+      "symbol": "920111.BJ",
+      "code": "920111",
+      "exchange": "BJ",
+      "name": "聚星科技",
+      "abbr": "920111",
+      "pinyin": "jxkj"
+    },
+    {
+      "symbol": "920112.BJ",
+      "code": "920112",
+      "exchange": "BJ",
+      "name": "巴兰仕",
+      "abbr": "920112",
+      "pinyin": "bls"
+    },
+    {
+      "symbol": "920116.BJ",
+      "code": "920116",
+      "exchange": "BJ",
+      "name": "星图测控",
+      "abbr": "920116",
+      "pinyin": "xtck"
+    },
+    {
+      "symbol": "920117.BJ",
+      "code": "920117",
+      "exchange": "BJ",
+      "name": "龙鑫智能",
+      "abbr": "920117",
+      "pinyin": "lxzn"
+    },
+    {
+      "symbol": "920118.BJ",
+      "code": "920118",
+      "exchange": "BJ",
+      "name": "太湖远大",
+      "abbr": "920118",
+      "pinyin": "thyd"
+    },
+    {
+      "symbol": "920119.BJ",
+      "code": "920119",
+      "exchange": "BJ",
+      "name": "美德乐",
+      "abbr": "920119",
+      "pinyin": "mdl"
+    },
+    {
+      "symbol": "920121.BJ",
+      "code": "920121",
+      "exchange": "BJ",
+      "name": "江天科技",
+      "abbr": "920121",
+      "pinyin": "jtkj"
+    },
+    {
+      "symbol": "920122.BJ",
+      "code": "920122",
+      "exchange": "BJ",
+      "name": "中纺标",
+      "abbr": "920122",
+      "pinyin": "zfb"
+    },
+    {
+      "symbol": "920123.BJ",
+      "code": "920123",
+      "exchange": "BJ",
+      "name": "芭薇股份",
+      "abbr": "920123",
+      "pinyin": "bwgf"
+    },
+    {
+      "symbol": "920124.BJ",
+      "code": "920124",
+      "exchange": "BJ",
+      "name": "南特科技",
+      "abbr": "920124",
+      "pinyin": "ntkj"
+    },
+    {
+      "symbol": "920125.BJ",
+      "code": "920125",
+      "exchange": "BJ",
+      "name": "鸿仕达",
+      "abbr": "920125",
+      "pinyin": "hsd"
+    },
+    {
+      "symbol": "920126.BJ",
+      "code": "920126",
+      "exchange": "BJ",
+      "name": "永大股份",
+      "abbr": "920126",
+      "pinyin": "ydgf"
+    },
+    {
+      "symbol": "920128.BJ",
+      "code": "920128",
+      "exchange": "BJ",
+      "name": "胜业电气",
+      "abbr": "920128",
+      "pinyin": "sydq"
+    },
+    {
+      "symbol": "920130.BJ",
+      "code": "920130",
+      "exchange": "BJ",
+      "name": "立方控股",
+      "abbr": "920130",
+      "pinyin": "lfkg"
+    },
+    {
+      "symbol": "920132.BJ",
+      "code": "920132",
+      "exchange": "BJ",
+      "name": "泰鹏智能",
+      "abbr": "920132",
+      "pinyin": "tpzn"
+    },
+    {
+      "symbol": "920136.BJ",
+      "code": "920136",
+      "exchange": "BJ",
+      "name": "永励精密",
+      "abbr": "920136",
+      "pinyin": "yljm"
+    },
+    {
+      "symbol": "920138.BJ",
+      "code": "920138",
+      "exchange": "BJ",
+      "name": "杰理科技",
+      "abbr": "920138",
+      "pinyin": "jlkj"
+    },
+    {
+      "symbol": "920139.BJ",
+      "code": "920139",
+      "exchange": "BJ",
+      "name": "华岭股份",
+      "abbr": "920139",
+      "pinyin": "hlgf"
+    },
+    {
+      "symbol": "920145.BJ",
+      "code": "920145",
+      "exchange": "BJ",
+      "name": "恒合股份",
+      "abbr": "920145",
+      "pinyin": "hhgf"
+    },
+    {
+      "symbol": "920146.BJ",
+      "code": "920146",
+      "exchange": "BJ",
+      "name": "华阳变速",
+      "abbr": "920146",
+      "pinyin": "hybs"
+    },
+    {
+      "symbol": "920149.BJ",
+      "code": "920149",
+      "exchange": "BJ",
+      "name": "旭杰科技",
+      "abbr": "920149",
+      "pinyin": "xjkj"
+    },
+    {
+      "symbol": "920152.BJ",
+      "code": "920152",
+      "exchange": "BJ",
+      "name": "昆工科技",
+      "abbr": "920152",
+      "pinyin": "kgkj"
+    },
+    {
+      "symbol": "920156.BJ",
+      "code": "920156",
+      "exchange": "BJ",
+      "name": "海昌智能",
+      "abbr": "920156",
+      "pinyin": "hczn"
+    },
+    {
+      "symbol": "920158.BJ",
+      "code": "920158",
+      "exchange": "BJ",
+      "name": "长江能科",
+      "abbr": "920158",
+      "pinyin": "cjnk"
+    },
+    {
+      "symbol": "920159.BJ",
+      "code": "920159",
+      "exchange": "BJ",
+      "name": "农大科技",
+      "abbr": "920159",
+      "pinyin": "ndkj"
+    },
+    {
+      "symbol": "920160.BJ",
+      "code": "920160",
+      "exchange": "BJ",
+      "name": "北矿检测",
+      "abbr": "920160",
+      "pinyin": "bkjc"
+    },
+    {
+      "symbol": "920161.BJ",
+      "code": "920161",
+      "exchange": "BJ",
+      "name": "龙辰科技",
+      "abbr": "920161",
+      "pinyin": "lckj"
+    },
+    {
+      "symbol": "920163.BJ",
+      "code": "920163",
+      "exchange": "BJ",
+      "name": "方大新材",
+      "abbr": "920163",
+      "pinyin": "fdxc"
+    },
+    {
+      "symbol": "920165.BJ",
+      "code": "920165",
+      "exchange": "BJ",
+      "name": "珈凯生物",
+      "abbr": "920165",
+      "pinyin": "jksw"
+    },
+    {
+      "symbol": "920166.BJ",
+      "code": "920166",
+      "exchange": "BJ",
+      "name": "海圣医疗",
+      "abbr": "920166",
+      "pinyin": "hsyl"
+    },
+    {
+      "symbol": "920167.BJ",
+      "code": "920167",
+      "exchange": "BJ",
+      "name": "同享科技",
+      "abbr": "920167",
+      "pinyin": "txkj"
+    },
+    {
+      "symbol": "920168.BJ",
+      "code": "920168",
+      "exchange": "BJ",
+      "name": "通宝光电",
+      "abbr": "920168",
+      "pinyin": "tbgd"
+    },
+    {
+      "symbol": "920169.BJ",
+      "code": "920169",
+      "exchange": "BJ",
+      "name": "七丰精工",
+      "abbr": "920169",
+      "pinyin": "qfjg"
+    },
+    {
+      "symbol": "920171.BJ",
+      "code": "920171",
+      "exchange": "BJ",
+      "name": "志晟信息",
+      "abbr": "920171",
+      "pinyin": "zcxx"
+    },
+    {
+      "symbol": "920174.BJ",
+      "code": "920174",
+      "exchange": "BJ",
+      "name": "五新智能",
+      "abbr": "920174",
+      "pinyin": "wxzn"
+    },
+    {
+      "symbol": "920175.BJ",
+      "code": "920175",
+      "exchange": "BJ",
+      "name": "东方碳素",
+      "abbr": "920175",
+      "pinyin": "dfts"
+    },
+    {
+      "symbol": "920176.BJ",
+      "code": "920176",
+      "exchange": "BJ",
+      "name": "XD维琪科",
+      "abbr": "920176",
+      "pinyin": "xdwqk"
+    },
+    {
+      "symbol": "920177.BJ",
+      "code": "920177",
+      "exchange": "BJ",
+      "name": "恒道科技",
+      "abbr": "920177",
+      "pinyin": "hdkj"
+    },
+    {
+      "symbol": "920178.BJ",
+      "code": "920178",
+      "exchange": "BJ",
+      "name": "锐翔智能",
+      "abbr": "920178",
+      "pinyin": "rxzn"
+    },
+    {
+      "symbol": "920179.BJ",
+      "code": "920179",
+      "exchange": "BJ",
+      "name": "凯德石英",
+      "abbr": "920179",
+      "pinyin": "kdsy"
+    },
+    {
+      "symbol": "920180.BJ",
+      "code": "920180",
+      "exchange": "BJ",
+      "name": "爱得科技",
+      "abbr": "920180",
+      "pinyin": "adkj"
+    },
+    {
+      "symbol": "920181.BJ",
+      "code": "920181",
+      "exchange": "BJ",
+      "name": "赛英电子",
+      "abbr": "920181",
+      "pinyin": "sydz"
+    },
+    {
+      "symbol": "920183.BJ",
+      "code": "920183",
+      "exchange": "BJ",
+      "name": "XD海菲曼",
+      "abbr": "920183",
+      "pinyin": "xdhfm"
+    },
+    {
+      "symbol": "920184.BJ",
+      "code": "920184",
+      "exchange": "BJ",
+      "name": "国源科技",
+      "abbr": "920184",
+      "pinyin": "gykj"
+    },
+    {
+      "symbol": "920185.BJ",
+      "code": "920185",
+      "exchange": "BJ",
+      "name": "贝特瑞",
+      "abbr": "920185",
+      "pinyin": "btr"
+    },
+    {
+      "symbol": "920186.BJ",
+      "code": "920186",
+      "exchange": "BJ",
+      "name": "中科仪",
+      "abbr": "920186",
+      "pinyin": "zky"
+    },
+    {
+      "symbol": "920187.BJ",
+      "code": "920187",
+      "exchange": "BJ",
+      "name": "通领科技",
+      "abbr": "920187",
+      "pinyin": "tlkj"
+    },
+    {
+      "symbol": "920188.BJ",
+      "code": "920188",
+      "exchange": "BJ",
+      "name": "悦龙科技",
+      "abbr": "920188",
+      "pinyin": "ylkj"
+    },
+    {
+      "symbol": "920189.BJ",
+      "code": "920189",
+      "exchange": "BJ",
+      "name": "康美特",
+      "abbr": "920189",
+      "pinyin": "kmt"
+    },
+    {
+      "symbol": "920190.BJ",
+      "code": "920190",
+      "exchange": "BJ",
+      "name": "雷神科技",
+      "abbr": "920190",
+      "pinyin": "lskj"
+    },
+    {
+      "symbol": "920191.BJ",
+      "code": "920191",
+      "exchange": "BJ",
+      "name": "瑞尔竞达",
+      "abbr": "920191",
+      "pinyin": "rejd"
+    },
+    {
+      "symbol": "920193.BJ",
+      "code": "920193",
+      "exchange": "BJ",
+      "name": "吉和昌",
+      "abbr": "920193",
+      "pinyin": "jhc"
+    },
+    {
+      "symbol": "920195.BJ",
+      "code": "920195",
+      "exchange": "BJ",
+      "name": "三祥科技",
+      "abbr": "920195",
+      "pinyin": "sxkj"
+    },
+    {
+      "symbol": "920198.BJ",
+      "code": "920198",
+      "exchange": "BJ",
+      "name": "微创光电",
+      "abbr": "920198",
+      "pinyin": "wcgd"
+    },
+    {
+      "symbol": "920199.BJ",
+      "code": "920199",
+      "exchange": "BJ",
+      "name": "倍益康",
+      "abbr": "920199",
+      "pinyin": "byk"
+    },
+    {
+      "symbol": "920200.BJ",
+      "code": "920200",
+      "exchange": "BJ",
+      "name": "振宏股份",
+      "abbr": "920200",
+      "pinyin": "zhgf"
+    },
+    {
+      "symbol": "920204.BJ",
+      "code": "920204",
+      "exchange": "BJ",
+      "name": "沪江材料",
+      "abbr": "920204",
+      "pinyin": "hjcl"
+    },
+    {
+      "symbol": "920206.BJ",
+      "code": "920206",
+      "exchange": "BJ",
+      "name": "彩客科技",
+      "abbr": "920206",
+      "pinyin": "ckkj"
+    },
+    {
+      "symbol": "920207.BJ",
+      "code": "920207",
+      "exchange": "BJ",
+      "name": "众诚科技",
+      "abbr": "920207",
+      "pinyin": "zckj"
+    },
+    {
+      "symbol": "920208.BJ",
+      "code": "920208",
+      "exchange": "BJ",
+      "name": "青矩技术",
+      "abbr": "920208",
+      "pinyin": "qjjs"
+    },
+    {
+      "symbol": "920211.BJ",
+      "code": "920211",
+      "exchange": "BJ",
+      "name": "新睿电子",
+      "abbr": "920211",
+      "pinyin": "xrdz"
+    },
+    {
+      "symbol": "920212.BJ",
+      "code": "920212",
+      "exchange": "BJ",
+      "name": "智新电子",
+      "abbr": "920212",
+      "pinyin": "zxdz"
+    },
+    {
+      "symbol": "920218.BJ",
+      "code": "920218",
+      "exchange": "BJ",
+      "name": "新天力",
+      "abbr": "920218",
+      "pinyin": "xtl"
+    },
+    {
+      "symbol": "920220.BJ",
+      "code": "920220",
+      "exchange": "BJ",
+      "name": "朗信电气",
+      "abbr": "920220",
+      "pinyin": "lxdq"
+    },
+    {
+      "symbol": "920221.BJ",
+      "code": "920221",
+      "exchange": "BJ",
+      "name": "易实精密",
+      "abbr": "920221",
+      "pinyin": "ysjm"
+    },
+    {
+      "symbol": "920222.BJ",
+      "code": "920222",
+      "exchange": "BJ",
+      "name": "益坤电气",
+      "abbr": "920222",
+      "pinyin": "ykdq"
+    },
+    {
+      "symbol": "920223.BJ",
+      "code": "920223",
+      "exchange": "BJ",
+      "name": "荣亿精密",
+      "abbr": "920223",
+      "pinyin": "ryjm"
+    },
+    {
+      "symbol": "920225.BJ",
+      "code": "920225",
+      "exchange": "BJ",
+      "name": "利通科技",
+      "abbr": "920225",
+      "pinyin": "ltkj"
+    },
+    {
+      "symbol": "920227.BJ",
+      "code": "920227",
+      "exchange": "BJ",
+      "name": "美登科技",
+      "abbr": "920227",
+      "pinyin": "mdkj"
+    },
+    {
+      "symbol": "920230.BJ",
+      "code": "920230",
+      "exchange": "BJ",
+      "name": "欧康医药",
+      "abbr": "920230",
+      "pinyin": "okyy"
+    },
+    {
+      "symbol": "920237.BJ",
+      "code": "920237",
+      "exchange": "BJ",
+      "name": "力佳科技",
+      "abbr": "920237",
+      "pinyin": "ljkj"
+    },
+    {
+      "symbol": "920238.BJ",
+      "code": "920238",
+      "exchange": "BJ",
+      "name": "长鹰硬科",
+      "abbr": "920238",
+      "pinyin": "zyyk"
+    },
+    {
+      "symbol": "920239.BJ",
+      "code": "920239",
+      "exchange": "BJ",
+      "name": "长虹能源",
+      "abbr": "920239",
+      "pinyin": "chny"
+    },
+    {
+      "symbol": "920242.BJ",
+      "code": "920242",
+      "exchange": "BJ",
+      "name": "建邦科技",
+      "abbr": "920242",
+      "pinyin": "jbkj"
+    },
+    {
+      "symbol": "920245.BJ",
+      "code": "920245",
+      "exchange": "BJ",
+      "name": "威博液压",
+      "abbr": "920245",
+      "pinyin": "wbyy"
+    },
+    {
+      "symbol": "920247.BJ",
+      "code": "920247",
+      "exchange": "BJ",
+      "name": "华密新材",
+      "abbr": "920247",
+      "pinyin": "hmxc"
+    },
+    {
+      "symbol": "920249.BJ",
+      "code": "920249",
+      "exchange": "BJ",
+      "name": "利尔达",
+      "abbr": "920249",
+      "pinyin": "led"
+    },
+    {
+      "symbol": "920252.BJ",
+      "code": "920252",
+      "exchange": "BJ",
+      "name": "天宏锂电",
+      "abbr": "920252",
+      "pinyin": "thld"
+    },
+    {
+      "symbol": "920258.BJ",
+      "code": "920258",
+      "exchange": "BJ",
+      "name": "聚仁新材",
+      "abbr": "920258",
+      "pinyin": "jrxc"
+    },
+    {
+      "symbol": "920260.BJ",
+      "code": "920260",
+      "exchange": "BJ",
+      "name": "中寰股份",
+      "abbr": "920260",
+      "pinyin": "zhgf"
+    },
+    {
+      "symbol": "920261.BJ",
+      "code": "920261",
+      "exchange": "BJ",
+      "name": "一诺威",
+      "abbr": "920261",
+      "pinyin": "ynw"
+    },
+    {
+      "symbol": "920262.BJ",
+      "code": "920262",
+      "exchange": "BJ",
+      "name": "太湖雪",
+      "abbr": "920262",
+      "pinyin": "thx"
+    },
+    {
+      "symbol": "920263.BJ",
+      "code": "920263",
+      "exchange": "BJ",
+      "name": "中航泰达",
+      "abbr": "920263",
+      "pinyin": "zhtd"
+    },
+    {
+      "symbol": "920266.BJ",
+      "code": "920266",
+      "exchange": "BJ",
+      "name": "生物谷",
+      "abbr": "920266",
+      "pinyin": "swg"
+    },
+    {
+      "symbol": "920267.BJ",
+      "code": "920267",
+      "exchange": "BJ",
+      "name": "鑫汇科",
+      "abbr": "920267",
+      "pinyin": "xhk"
+    },
+    {
+      "symbol": "920268.BJ",
+      "code": "920268",
+      "exchange": "BJ",
+      "name": "百迈科",
+      "abbr": "920268",
+      "pinyin": "bmk"
+    },
+    {
+      "symbol": "920269.BJ",
+      "code": "920269",
+      "exchange": "BJ",
+      "name": "杰锋动力",
+      "abbr": "920269",
+      "pinyin": "jfdl"
+    },
+    {
+      "symbol": "920270.BJ",
+      "code": "920270",
+      "exchange": "BJ",
+      "name": "天铭科技",
+      "abbr": "920270",
+      "pinyin": "tmkj"
+    },
+    {
+      "symbol": "920271.BJ",
+      "code": "920271",
+      "exchange": "BJ",
+      "name": "邦德股份",
+      "abbr": "920271",
+      "pinyin": "bdgf"
+    },
+    {
+      "symbol": "920273.BJ",
+      "code": "920273",
+      "exchange": "BJ",
+      "name": "一致魔芋",
+      "abbr": "920273",
+      "pinyin": "yzmy"
+    },
+    {
+      "symbol": "920274.BJ",
+      "code": "920274",
+      "exchange": "BJ",
+      "name": "宏裕包材",
+      "abbr": "920274",
+      "pinyin": "hybc"
+    },
+    {
+      "symbol": "920275.BJ",
+      "code": "920275",
+      "exchange": "BJ",
+      "name": "驱动力",
+      "abbr": "920275",
+      "pinyin": "qdl"
+    },
+    {
+      "symbol": "920278.BJ",
+      "code": "920278",
+      "exchange": "BJ",
+      "name": "鹿得医疗",
+      "abbr": "920278",
+      "pinyin": "ldyl"
+    },
+    {
+      "symbol": "920284.BJ",
+      "code": "920284",
+      "exchange": "BJ",
+      "name": "灵鸽科技",
+      "abbr": "920284",
+      "pinyin": "lgkj"
+    },
+    {
+      "symbol": "920288.BJ",
+      "code": "920288",
+      "exchange": "BJ",
+      "name": "华大海天",
+      "abbr": "920288",
+      "pinyin": "hdht"
+    },
+    {
+      "symbol": "920289.BJ",
+      "code": "920289",
+      "exchange": "BJ",
+      "name": "华汇智能",
+      "abbr": "920289",
+      "pinyin": "hhzn"
+    },
+    {
+      "symbol": "920298.BJ",
+      "code": "920298",
+      "exchange": "BJ",
+      "name": "腾信精密",
+      "abbr": "920298",
+      "pinyin": "txjm"
+    },
+    {
+      "symbol": "920299.BJ",
+      "code": "920299",
+      "exchange": "BJ",
+      "name": "灿能电力",
+      "abbr": "920299",
+      "pinyin": "cndl"
+    },
+    {
+      "symbol": "920300.BJ",
+      "code": "920300",
+      "exchange": "BJ",
+      "name": "辰光医疗",
+      "abbr": "920300",
+      "pinyin": "cgyl"
+    },
+    {
+      "symbol": "920304.BJ",
+      "code": "920304",
+      "exchange": "BJ",
+      "name": "迪尔化工",
+      "abbr": "920304",
+      "pinyin": "dehg"
+    },
+    {
+      "symbol": "920339.BJ",
+      "code": "920339",
+      "exchange": "BJ",
+      "name": "恒太照明",
+      "abbr": "920339",
+      "pinyin": "htzm"
+    },
+    {
+      "symbol": "920344.BJ",
+      "code": "920344",
+      "exchange": "BJ",
+      "name": "三元基因",
+      "abbr": "920344",
+      "pinyin": "syjy"
+    },
+    {
+      "symbol": "920346.BJ",
+      "code": "920346",
+      "exchange": "BJ",
+      "name": "威贸电子",
+      "abbr": "920346",
+      "pinyin": "wmdz"
+    },
+    {
+      "symbol": "920351.BJ",
+      "code": "920351",
+      "exchange": "BJ",
+      "name": "华光源海",
+      "abbr": "920351",
+      "pinyin": "hgyh"
+    },
+    {
+      "symbol": "920357.BJ",
+      "code": "920357",
+      "exchange": "BJ",
+      "name": "雅葆轩",
+      "abbr": "920357",
+      "pinyin": "ybx"
+    },
+    {
+      "symbol": "920363.BJ",
+      "code": "920363",
+      "exchange": "BJ",
+      "name": "莱赛激光",
+      "abbr": "920363",
+      "pinyin": "lsjg"
+    },
+    {
+      "symbol": "920367.BJ",
+      "code": "920367",
+      "exchange": "BJ",
+      "name": "新赣江",
+      "abbr": "920367",
+      "pinyin": "xgj"
+    },
+    {
+      "symbol": "920368.BJ",
+      "code": "920368",
+      "exchange": "BJ",
+      "name": "连城数控",
+      "abbr": "920368",
+      "pinyin": "lcsk"
+    },
+    {
+      "symbol": "920370.BJ",
+      "code": "920370",
+      "exchange": "BJ",
+      "name": "新安洁",
+      "abbr": "920370",
+      "pinyin": "xaj"
+    },
+    {
+      "symbol": "920371.BJ",
+      "code": "920371",
+      "exchange": "BJ",
+      "name": "欧福蛋业",
+      "abbr": "920371",
+      "pinyin": "ofdy"
+    },
+    {
+      "symbol": "920374.BJ",
+      "code": "920374",
+      "exchange": "BJ",
+      "name": "云里物里",
+      "abbr": "920374",
+      "pinyin": "ylwl"
+    },
+    {
+      "symbol": "920375.BJ",
+      "code": "920375",
+      "exchange": "BJ",
+      "name": "派诺科技",
+      "abbr": "920375",
+      "pinyin": "pnkj"
+    },
+    {
+      "symbol": "920378.BJ",
+      "code": "920378",
+      "exchange": "BJ",
+      "name": "泰德股份",
+      "abbr": "920378",
+      "pinyin": "tdgf"
+    },
+    {
+      "symbol": "920392.BJ",
+      "code": "920392",
+      "exchange": "BJ",
+      "name": "佳合科技",
+      "abbr": "920392",
+      "pinyin": "jhkj"
+    },
+    {
+      "symbol": "920394.BJ",
+      "code": "920394",
+      "exchange": "BJ",
+      "name": "民士达",
+      "abbr": "920394",
+      "pinyin": "msd"
+    },
+    {
+      "symbol": "920395.BJ",
+      "code": "920395",
+      "exchange": "BJ",
+      "name": "朗鸿科技",
+      "abbr": "920395",
+      "pinyin": "lhkj"
+    },
+    {
+      "symbol": "920396.BJ",
+      "code": "920396",
+      "exchange": "BJ",
+      "name": "常辅股份",
+      "abbr": "920396",
+      "pinyin": "cfgf"
+    },
+    {
+      "symbol": "920402.BJ",
+      "code": "920402",
+      "exchange": "BJ",
+      "name": "硅烷科技",
+      "abbr": "920402",
+      "pinyin": "gwkj"
+    },
+    {
+      "symbol": "920403.BJ",
+      "code": "920403",
+      "exchange": "BJ",
+      "name": "康农种业",
+      "abbr": "920403",
+      "pinyin": "knzy"
+    },
+    {
+      "symbol": "920405.BJ",
+      "code": "920405",
+      "exchange": "BJ",
+      "name": "海希通讯",
+      "abbr": "920405",
+      "pinyin": "hxtx"
+    },
+    {
+      "symbol": "920407.BJ",
+      "code": "920407",
+      "exchange": "BJ",
+      "name": "驰诚股份",
+      "abbr": "920407",
+      "pinyin": "ccgf"
+    },
+    {
+      "symbol": "920414.BJ",
+      "code": "920414",
+      "exchange": "BJ",
+      "name": "欧普泰",
+      "abbr": "920414",
+      "pinyin": "opt"
+    },
+    {
+      "symbol": "920415.BJ",
+      "code": "920415",
+      "exchange": "BJ",
+      "name": "恒拓开源",
+      "abbr": "920415",
+      "pinyin": "htky"
+    },
+    {
+      "symbol": "920418.BJ",
+      "code": "920418",
+      "exchange": "BJ",
+      "name": "苏轴股份",
+      "abbr": "920418",
+      "pinyin": "szgf"
+    },
+    {
+      "symbol": "920419.BJ",
+      "code": "920419",
+      "exchange": "BJ",
+      "name": "路斯股份",
+      "abbr": "920419",
+      "pinyin": "lsgf"
+    },
+    {
+      "symbol": "920422.BJ",
+      "code": "920422",
+      "exchange": "BJ",
+      "name": "润普食品",
+      "abbr": "920422",
+      "pinyin": "rpsp"
+    },
+    {
+      "symbol": "920425.BJ",
+      "code": "920425",
+      "exchange": "BJ",
+      "name": "乐创技术",
+      "abbr": "920425",
+      "pinyin": "lcjs"
+    },
+    {
+      "symbol": "920427.BJ",
+      "code": "920427",
+      "exchange": "BJ",
+      "name": "华维设计",
+      "abbr": "920427",
+      "pinyin": "hwsj"
+    },
+    {
+      "symbol": "920429.BJ",
+      "code": "920429",
+      "exchange": "BJ",
+      "name": "康比特",
+      "abbr": "920429",
+      "pinyin": "kbt"
+    },
+    {
+      "symbol": "920433.BJ",
+      "code": "920433",
+      "exchange": "BJ",
+      "name": "大唐药业",
+      "abbr": "920433",
+      "pinyin": "dtyy"
+    },
+    {
+      "symbol": "920436.BJ",
+      "code": "920436",
+      "exchange": "BJ",
+      "name": "大地电气",
+      "abbr": "920436",
+      "pinyin": "dddq"
+    },
+    {
+      "symbol": "920438.BJ",
+      "code": "920438",
+      "exchange": "BJ",
+      "name": "戈碧迦",
+      "abbr": "920438",
+      "pinyin": "gbj"
+    },
+    {
+      "symbol": "920445.BJ",
+      "code": "920445",
+      "exchange": "BJ",
+      "name": "XD龙竹科",
+      "abbr": "920445",
+      "pinyin": "xdlzk"
+    },
+    {
+      "symbol": "920454.BJ",
+      "code": "920454",
+      "exchange": "BJ",
+      "name": "同心传动",
+      "abbr": "920454",
+      "pinyin": "txcd"
+    },
+    {
+      "symbol": "920455.BJ",
+      "code": "920455",
+      "exchange": "BJ",
+      "name": "汇隆活塞",
+      "abbr": "920455",
+      "pinyin": "hlhs"
+    },
+    {
+      "symbol": "920469.BJ",
+      "code": "920469",
+      "exchange": "BJ",
+      "name": "富恒新材",
+      "abbr": "920469",
+      "pinyin": "fhxc"
+    },
+    {
+      "symbol": "920471.BJ",
+      "code": "920471",
+      "exchange": "BJ",
+      "name": "美邦科技",
+      "abbr": "920471",
+      "pinyin": "mbkj"
+    },
+    {
+      "symbol": "920475.BJ",
+      "code": "920475",
+      "exchange": "BJ",
+      "name": "三友科技",
+      "abbr": "920475",
       "pinyin": "sykj"
     },
     {
-      "symbol": "688837.SH",
-      "code": "688837",
-      "exchange": "SH",
-      "name": "信诺维",
-      "abbr": "688837",
-      "pinyin": "xnw"
+      "symbol": "920476.BJ",
+      "code": "920476",
+      "exchange": "BJ",
+      "name": "海能技术",
+      "abbr": "920476",
+      "pinyin": "hnjs"
+    },
+    {
+      "symbol": "920478.BJ",
+      "code": "920478",
+      "exchange": "BJ",
+      "name": "峆一药业",
+      "abbr": "920478",
+      "pinyin": "hyyy"
+    },
+    {
+      "symbol": "920489.BJ",
+      "code": "920489",
+      "exchange": "BJ",
+      "name": "佳先股份",
+      "abbr": "920489",
+      "pinyin": "jxgf"
+    },
+    {
+      "symbol": "920491.BJ",
+      "code": "920491",
+      "exchange": "BJ",
+      "name": "奥迪威",
+      "abbr": "920491",
+      "pinyin": "adw"
+    },
+    {
+      "symbol": "920493.BJ",
+      "code": "920493",
+      "exchange": "BJ",
+      "name": "并行科技",
+      "abbr": "920493",
+      "pinyin": "bxkj"
+    },
+    {
+      "symbol": "920496.BJ",
+      "code": "920496",
+      "exchange": "BJ",
+      "name": "许昌智能",
+      "abbr": "920496",
+      "pinyin": "xczn"
+    },
+    {
+      "symbol": "920504.BJ",
+      "code": "920504",
+      "exchange": "BJ",
+      "name": "博迅生物",
+      "abbr": "920504",
+      "pinyin": "bxsw"
+    },
+    {
+      "symbol": "920505.BJ",
+      "code": "920505",
+      "exchange": "BJ",
+      "name": "九菱科技",
+      "abbr": "920505",
+      "pinyin": "jlkj"
+    },
+    {
+      "symbol": "920508.BJ",
+      "code": "920508",
+      "exchange": "BJ",
+      "name": "殷图网联",
+      "abbr": "920508",
+      "pinyin": "ytwl"
+    },
+    {
+      "symbol": "920509.BJ",
+      "code": "920509",
+      "exchange": "BJ",
+      "name": "同惠电子",
+      "abbr": "920509",
+      "pinyin": "thdz"
+    },
+    {
+      "symbol": "920510.BJ",
+      "code": "920510",
+      "exchange": "BJ",
+      "name": "丰光精密",
+      "abbr": "920510",
+      "pinyin": "fgjm"
+    },
+    {
+      "symbol": "920519.BJ",
+      "code": "920519",
+      "exchange": "BJ",
+      "name": "万德股份",
+      "abbr": "920519",
+      "pinyin": "wdgf"
+    },
+    {
+      "symbol": "920522.BJ",
+      "code": "920522",
+      "exchange": "BJ",
+      "name": "纳科诺尔",
+      "abbr": "920522",
+      "pinyin": "nkne"
+    },
+    {
+      "symbol": "920523.BJ",
+      "code": "920523",
+      "exchange": "BJ",
+      "name": "德瑞锂电",
+      "abbr": "920523",
+      "pinyin": "drld"
+    },
+    {
+      "symbol": "920526.BJ",
+      "code": "920526",
+      "exchange": "BJ",
+      "name": "凯华材料",
+      "abbr": "920526",
+      "pinyin": "khcl"
+    },
+    {
+      "symbol": "920527.BJ",
+      "code": "920527",
+      "exchange": "BJ",
+      "name": "夜光明",
+      "abbr": "920527",
+      "pinyin": "ygm"
+    },
+    {
+      "symbol": "920533.BJ",
+      "code": "920533",
+      "exchange": "BJ",
+      "name": "骏创科技",
+      "abbr": "920533",
+      "pinyin": "jckj"
+    },
+    {
+      "symbol": "920541.BJ",
+      "code": "920541",
+      "exchange": "BJ",
+      "name": "铁大科技",
+      "abbr": "920541",
+      "pinyin": "tdkj"
+    },
+    {
+      "symbol": "920547.BJ",
+      "code": "920547",
+      "exchange": "BJ",
+      "name": "无锡晶海",
+      "abbr": "920547",
+      "pinyin": "wxjh"
+    },
+    {
+      "symbol": "920553.BJ",
+      "code": "920553",
+      "exchange": "BJ",
+      "name": "凯腾精工",
+      "abbr": "920553",
+      "pinyin": "ktjg"
+    },
+    {
+      "symbol": "920556.BJ",
+      "code": "920556",
+      "exchange": "BJ",
+      "name": "雅达股份",
+      "abbr": "920556",
+      "pinyin": "ydgf"
+    },
+    {
+      "symbol": "920564.BJ",
+      "code": "920564",
+      "exchange": "BJ",
+      "name": "天润科技",
+      "abbr": "920564",
+      "pinyin": "trkj"
+    },
+    {
+      "symbol": "920566.BJ",
+      "code": "920566",
+      "exchange": "BJ",
+      "name": "梓橦宫",
+      "abbr": "920566",
+      "pinyin": "ztg"
+    },
+    {
+      "symbol": "920570.BJ",
+      "code": "920570",
+      "exchange": "BJ",
+      "name": "坤博精工",
+      "abbr": "920570",
+      "pinyin": "kbjg"
+    },
+    {
+      "symbol": "920571.BJ",
+      "code": "920571",
+      "exchange": "BJ",
+      "name": "国航远洋",
+      "abbr": "920571",
+      "pinyin": "ghyy"
+    },
+    {
+      "symbol": "920575.BJ",
+      "code": "920575",
+      "exchange": "BJ",
+      "name": "*ST康乐",
+      "abbr": "920575",
+      "pinyin": "stkl"
+    },
+    {
+      "symbol": "920576.BJ",
+      "code": "920576",
+      "exchange": "BJ",
+      "name": "天力复合",
+      "abbr": "920576",
+      "pinyin": "tlfh"
+    },
+    {
+      "symbol": "920578.BJ",
+      "code": "920578",
+      "exchange": "BJ",
+      "name": "巨能股份",
+      "abbr": "920578",
+      "pinyin": "jngf"
+    },
+    {
+      "symbol": "920579.BJ",
+      "code": "920579",
+      "exchange": "BJ",
+      "name": "机科股份",
+      "abbr": "920579",
+      "pinyin": "jkgf"
+    },
+    {
+      "symbol": "920580.BJ",
+      "code": "920580",
+      "exchange": "BJ",
+      "name": "科创新材",
+      "abbr": "920580",
+      "pinyin": "kcxc"
+    },
+    {
+      "symbol": "920592.BJ",
+      "code": "920592",
+      "exchange": "BJ",
+      "name": "华信永道",
+      "abbr": "920592",
+      "pinyin": "hxyd"
+    },
+    {
+      "symbol": "920593.BJ",
+      "code": "920593",
+      "exchange": "BJ",
+      "name": "鼎智科技",
+      "abbr": "920593",
+      "pinyin": "dzkj"
+    },
+    {
+      "symbol": "920599.BJ",
+      "code": "920599",
+      "exchange": "BJ",
+      "name": "同力股份",
+      "abbr": "920599",
+      "pinyin": "tlgf"
+    },
+    {
+      "symbol": "920608.BJ",
+      "code": "920608",
+      "exchange": "BJ",
+      "name": "丰安股份",
+      "abbr": "920608",
+      "pinyin": "fagf"
+    },
+    {
+      "symbol": "920627.BJ",
+      "code": "920627",
+      "exchange": "BJ",
+      "name": "力王股份",
+      "abbr": "920627",
+      "pinyin": "lwgf"
+    },
+    {
+      "symbol": "920634.BJ",
+      "code": "920634",
+      "exchange": "BJ",
+      "name": "新威凌",
+      "abbr": "920634",
+      "pinyin": "xwl"
+    },
+    {
+      "symbol": "920639.BJ",
+      "code": "920639",
+      "exchange": "BJ",
+      "name": "晨光电缆",
+      "abbr": "920639",
+      "pinyin": "cgdl"
+    },
+    {
+      "symbol": "920640.BJ",
+      "code": "920640",
+      "exchange": "BJ",
+      "name": "富士达",
+      "abbr": "920640",
+      "pinyin": "fsd"
+    },
+    {
+      "symbol": "920641.BJ",
+      "code": "920641",
+      "exchange": "BJ",
+      "name": "格利尔",
+      "abbr": "920641",
+      "pinyin": "gle"
+    },
+    {
+      "symbol": "920642.BJ",
+      "code": "920642",
+      "exchange": "BJ",
+      "name": "通易航天",
+      "abbr": "920642",
+      "pinyin": "tyht"
+    },
+    {
+      "symbol": "920651.BJ",
+      "code": "920651",
+      "exchange": "BJ",
+      "name": "天罡股份",
+      "abbr": "920651",
+      "pinyin": "tggf"
+    },
+    {
+      "symbol": "920656.BJ",
+      "code": "920656",
+      "exchange": "BJ",
+      "name": "海昇药业",
+      "abbr": "920656",
+      "pinyin": "hsyy"
+    },
+    {
+      "symbol": "920662.BJ",
+      "code": "920662",
+      "exchange": "BJ",
+      "name": "方盛股份",
+      "abbr": "920662",
+      "pinyin": "fsgf"
+    },
+    {
+      "symbol": "920663.BJ",
+      "code": "920663",
+      "exchange": "BJ",
+      "name": "明阳科技",
+      "abbr": "920663",
+      "pinyin": "mykj"
+    },
+    {
+      "symbol": "920665.BJ",
+      "code": "920665",
+      "exchange": "BJ",
+      "name": "科强股份",
+      "abbr": "920665",
+      "pinyin": "kqgf"
+    },
+    {
+      "symbol": "920670.BJ",
+      "code": "920670",
+      "exchange": "BJ",
+      "name": "数字人",
+      "abbr": "920670",
+      "pinyin": "szr"
+    },
+    {
+      "symbol": "920675.BJ",
+      "code": "920675",
+      "exchange": "BJ",
+      "name": "秉扬科技",
+      "abbr": "920675",
+      "pinyin": "bykj"
+    },
+    {
+      "symbol": "920679.BJ",
+      "code": "920679",
+      "exchange": "BJ",
+      "name": "前进科技",
+      "abbr": "920679",
+      "pinyin": "qjkj"
+    },
+    {
+      "symbol": "920682.BJ",
+      "code": "920682",
+      "exchange": "BJ",
+      "name": "球冠电缆",
+      "abbr": "920682",
+      "pinyin": "qgdl"
+    },
+    {
+      "symbol": "920685.BJ",
+      "code": "920685",
+      "exchange": "BJ",
+      "name": "新芝生物",
+      "abbr": "920685",
+      "pinyin": "xzsw"
+    },
+    {
+      "symbol": "920689.BJ",
+      "code": "920689",
+      "exchange": "BJ",
+      "name": "克莱特",
+      "abbr": "920689",
+      "pinyin": "klt"
+    },
+    {
+      "symbol": "920690.BJ",
+      "code": "920690",
+      "exchange": "BJ",
+      "name": "捷众科技",
+      "abbr": "920690",
+      "pinyin": "jzkj"
+    },
+    {
+      "symbol": "920693.BJ",
+      "code": "920693",
+      "exchange": "BJ",
+      "name": "阿为特",
+      "abbr": "920693",
+      "pinyin": "awt"
+    },
+    {
+      "symbol": "920694.BJ",
+      "code": "920694",
+      "exchange": "BJ",
+      "name": "中裕科技",
+      "abbr": "920694",
+      "pinyin": "zykj"
+    },
+    {
+      "symbol": "920699.BJ",
+      "code": "920699",
+      "exchange": "BJ",
+      "name": "海达尔",
+      "abbr": "920699",
+      "pinyin": "hde"
+    },
+    {
+      "symbol": "920701.BJ",
+      "code": "920701",
+      "exchange": "BJ",
+      "name": "豪声电子",
+      "abbr": "920701",
+      "pinyin": "hsdz"
+    },
+    {
+      "symbol": "920703.BJ",
+      "code": "920703",
+      "exchange": "BJ",
+      "name": "广厦环能",
+      "abbr": "920703",
+      "pinyin": "gshn"
+    },
+    {
+      "symbol": "920706.BJ",
+      "code": "920706",
+      "exchange": "BJ",
+      "name": "铁拓机械",
+      "abbr": "920706",
+      "pinyin": "ttjx"
+    },
+    {
+      "symbol": "920717.BJ",
+      "code": "920717",
+      "exchange": "BJ",
+      "name": "瑞星股份",
+      "abbr": "920717",
+      "pinyin": "rxgf"
+    },
+    {
+      "symbol": "920718.BJ",
+      "code": "920718",
+      "exchange": "BJ",
+      "name": "合肥高科",
+      "abbr": "920718",
+      "pinyin": "hfgk"
+    },
+    {
+      "symbol": "920719.BJ",
+      "code": "920719",
+      "exchange": "BJ",
+      "name": "宁新新材",
+      "abbr": "920719",
+      "pinyin": "nxxc"
+    },
+    {
+      "symbol": "920720.BJ",
+      "code": "920720",
+      "exchange": "BJ",
+      "name": "吉冈精密",
+      "abbr": "920720",
+      "pinyin": "jgjm"
+    },
+    {
+      "symbol": "920725.BJ",
+      "code": "920725",
+      "exchange": "BJ",
+      "name": "惠丰钻石",
+      "abbr": "920725",
+      "pinyin": "hfzs"
+    },
+    {
+      "symbol": "920726.BJ",
+      "code": "920726",
+      "exchange": "BJ",
+      "name": "朱老六",
+      "abbr": "920726",
+      "pinyin": "zll"
+    },
+    {
+      "symbol": "920729.BJ",
+      "code": "920729",
+      "exchange": "BJ",
+      "name": "永顺生物",
+      "abbr": "920729",
+      "pinyin": "yssw"
+    },
+    {
+      "symbol": "920735.BJ",
+      "code": "920735",
+      "exchange": "BJ",
+      "name": "德源药业",
+      "abbr": "920735",
+      "pinyin": "dyyy"
+    },
+    {
+      "symbol": "920748.BJ",
+      "code": "920748",
+      "exchange": "BJ",
+      "name": "路桥信息",
+      "abbr": "920748",
+      "pinyin": "lqxx"
+    },
+    {
+      "symbol": "920751.BJ",
+      "code": "920751",
+      "exchange": "BJ",
+      "name": "惠同新材",
+      "abbr": "920751",
+      "pinyin": "htxc"
+    },
+    {
+      "symbol": "920753.BJ",
+      "code": "920753",
+      "exchange": "BJ",
+      "name": "天纺标",
+      "abbr": "920753",
+      "pinyin": "tfb"
+    },
+    {
+      "symbol": "920765.BJ",
+      "code": "920765",
+      "exchange": "BJ",
+      "name": "美之高",
+      "abbr": "920765",
+      "pinyin": "mzg"
+    },
+    {
+      "symbol": "920768.BJ",
+      "code": "920768",
+      "exchange": "BJ",
+      "name": "拾比佰",
+      "abbr": "920768",
+      "pinyin": "sbb"
+    },
+    {
+      "symbol": "920770.BJ",
+      "code": "920770",
+      "exchange": "BJ",
+      "name": "艾能聚",
+      "abbr": "920770",
+      "pinyin": "anj"
+    },
+    {
+      "symbol": "920779.BJ",
+      "code": "920779",
+      "exchange": "BJ",
+      "name": "武汉蓝电",
+      "abbr": "920779",
+      "pinyin": "whld"
+    },
+    {
+      "symbol": "920781.BJ",
+      "code": "920781",
+      "exchange": "BJ",
+      "name": "瑞奇智造",
+      "abbr": "920781",
+      "pinyin": "rqzz"
+    },
+    {
+      "symbol": "920786.BJ",
+      "code": "920786",
+      "exchange": "BJ",
+      "name": "骑士乳业",
+      "abbr": "920786",
+      "pinyin": "qsry"
+    },
+    {
+      "symbol": "920790.BJ",
+      "code": "920790",
+      "exchange": "BJ",
+      "name": "联迪信息",
+      "abbr": "920790",
+      "pinyin": "ldxx"
+    },
+    {
+      "symbol": "920792.BJ",
+      "code": "920792",
+      "exchange": "BJ",
+      "name": "东和新材",
+      "abbr": "920792",
+      "pinyin": "dhxc"
+    },
+    {
+      "symbol": "920799.BJ",
+      "code": "920799",
+      "exchange": "BJ",
+      "name": "艾融软件",
+      "abbr": "920799",
+      "pinyin": "arrj"
+    },
+    {
+      "symbol": "920802.BJ",
+      "code": "920802",
+      "exchange": "BJ",
+      "name": "保丽洁",
+      "abbr": "920802",
+      "pinyin": "blj"
+    },
+    {
+      "symbol": "920806.BJ",
+      "code": "920806",
+      "exchange": "BJ",
+      "name": "云星宇",
+      "abbr": "920806",
+      "pinyin": "yxy"
+    },
+    {
+      "symbol": "920807.BJ",
+      "code": "920807",
+      "exchange": "BJ",
+      "name": "奔朗新材",
+      "abbr": "920807",
+      "pinyin": "blxc"
+    },
+    {
+      "symbol": "920808.BJ",
+      "code": "920808",
+      "exchange": "BJ",
+      "name": "曙光数创",
+      "abbr": "920808",
+      "pinyin": "sgsc"
+    },
+    {
+      "symbol": "920809.BJ",
+      "code": "920809",
+      "exchange": "BJ",
+      "name": "安达科技",
+      "abbr": "920809",
+      "pinyin": "adkj"
+    },
+    {
+      "symbol": "920810.BJ",
+      "code": "920810",
+      "exchange": "BJ",
+      "name": "春光智能",
+      "abbr": "920810",
+      "pinyin": "cgzn"
+    },
+    {
+      "symbol": "920819.BJ",
+      "code": "920819",
+      "exchange": "BJ",
+      "name": "颖泰生物",
+      "abbr": "920819",
+      "pinyin": "ytsw"
+    },
+    {
+      "symbol": "920821.BJ",
+      "code": "920821",
+      "exchange": "BJ",
+      "name": "则成电子",
+      "abbr": "920821",
+      "pinyin": "zcdz"
+    },
+    {
+      "symbol": "920826.BJ",
+      "code": "920826",
+      "exchange": "BJ",
+      "name": "盖世食品",
+      "abbr": "920826",
+      "pinyin": "gssp"
+    },
+    {
+      "symbol": "920832.BJ",
+      "code": "920832",
+      "exchange": "BJ",
+      "name": "齐鲁华信",
+      "abbr": "920832",
+      "pinyin": "qlhx"
+    },
+    {
+      "symbol": "920833.BJ",
+      "code": "920833",
+      "exchange": "BJ",
+      "name": "美心翼申",
+      "abbr": "920833",
+      "pinyin": "mxys"
+    },
+    {
+      "symbol": "920834.BJ",
+      "code": "920834",
+      "exchange": "BJ",
+      "name": "三维装备",
+      "abbr": "920834",
+      "pinyin": "swzb"
+    },
+    {
+      "symbol": "920837.BJ",
+      "code": "920837",
+      "exchange": "BJ",
+      "name": "华原股份",
+      "abbr": "920837",
+      "pinyin": "hygf"
+    },
+    {
+      "symbol": "920839.BJ",
+      "code": "920839",
+      "exchange": "BJ",
+      "name": "万通液压",
+      "abbr": "920839",
+      "pinyin": "wtyy"
+    },
+    {
+      "symbol": "920855.BJ",
+      "code": "920855",
+      "exchange": "BJ",
+      "name": "浙江大农",
+      "abbr": "920855",
+      "pinyin": "zjdn"
+    },
+    {
+      "symbol": "920856.BJ",
+      "code": "920856",
+      "exchange": "BJ",
+      "name": "浩淼科技",
+      "abbr": "920856",
+      "pinyin": "hmkj"
+    },
+    {
+      "symbol": "920857.BJ",
+      "code": "920857",
+      "exchange": "BJ",
+      "name": "泓禧科技",
+      "abbr": "920857",
+      "pinyin": "hxkj"
+    },
+    {
+      "symbol": "920866.BJ",
+      "code": "920866",
+      "exchange": "BJ",
+      "name": "绿亨科技",
+      "abbr": "920866",
+      "pinyin": "lhkj"
+    },
+    {
+      "symbol": "920870.BJ",
+      "code": "920870",
+      "exchange": "BJ",
+      "name": "恒进感应",
+      "abbr": "920870",
+      "pinyin": "hjgy"
+    },
+    {
+      "symbol": "920871.BJ",
+      "code": "920871",
+      "exchange": "BJ",
+      "name": "派特尔",
+      "abbr": "920871",
+      "pinyin": "pte"
+    },
+    {
+      "symbol": "920873.BJ",
+      "code": "920873",
+      "exchange": "BJ",
+      "name": "中设咨询",
+      "abbr": "920873",
+      "pinyin": "zszx"
+    },
+    {
+      "symbol": "920876.BJ",
+      "code": "920876",
+      "exchange": "BJ",
+      "name": "慧为智能",
+      "abbr": "920876",
+      "pinyin": "hwzn"
+    },
+    {
+      "symbol": "920879.BJ",
+      "code": "920879",
+      "exchange": "BJ",
+      "name": "基康技术",
+      "abbr": "920879",
+      "pinyin": "jkjs"
+    },
+    {
+      "symbol": "920885.BJ",
+      "code": "920885",
+      "exchange": "BJ",
+      "name": "星辰科技",
+      "abbr": "920885",
+      "pinyin": "xckj"
+    },
+    {
+      "symbol": "920892.BJ",
+      "code": "920892",
+      "exchange": "BJ",
+      "name": "广咨国际",
+      "abbr": "920892",
+      "pinyin": "gzgj"
+    },
+    {
+      "symbol": "920895.BJ",
+      "code": "920895",
+      "exchange": "BJ",
+      "name": "花溪科技",
+      "abbr": "920895",
+      "pinyin": "hxkj"
+    },
+    {
+      "symbol": "920896.BJ",
+      "code": "920896",
+      "exchange": "BJ",
+      "name": "旺成科技",
+      "abbr": "920896",
+      "pinyin": "wckj"
+    },
+    {
+      "symbol": "920906.BJ",
+      "code": "920906",
+      "exchange": "BJ",
+      "name": "舜宇精工",
+      "abbr": "920906",
+      "pinyin": "syjg"
+    },
+    {
+      "symbol": "920914.BJ",
+      "code": "920914",
+      "exchange": "BJ",
+      "name": "远航精密",
+      "abbr": "920914",
+      "pinyin": "yhjm"
+    },
+    {
+      "symbol": "920924.BJ",
+      "code": "920924",
+      "exchange": "BJ",
+      "name": "广脉科技",
+      "abbr": "920924",
+      "pinyin": "gmkj"
+    },
+    {
+      "symbol": "920925.BJ",
+      "code": "920925",
+      "exchange": "BJ",
+      "name": "锦好医疗",
+      "abbr": "920925",
+      "pinyin": "jhyl"
+    },
+    {
+      "symbol": "920926.BJ",
+      "code": "920926",
+      "exchange": "BJ",
+      "name": "鸿智科技",
+      "abbr": "920926",
+      "pinyin": "hzkj"
+    },
+    {
+      "symbol": "920931.BJ",
+      "code": "920931",
+      "exchange": "BJ",
+      "name": "无锡鼎邦",
+      "abbr": "920931",
+      "pinyin": "wxdb"
+    },
+    {
+      "symbol": "920932.BJ",
+      "code": "920932",
+      "exchange": "BJ",
+      "name": "科达自控",
+      "abbr": "920932",
+      "pinyin": "kdzk"
+    },
+    {
+      "symbol": "920942.BJ",
+      "code": "920942",
+      "exchange": "BJ",
+      "name": "恒立钻具",
+      "abbr": "920942",
+      "pinyin": "hlzj"
+    },
+    {
+      "symbol": "920943.BJ",
+      "code": "920943",
+      "exchange": "BJ",
+      "name": "优机股份",
+      "abbr": "920943",
+      "pinyin": "yjgf"
+    },
+    {
+      "symbol": "920946.BJ",
+      "code": "920946",
+      "exchange": "BJ",
+      "name": "森萱医药",
+      "abbr": "920946",
+      "pinyin": "sxyy"
+    },
+    {
+      "symbol": "920950.BJ",
+      "code": "920950",
+      "exchange": "BJ",
+      "name": "迅安科技",
+      "abbr": "920950",
+      "pinyin": "xakj"
+    },
+    {
+      "symbol": "920953.BJ",
+      "code": "920953",
+      "exchange": "BJ",
+      "name": "国子软件",
+      "abbr": "920953",
+      "pinyin": "gzrj"
+    },
+    {
+      "symbol": "920957.BJ",
+      "code": "920957",
+      "exchange": "BJ",
+      "name": "汉维科技",
+      "abbr": "920957",
+      "pinyin": "hwkj"
+    },
+    {
+      "symbol": "920961.BJ",
+      "code": "920961",
+      "exchange": "BJ",
+      "name": "创远信科",
+      "abbr": "920961",
+      "pinyin": "cyxk"
+    },
+    {
+      "symbol": "920964.BJ",
+      "code": "920964",
+      "exchange": "BJ",
+      "name": "润农节水",
+      "abbr": "920964",
+      "pinyin": "rnjs"
+    },
+    {
+      "symbol": "920970.BJ",
+      "code": "920970",
+      "exchange": "BJ",
+      "name": "大禹生物",
+      "abbr": "920970",
+      "pinyin": "dysw"
+    },
+    {
+      "symbol": "920971.BJ",
+      "code": "920971",
+      "exchange": "BJ",
+      "name": "天马新材",
+      "abbr": "920971",
+      "pinyin": "tmxc"
+    },
+    {
+      "symbol": "920974.BJ",
+      "code": "920974",
+      "exchange": "BJ",
+      "name": "凯大催化",
+      "abbr": "920974",
+      "pinyin": "kdch"
+    },
+    {
+      "symbol": "920976.BJ",
+      "code": "920976",
+      "exchange": "BJ",
+      "name": "视声智能",
+      "abbr": "920976",
+      "pinyin": "sszn"
+    },
+    {
+      "symbol": "920978.BJ",
+      "code": "920978",
+      "exchange": "BJ",
+      "name": "开特股份",
+      "abbr": "920978",
+      "pinyin": "ktgf"
+    },
+    {
+      "symbol": "920981.BJ",
+      "code": "920981",
+      "exchange": "BJ",
+      "name": "晶赛科技",
+      "abbr": "920981",
+      "pinyin": "jskj"
+    },
+    {
+      "symbol": "920982.BJ",
+      "code": "920982",
+      "exchange": "BJ",
+      "name": "锦波生物",
+      "abbr": "920982",
+      "pinyin": "jbsw"
+    },
+    {
+      "symbol": "920985.BJ",
+      "code": "920985",
+      "exchange": "BJ",
+      "name": "海泰新能",
+      "abbr": "920985",
+      "pinyin": "htxn"
+    },
+    {
+      "symbol": "920992.BJ",
+      "code": "920992",
+      "exchange": "BJ",
+      "name": "中科美菱",
+      "abbr": "920992",
+      "pinyin": "zkml"
     }
   ]
 }
