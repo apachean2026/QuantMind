@@ -2317,66 +2317,18 @@ async def get_stock_kline(
             date.fromisoformat(start_s)
     except (ValueError, TypeError):
         start_s = ""
-    cache_key = f"sdl-kline:{normalized_symbol}:{days}:{end_s or 'latest'}:{start_s or '-'}"
-
-    # 当前价格统一走 QuantDB（不复权真实价），避免 stock_daily_latest 空表/复权口径不一致
-    qd_items = _quantdb_kline_items(
-        normalized_symbol, days, end_date=end_s or None, start_date=start_s or None
-    )
-    if qd_items:
-        payload = {"code": 200, "data": {"symbol": normalized_symbol, "items": qd_items}}
-        _set_local_cache(_SDL_CACHE, cache_key, payload, _SDL_CACHE_MAX_ENTRIES)
-        return payload
+    cache_key = f"qdb-kline:{normalized_symbol}:{days}:{end_s or 'latest'}:{start_s or '-'}"
 
     cached = _get_local_cache(_SDL_CACHE, cache_key, _SDL_CACHE_TTL_SECONDS)
     if cached is not None:
         return cached
 
-    items: list[dict[str, Any]] = []
-
-    # 若 DB 暂无行情数据，自动通过实时行情源拉取真实 K 线。
-    # 腾讯 fqkline 支持起止日期（param=code,day,start,end,count,qfq）：无起始日
-    # 时用 end_date/count 截断防前视泄露；有起始日时拉取验证窗口供对照预测。
-    if not items:
-        try:
-            import aiohttp
-            ts_code = normalized_symbol.lower()
-            tx_count = 2000 if start_s else days
-            url = f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={ts_code},day,{start_s},{end_s},{tx_count},qfq"
-            async with aiohttp.ClientSession() as client:
-                async with client.get(url, timeout=aiohttp.ClientTimeout(total=6)) as resp:
-                    if resp.status == 200:
-                        pdata = await resp.json(content_type=None)
-                        day_rows = (pdata.get("data", {}).get(ts_code, {}) or {}).get("qfqday") or (pdata.get("data", {}).get(ts_code, {}) or {}).get("day") or []
-                        for row in day_rows:
-                            if len(row) >= 6:
-                                items.append({
-                                    "date": str(row[0]),
-                                    "open": float(row[1]),
-                                    "close": float(row[2]),
-                                    "high": float(row[3]),
-                                    "low": float(row[4]),
-                                    # 腾讯 fqkline 成交量为「手」（1 手 = 100 股），
-                                    # ×100 归一为「股」，与 QuantDB 路径
-                                    # （qdb_daily_unadjusted.volume 单位=股）及前端展示一致。
-                                    "volume": float(row[5]) * 100.0,
-                                })
-        except Exception as e:
-            logger.warning(f"[get_stock_kline] 实时在线拉取 K 线失败: {e}")
-
-    # 统一兜底：按窗口边界过滤。无起始日时保持“最近 days 根”；
-    # 有起始日时保留全窗口（上限 2000 根）。
-    if start_s or end_s:
-        items = [
-            it for it in items
-            if (not start_s or str(it.get("date", ""))[:10] >= start_s)
-            and (not end_s or str(it.get("date", ""))[:10] <= end_s)
-        ]
-    if not start_s:
-        items = items[-days:]
-    else:
-        items = items[:2000]
-
+    # 投研平台 K 线全部由 QuantDB 提供（不复权真实价），不做腾讯财经等在线源兜底。
+    # 无数据时返回空 items，由前端展示「暂无数据」。窗口/根数截断由
+    # `_quantdb_kline_items` 内部处理（含起始日验证窗口，上限 2000 根）。
+    items = _quantdb_kline_items(
+        normalized_symbol, days, end_date=end_s or None, start_date=start_s or None
+    )
     payload = {"code": 200, "data": {"symbol": normalized_symbol, "items": items}}
     if items:
         _set_local_cache(_SDL_CACHE, cache_key, payload, _SDL_CACHE_MAX_ENTRIES)

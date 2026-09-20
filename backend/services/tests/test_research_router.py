@@ -184,8 +184,8 @@ async def test_get_research_universe_uses_short_ttl_cache(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_get_stock_kline_skips_deprecated_sdl(monkeypatch):
-    """QuantDB 空时不再回退 stock_daily_latest（已弃用），直走在线源/空结果。"""
+async def test_get_stock_kline_quantdb_only_no_online_fallback(monkeypatch):
+    """K 线只走 QuantDB：无数据时返回空 items，不回退 stock_daily_latest 或在线源。"""
     research_service = research._research_service  # noqa: SLF001
     research_service._SDL_CACHE.clear()  # noqa: SLF001
 
@@ -204,25 +204,6 @@ async def test_get_stock_kline_skips_deprecated_sdl(monkeypatch):
 
     monkeypatch.setattr(research_service, "get_session", _fake_get_session)
 
-    # 屏蔽腾讯在线拉取（本机可能无 aiohttp）
-    class _BoomClientSession:
-        def __init__(self, *a, **k):
-            raise RuntimeError("offline")
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *a):
-            return False
-
-    import sys
-    import types
-
-    fake_aiohttp = types.ModuleType("aiohttp")
-    fake_aiohttp.ClientSession = _BoomClientSession
-    fake_aiohttp.ClientTimeout = lambda *a, **k: None
-    monkeypatch.setitem(sys.modules, "aiohttp", fake_aiohttp)
-
     payload = await research_service.get_stock_kline("SH600000", 2)
     assert session_calls["count"] == 0
     assert payload["data"]["symbol"] == "SH600000"
@@ -230,64 +211,24 @@ async def test_get_stock_kline_skips_deprecated_sdl(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_get_stock_kline_tencent_fallback_volume_normalized_to_shares(monkeypatch):
-    """腾讯 fqkline 兜底成交量为「手」，须 ×100 归一为「股」（与 QuantDB 路径一致）。"""
-    import sys
-    import types
-
+async def test_get_stock_kline_returns_quantdb_items(monkeypatch):
+    """QuantDB 有数据时原样返回（含成交量原始口径），并写入缓存。"""
     research_service = research._research_service  # noqa: SLF001
     research_service._SDL_CACHE.clear()  # noqa: SLF001
 
-    monkeypatch.setattr(research_service, "_quantdb_kline_items", lambda *a, **k: [])
-
-    @asynccontextmanager
-    async def _fake_get_session(read_only=True):
-        raise AssertionError("stock_daily_latest fallback must not run")
-        yield  # pragma: no cover
-
-    monkeypatch.setattr(research_service, "get_session", _fake_get_session)
-
-    tencent_payload = {
-        "data": {
-            "sh600000": {
-                "qfqday": [["2026-09-18", "10.00", "10.50", "10.60", "9.90", "1234"]]
-            }
+    qd_items = [
+        {
+            "date": "2026-09-18",
+            "open": 10.0,
+            "high": 10.6,
+            "low": 9.9,
+            "close": 10.5,
+            "volume": 123400.0,
         }
-    }
-
-    class _FakeResp:
-        status = 200
-
-        async def json(self, content_type=None):
-            return tencent_payload
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *a):
-            return False
-
-    class _FakeClientSession:
-        def __init__(self, *a, **k):
-            pass
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *a):
-            return False
-
-        def get(self, url, timeout=None):
-            return _FakeResp()
-
-    fake_aiohttp = types.ModuleType("aiohttp")
-    fake_aiohttp.ClientSession = _FakeClientSession
-    fake_aiohttp.ClientTimeout = lambda *a, **k: None
-    monkeypatch.setitem(sys.modules, "aiohttp", fake_aiohttp)
+    ]
+    monkeypatch.setattr(research_service, "_quantdb_kline_items", lambda *a, **k: qd_items)
 
     payload = await research_service.get_stock_kline("SH600000", 2)
+    assert payload["data"]["items"] == qd_items
 
-    items = payload["data"]["items"]
-    assert len(items) == 1
-    assert items[0]["volume"] == 1234.0 * 100  # 1234 手 → 123400 股
 
