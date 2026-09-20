@@ -1123,18 +1123,29 @@ def run_market_snapshot() -> dict[str, Any]:
         if max_part is None:
             logger.error("[MarketSnapshot] 跳过：未找到任何日线分区")
             return {"status": "skipped", "reason": "no_partitions"}
+        # 日期命名 SQLite（{YYYY-MM-DD}.db）由离线全量构建产出，内含 tags 标签库；
+        # 流式刷新只写 latest.json + latest.db 的 sector_mv/meta。因此即使 latest.json
+        # 已是最新交易日，只要对应日期库缺失，就必须补跑一次全量，否则「标签双向查询」断档。
+        iso_part = f"{max_part[:4]}-{max_part[4:6]}-{max_part[6:8]}"
+        dated_db = _Path(out_dir) / f"{iso_part}.db"
         if latest_td is not None and max_part <= latest_td:
+            if dated_db.is_file():
+                logger.info(
+                    "[MarketSnapshot] 跳过：已是最新交易日 %s 且 %s.db 存在",
+                    latest_td,
+                    iso_part,
+                )
+                return {
+                    "status": "skipped",
+                    "reason": "stale",
+                    "max_partition": max_part,
+                    "latest_trade_date": latest_td,
+                }
             logger.warning(
-                "[MarketSnapshot] 跳过：库内最新分区 %s 未超过线上快照 %s（同步未完成或今日无新数据），不覆盖 latest",
-                max_part,
+                "[MarketSnapshot] latest.json 已为 %s 但缺少离线日期库 %s.db（含 tags），强制全量重建",
                 latest_td,
+                iso_part,
             )
-            return {
-                "status": "skipped",
-                "reason": "stale",
-                "max_partition": max_part,
-                "latest_trade_date": latest_td,
-            }
 
         cmd = [
             sys.executable,
