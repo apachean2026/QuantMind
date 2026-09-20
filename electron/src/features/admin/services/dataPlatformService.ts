@@ -248,6 +248,88 @@ export interface QuantDBLocalScanJob {
     started_by?: string;
 }
 
+export interface QuantDBModelScopeDataset {
+    dataset: string;
+    name: string;
+    group: string;
+    layout: string;
+    rel_dir: string;
+    files: number;
+    bytes: number;
+}
+
+export interface QuantDBModelScopePreflight {
+    repo_id: string;
+    revision: string;
+    root: string;
+    datasets: QuantDBModelScopeDataset[];
+    total_files: number;
+    total_bytes: number;
+    disk: { total: number; used: number; free: number };
+    warnings: string[];
+    timestamp: string;
+}
+
+export interface QuantDBModelScopeInitJob {
+    job_id: string;
+    kind: 'modelscope_init';
+    status: 'running' | 'completed' | 'failed' | 'cancelled' | 'cancelling';
+    stage: string;
+    datasets?: string[] | null;
+    mode: string;
+    rebuild_state: string;
+    with_pg: boolean;
+    with_qlib: boolean;
+    total: number;
+    done: number;
+    files_total: number;
+    bytes_total: number;
+    bytes_done: number;
+    current?: string | null;
+    current_detail?: {
+        dataset?: string;
+        phase?: string;
+        done?: number;
+        total?: number;
+        files?: number;
+        pending?: number;
+    } | null;
+    summary?: {
+        root: string;
+        repo_id: string;
+        mode: string;
+        cancelled: boolean;
+        total_files: number;
+        downloaded: number;
+        up_to_date: number;
+        errors: number;
+        downloaded_bytes: number;
+        error_samples: string[];
+        state?: {
+            mode: string;
+            status: string;
+            objects?: number;
+            state_dbs?: Record<string, string>;
+            reason?: string;
+        };
+        pg?: { status: string; reason?: string };
+        qlib?: { status: string; provider_uri?: string; reason?: string };
+        elapsed_sec: number;
+        datasets: Record<string, {
+            files: number;
+            downloaded: number;
+            up_to_date: number;
+            errors: number;
+            bytes: number;
+        }>;
+    } | null;
+    error?: string | null;
+    cancel_requested?: boolean;
+    started_at: string;
+    finished_at?: string;
+    started_by?: string;
+}
+
 export interface QuantDBDatasetDiff {
     dataset: string;
     name: string;
@@ -686,6 +768,53 @@ class DataPlatformService {
     }> {
         const resp = await this.axiosInstance.post(
             `/admin/data-platform/quantdb/local-scan/jobs/${jobId}/cancel`,
+        );
+        return this.unwrap(resp);
+    }
+
+    // ---- 初始化数据（魔搭 ModelScope → 覆盖本地 QuantDB 数据目录） ----
+    async modelscopePreflight(datasets?: string[]): Promise<QuantDBModelScopePreflight> {
+        const resp = await this.axiosInstance.get('/admin/data-platform/quantdb/modelscope/preflight', {
+            params: datasets && datasets.length ? { datasets: datasets.join(',') } : undefined,
+            timeout: 180000, // 预检需枚举远端数万个文件
+        });
+        return this.unwrap(resp);
+    }
+
+    async startModelScopeInit(payload: {
+        datasets?: string[];
+        mode?: 'overwrite' | 'purge';
+        rebuild_state?: 'meta' | 'rescan' | 'none';
+        with_pg?: boolean;
+        with_qlib?: boolean;
+    }): Promise<{ job: QuantDBModelScopeInitJob }> {
+        const resp = await this.axiosInstance.post(
+            '/admin/data-platform/quantdb/modelscope/init',
+            payload,
+            { timeout: 30000 },
+        );
+        return this.unwrap(resp);
+    }
+
+    async listModelScopeInitJobs(): Promise<{ jobs: QuantDBModelScopeInitJob[]; timestamp: string }> {
+        const resp = await this.axiosInstance.get('/admin/data-platform/quantdb/modelscope/jobs');
+        return this.unwrap(resp);
+    }
+
+    async getModelScopeInitJob(jobId: string): Promise<{ job: QuantDBModelScopeInitJob }> {
+        const resp = await this.axiosInstance.get(
+            `/admin/data-platform/quantdb/modelscope/jobs/${jobId}`,
+        );
+        return this.unwrap(resp);
+    }
+
+    async cancelModelScopeInitJob(jobId: string): Promise<{
+        job_id: string;
+        status: string;
+        message: string;
+    }> {
+        const resp = await this.axiosInstance.post(
+            `/admin/data-platform/quantdb/modelscope/jobs/${jobId}/cancel`,
         );
         return this.unwrap(resp);
     }

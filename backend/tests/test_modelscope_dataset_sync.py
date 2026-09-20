@@ -1,0 +1,299 @@
+"""ModelScope 初始化数据（魔搭 → 本地 QuantDB 覆盖）的单元测试。
+
+网络全部用 fake httpx.Client 拦截：tree 枚举走 .get()，文件下载走 .stream()，
+校验 sha256/size 后原子落盘并写同步状态库。
+"""
+
+import hashlib
+import sqlite3
+import sys
+from pathlib import Path
+from urllib.parse import parse_qs, urlparse
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from backend.services.engine.data_platform import modelscope_dataset_sync as ms
+from backend.shared.quantdb_datasets import DATASETS
+
+
+# ---------------------------------------------------------------------------
+# fake httpx
+# ---------------------------------------------------------------------------
+class _JsonResp:
+    def __init__(self, body):
+        self._body = body
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return self._body
+
+
+class _StreamResp:
+    def __init__(self, content: bytes):
+        self._content = content
+
+    def raise_for_status(self):
+        return None
+
+    def iter_bytes(self, chunk_size=0):
+        step = chunk_size or len(self._content) or 1
+        for i in range(0, len(self._content), step):
+            yield self._content[i : i + step]
+
+
+class _StreamCtx:
+    def __init__(self, resp):
+        self._resp = resp
+
+    def __enter__(self):
+        return self._resp
+
+    def __exit__(self, *exc):
+        return False
+
+
+class _FakeClient:
+    tree_pages: list = []
+    payloads: dict = {}
+    stream_calls: int = 0
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def get(self, url, params=None):
+        page = int((params or {}).get("PageNumber", 1))
+        return _JsonResp(self.tree_pages[page - 1])
+
+    def stream(self, method, url):
+        path = parse_qs(urlparse(url).query)["FilePath"][0]
+        type(self).stream_calls += 1
+        return _StreamCtx(_StreamResp(self.payloads[path]))
+
+
+def _blob(path: str, content: bytes) -> dict:
+    return {
+        "Type": "blob",
+        "Path": path,
+        "Size": len(content),
+        "Sha256": hashlib.sha256(content).hexdigest(),
+    }
+
+
+# ---------------------------------------------------------------------------
+# 纯函数
+# ---------------------------------------------------------------------------
+def test_classify_maps_rel_dir_and_layout():
+    assert ms._classify("1_kline_data/daily_forward/dt=20260101/data.parquet") == (
+        "daily_forward",
+        "v2_daily_partition",
+    )
+    assert ms._classify("3_financial_data/income/000001.SZ.parquet") == (
+        "income",
+        "v1_symbol",
+    )
+    assert ms._classify("README.md") == (None, "v2_manifest")
+    assert ms._classify("1_kline_data/daily_forward") == (None, "v2_manifest")
+
+
+def test_classify_covers_all_dataset_specs():
+    for spec in DATASETS:
+        dataset, layout = ms._classify(f"{spec.rel_dir}/x/data.parquet")
+        assert dataset == spec.dataset
+        expected = "v2_daily_partition" if spec.layout == "partition" else "v1_symbol"
+        assert layout == expected
+
+
+def test_target_path_rejects_traversal(tmp_path):
+    import pytest
+
+    with pytest.raises(ValueError):
+        ms._target_path(tmp_path, "../evil.parquet")
+    with pytest.raises(ValueError):
+        ms._target_path(tmp_path, "/etc/passwd")
+    assert ms._target_path(tmp_path, "1_kline_data/a.parquet").is_relative_to(tmp_path)
+
+
+def test_partition_splits_by_size(tmp_path):
+    content = b"x" * 32
+    remote = ms.RemoteFile(
+        path="1_kline_data/daily_forward/dt=20260101/data.parquet",
+        size=len(content),
+        sha256=hashlib.sha256(content).hexdigest(),
+        dataset="daily_forward",
+        layout="v2_daily_partition",
+    )
+    other = ms.RemoteFile(
+        path="1_kline_data/daily_forward/dt=20260102/data.parquet",
+        size=len(content),
+        sha256="",
+        dataset="daily_forward",
+        layout="v2_daily_partition",
+    )
+    present, pending = ms._partition(tmp_path, [remote, other])
+    assert [f.path for f in pending] == [remote.path, other.path]
+
+    target = tmp_path / remote.path
+    target.parent.mkdir(parents=True)
+    target.write_bytes(content)
+    present, pending = ms._partition(tmp_path, [remote, other])
+    assert [f.path for f in present] == [remote.path]
+    assert [f.path for f in pending] == [other.path]
+
+
+# ---------------------------------------------------------------------------
+# list_remote_files
+# ---------------------------------------------------------------------------
+def test_list_remote_files_paginates_and_dedupes(monkeypatch):
+    page1 = {
+        "Code": 200,
+        "Data": {
+            "TotalCount": 3,
+            "Files": [
+                {"Type": "tree", "Path": "1_kline_data/daily_forward"},
+                _blob("1_kline_data/daily_forward/dt=20260101/data.parquet", b"aa"),
+            ],
+        },
+    }
+    page2 = {
+        "Code": 200,
+        "Data": {
+            "TotalCount": 3,
+            "Files": [_blob("3_financial_data/income/000001.SZ.parquet", b"bb")],
+        },
+    }
+    _FakeClient.tree_pages = [page1, page2]
+    _FakeClient.payloads = {}
+    monkeypatch.setattr(ms.httpx, "Client", _FakeClient)
+
+    files = ms.list_remote_files(endpoint="https://example.test", repo_id="ns/repo")
+    paths = sorted(f.path for f in files)
+    assert paths == [
+        "1_kline_data/daily_forward/dt=20260101/data.parquet",
+        "3_financial_data/income/000001.SZ.parquet",
+    ]
+    assert files[0].dataset == "daily_forward"
+    assert files[1].dataset == "income"
+
+
+# ---------------------------------------------------------------------------
+# init_from_modelscope
+# ---------------------------------------------------------------------------
+def _make_remote():
+    c1 = b"parquet-one" * 4
+    c2 = b"parquet-two" * 8
+    return (
+        c1,
+        c2,
+        [
+            ms.RemoteFile(
+                path="1_kline_data/daily_forward/dt=20260101/data.parquet",
+                size=len(c1),
+                sha256=hashlib.sha256(c1).hexdigest(),
+                dataset="daily_forward",
+                layout="v2_daily_partition",
+            ),
+            ms.RemoteFile(
+                path="1_kline_data/daily_forward/dt=20260102/data.parquet",
+                size=len(c2),
+                sha256=hashlib.sha256(c2).hexdigest(),
+                dataset="daily_forward",
+                layout="v2_daily_partition",
+            ),
+        ],
+    )
+
+
+def test_init_downloads_and_writes_state(tmp_path, monkeypatch):
+    root = tmp_path / "quantdb"
+    monkeypatch.setenv("QM_QUANTDB_DATA_DIR", str(root))
+    monkeypatch.setenv("QUANTDB_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setenv("MODELSCOPE_SYNC_WORKERS", "2")
+
+    c1, c2, remote = _make_remote()
+    _FakeClient.payloads = {remote[0].path: c1, remote[1].path: c2}
+    _FakeClient.stream_calls = 0
+    monkeypatch.setattr(ms.httpx, "Client", _FakeClient)
+    monkeypatch.setattr(ms, "list_remote_files", lambda **kw: remote)
+
+    summary = ms.init_from_modelscope(["daily_forward"], rebuild_state="meta")
+
+    assert summary["downloaded"] == 2
+    assert summary["up_to_date"] == 0
+    assert summary["errors"] == 0
+    assert (root / remote[0].path).read_bytes() == c1
+    assert (root / remote[1].path).read_bytes() == c2
+    assert summary["state"]["status"] == "ok"
+
+    from backend.scripts.quantdb_daily_sync import _state_path
+
+    conn = sqlite3.connect(str(_state_path(root)))
+    rows = conn.execute(
+        "SELECT key, sha256, size FROM objects WHERE dataset='daily_forward' ORDER BY key"
+    ).fetchall()
+    conn.close()
+    assert [r[0] for r in rows] == [remote[0].path, remote[1].path]
+    assert rows[0][1] == remote[0].sha256
+    assert rows[0][2] == remote[0].size
+
+
+def test_init_skips_present_and_is_idempotent(tmp_path, monkeypatch):
+    root = tmp_path / "quantdb"
+    monkeypatch.setenv("QM_QUANTDB_DATA_DIR", str(root))
+    monkeypatch.setenv("QUANTDB_STATE_DIR", str(tmp_path / "state"))
+
+    c1, c2, remote = _make_remote()
+    # 预先放好第一个文件（size 一致）
+    target = root / remote[0].path
+    target.parent.mkdir(parents=True)
+    target.write_bytes(c1)
+
+    _FakeClient.payloads = {remote[1].path: c2}
+    _FakeClient.stream_calls = 0
+    monkeypatch.setattr(ms.httpx, "Client", _FakeClient)
+    monkeypatch.setattr(ms, "list_remote_files", lambda **kw: remote)
+
+    summary = ms.init_from_modelscope(["daily_forward"], rebuild_state="none")
+
+    assert summary["up_to_date"] == 1
+    assert summary["downloaded"] == 1
+    assert _FakeClient.stream_calls == 1
+
+
+def test_init_rejects_unknown_dataset(tmp_path, monkeypatch):
+    import pytest
+
+    root = tmp_path / "quantdb"
+    monkeypatch.setenv("QM_QUANTDB_DATA_DIR", str(root))
+    monkeypatch.setenv("QUANTDB_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setattr(ms, "list_remote_files", lambda **kw: [])
+
+    with pytest.raises(ValueError):
+        ms.init_from_modelscope(["not_a_dataset"])
+
+
+def test_init_purge_removes_selected_dir(tmp_path, monkeypatch):
+    root = tmp_path / "quantdb"
+    monkeypatch.setenv("QM_QUANTDB_DATA_DIR", str(root))
+    monkeypatch.setenv("QUANTDB_STATE_DIR", str(tmp_path / "state"))
+
+    stale = root / "1_kline_data" / "daily_forward" / "dt=20250101" / "data.parquet"
+    stale.parent.mkdir(parents=True)
+    stale.write_bytes(b"stale")
+
+    c1, c2, remote = _make_remote()
+    _FakeClient.payloads = {remote[0].path: c1, remote[1].path: c2}
+    monkeypatch.setattr(ms.httpx, "Client", _FakeClient)
+    monkeypatch.setattr(ms, "list_remote_files", lambda **kw: remote)
+
+    ms.init_from_modelscope(["daily_forward"], mode="purge", rebuild_state="none")
+
+    assert not stale.exists()
+    assert (root / remote[0].path).exists()
