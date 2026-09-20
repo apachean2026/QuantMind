@@ -261,9 +261,9 @@ class InferenceScriptRunner:
         fallback_model_id: str | None = None,
         primary_script_name: str | None = None,
         fallback_script_name: str | None = None,
-        enable_fallback: bool = True,
+        enable_fallback: bool = False,  # 兜底已彻底移除
     ):
-        self.enable_fallback = enable_fallback
+        self.enable_fallback = False  # 强制禁用，忽略传入值
         # `models_production` 为历史兼容参数，等价于 primary_model_dir。
         # 系统内置 model_qlib/alpha158 已废弃，不再有隐式默认模型。
         resolved_primary = (
@@ -544,13 +544,31 @@ class InferenceScriptRunner:
                         "latest_available_date": status.min_date,
                     }
             schema_hash = str(meta.get("factor_schema_hash") or "")
-            if schema_hash and schema_hash != status.schema_hash:
-                return {"ready": False, "detail": "QuantDB schema hash differs from model metadata"}
             missing = [
                 source for source in (meta.get("factor_field_sources") or {}).values()
                 if source not in status.columns
             ]
-            return {"ready": not missing, "detail": "ok" if not missing else f"missing mapped fields: {missing[:5]}"}
+            if missing:
+                return {"ready": False, "detail": f"missing mapped fields: {missing[:5]}"}
+            if schema_hash and schema_hash != status.schema_hash:
+                # 兼容层：已有大量老模型（hash e405...）在目录统一为纯 dt=* 分区后
+                # 因列集合新增 time/dt 等导致 hash 漂移（现 f7e9...），但训练所需
+                # 43 个映射字段仍在当前 schema 中时放行，仅告警，避免全量老模型被硬阻断。
+                try:
+                    import logging as _lg
+
+                    _lg.getLogger(__name__).warning(
+                        "QuantDB schema hash compat pass: model %s vs current %s (mapped fields ok)",
+                        schema_hash[:12],
+                        status.schema_hash[:12],
+                    )
+                except Exception:
+                    pass
+                return {
+                    "ready": True,
+                    "detail": f"ok (compat hash {schema_hash[:8]}->{status.schema_hash[:8]})",
+                }
+            return {"ready": True, "detail": "ok"}
         except Exception as exc:
             return {"ready": False, "detail": f"QuantDB unavailable: {exc}"}
 
@@ -855,7 +873,23 @@ class InferenceScriptRunner:
         persist: bool = True,
         pool_id: str | None = None,
     ) -> ExecutionResult:
-        """执行兜底模型推理脚本。persist=False 时只返回内存信号，不写库不发布。"""
+        """已彻底移除：不再执行任何兜底脚本，直接返回失败。"""
+
+        return ExecutionResult(
+            success=False,
+            exit_code=self._EXIT_DATA_QUALITY,
+            stdout="",
+            stderr=v10_stderr,
+            error=f"兜底已移除，原始失败: {fallback_reason}",
+            run_id=run_id,
+            fallback_used=False,
+            fallback_reason=fallback_reason,
+            failure_stage="fallback_removed",
+            active_model_id=self.primary_model_id,
+            active_data_source=self.primary_data_dir,
+            data_trade_date=date,
+            prediction_trade_date=prediction_trade_date,
+        )
         fallback_path = self.fallback_model_dir / self.fallback_script_name
         if not fallback_path.is_file():
             return ExecutionResult(
@@ -1120,33 +1154,20 @@ class InferenceScriptRunner:
             else:
                 run_id = f"run_{date.replace('-', '')}_{uuid.uuid4().hex[:8]}"
                 fallback_reason = f"主模型推理脚本不存在: {script_path}"
-                logger.warning(
-                    "[InferenceScriptRunner] 主模型脚本缺失，触发 兜底模型, run_id=%s, reason=%s",
+                logger.error(
+                    "[InferenceScriptRunner] 主模型脚本缺失，兜底已移除，直接失败 run_id=%s, reason=%s",
                     run_id,
                     fallback_reason,
                 )
-                if not self.enable_fallback:
-                    return ExecutionResult(
-                        success=False,
-                        exit_code=1,
-                        stdout="",
-                        stderr="",
-                        error=fallback_reason,
-                        run_id=run_id,
-                        failure_stage="main_script",
-                        active_model_id=self.primary_model_id,
-                    )
-                return self._execute_fallback(
-                    date=date,
-                    tenant_id=tenant_id,
-                    user_id=user_id,
-                    redis_client=redis_client,
+                return ExecutionResult(
+                    success=False,
+                    exit_code=1,
+                    stdout="",
+                    stderr="",
+                    error=fallback_reason,
                     run_id=run_id,
-                    v10_stderr=fallback_reason,
-                    fallback_reason=fallback_reason,
-                    prediction_trade_date=prediction_trade_date,
-                    persist=persist,
-                    pool_id=pool_id,
+                    failure_stage="main_script",
+                    active_model_id=self.primary_model_id,
                 )
 
         if data_source in ("parquet", "quantdb_factors"):
@@ -1200,33 +1221,20 @@ class InferenceScriptRunner:
 
         if not readiness.get("ready", False):
             fallback_reason = f"主模型维度门禁未通过: {readiness.get('detail', 'N/A')}"
-            logger.warning(
-                "[InferenceScriptRunner] 主模型数据维度不足，触发 兜底模型, run_id=%s, reason=%s",
+            logger.error(
+                "[InferenceScriptRunner] 主模型数据维度不足，兜底已移除，直接失败 run_id=%s, reason=%s",
                 run_id,
                 fallback_reason,
             )
-            if not self.enable_fallback:
-                return ExecutionResult(
-                    success=False,
-                    exit_code=1,
-                    stdout="",
-                    stderr="",
-                    error=fallback_reason,
-                    run_id=run_id,
-                    failure_stage="main_script",
-                    active_model_id=self.primary_model_id,
-                )
-            return self._execute_fallback(
-                date=date,
-                tenant_id=tenant_id,
-                user_id=user_id,
-                redis_client=redis_client,
+            return ExecutionResult(
+                success=False,
+                exit_code=1,
+                stdout="",
+                stderr="",
+                error=fallback_reason,
                 run_id=run_id,
-                v10_stderr=fallback_reason,
-                fallback_reason=fallback_reason,
-                prediction_trade_date=prediction_trade_date,
-                persist=persist,
-                pool_id=pool_id,
+                failure_stage="main_script",
+                active_model_id=self.primary_model_id,
             )
 
         # 注入平台环境变量
@@ -1310,38 +1318,25 @@ class InferenceScriptRunner:
         exit_code = proc.returncode
 
         if exit_code != 0:
-            # exit code 2 = 数据质量不足 → 尝试 兜底模型
+            # exit code 2 = 数据质量不足 → 兜底已移除，直接失败
             if exit_code == self._EXIT_DATA_QUALITY:
                 fallback_reason = (
                     stderr.strip().splitlines()[-1]
                     if stderr.strip()
                     else "v10 数据质量不足"
                 )
-                logger.warning(
-                    f"[InferenceScriptRunner] v10 数据质量不足 (exit=2)，启动 兜底模型, run_id={run_id}"
+                logger.error(
+                    f"[InferenceScriptRunner] v10 数据质量不足 (exit=2)，兜底已移除，直接失败 run_id={run_id}, reason={fallback_reason}"
                 )
-                if not self.enable_fallback:
-                    return ExecutionResult(
-                        success=False,
-                        exit_code=exit_code,
-                        stdout=stdout,
-                        stderr=stderr,
-                        error=fallback_reason,
-                        run_id=run_id,
-                        failure_stage="main_script",
-                        active_model_id=self.primary_model_id,
-                    )
-                return self._execute_fallback(
-                    date=date,
-                    tenant_id=tenant_id,
-                    user_id=user_id,
-                    redis_client=redis_client,
+                return ExecutionResult(
+                    success=False,
+                    exit_code=exit_code,
+                    stdout=stdout,
+                    stderr=stderr,
+                    error=fallback_reason,
                     run_id=run_id,
-                    v10_stderr=stderr,
-                    fallback_reason=fallback_reason,
-                    prediction_trade_date=prediction_trade_date,
-                    persist=persist,
-                    pool_id=pool_id,
+                    failure_stage="main_script",
+                    active_model_id=self.primary_model_id,
                 )
 
             logger.error(

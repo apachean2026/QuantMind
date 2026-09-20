@@ -72,8 +72,18 @@ def _quantdb_reader(meta: dict, data_dir: Path):
     if meta.get("data_source") != "quantdb_factors":
         return None
     from backend.services.engine.data_platform.quantdb_factor_reader import QuantDBFactorReader
+
     pinned_dir = Path(str(meta.get("quantdb_dir") or ""))
-    return QuantDBFactorReader(pinned_dir if pinned_dir.is_dir() else data_dir)
+    if pinned_dir.is_dir():
+        return QuantDBFactorReader(pinned_dir)
+    # 兼容：训练时 quantdb_dir 为 /tmp 临时目录，推理时回退到市场数据目录
+    try:
+        from backend.services.engine.data_platform.quantdb_factor_reader import market_data_dir
+
+        m = (meta.get("context") or {}).get("market") or "CN"
+        return QuantDBFactorReader(market_data_dir(m))
+    except Exception:
+        return QuantDBFactorReader(data_dir)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -343,7 +353,16 @@ def load_date_data(trade_date: str, data_dir: Path, meta: dict) -> pd.DataFrame 
             status = reader.assert_ready(source, start=trade_date, end=trade_date)
             expected_hash = str(meta.get("factor_schema_hash") or "")
             if expected_hash and expected_hash != status.schema_hash:
-                raise RuntimeError("QuantDB schema hash differs from model metadata")
+                # 兼容层：目录统一后 hash 漂移（e405->f7e9），但因子列仍齐时放行
+                field_sources = meta.get("factor_field_sources") or {}
+                missing = [v for v in field_sources.values() if v not in status.columns]
+                if missing:
+                    raise RuntimeError(f"QuantDB schema hash differs and missing fields {missing[:3]}")
+                logger.warning(
+                    "QuantDB schema hash compat pass: model %s vs current %s",
+                    expected_hash[:12],
+                    status.schema_hash[:12],
+                )
             day_df = reader.read_day(
                 source, features=features, trade_date=trade_date,
                 feature_sources=meta.get("factor_field_sources") or None,
