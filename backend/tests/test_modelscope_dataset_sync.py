@@ -362,4 +362,6 @@ def test_preflight_orders_by_spec_and_has_repo_url(tmp_path, monkeypatch):
     )
     assert pf["total_bytes"] == 4
     assert pf["existing_bytes"] == 1
+    assert pf["missing_bytes"] == 3
+    assert pf["changed_bytes"] == 0
     assert pf["download_bytes"] == 3

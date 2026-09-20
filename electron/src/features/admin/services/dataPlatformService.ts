@@ -268,6 +268,8 @@ export interface QuantDBModelScopePreflight {
     total_files: number;
     total_bytes: number;
     existing_bytes: number;
+    missing_bytes: number;
+    changed_bytes: number;
     download_bytes: number;
     disk: { total: number; used: number; free: number };
     warnings: string[];

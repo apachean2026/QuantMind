@@ -599,9 +599,6 @@ export const ModelScopeInitModal: React.FC<ModelScopeInitModalProps> = ({ open, 
     const [preflightLoading, setPreflightLoading] = useState(false);
     const [selected, setSelected] = useState<string[]>([]);
     const [mode, setMode] = useState<'overwrite' | 'purge'>('overwrite');
-    const [rebuildState, setRebuildState] = useState<'meta' | 'rescan' | 'none'>('meta');
-    const [withPg, setWithPg] = useState(false);
-    const [withQlib, setWithQlib] = useState(false);
     const [job, setJob] = useState<QuantDBModelScopeInitJob | null>(null);
     const [starting, setStarting] = useState(false);
     const [cancelling, setCancelling] = useState(false);
@@ -656,9 +653,6 @@ export const ModelScopeInitModal: React.FC<ModelScopeInitModalProps> = ({ open, 
             const resp = await dataPlatformService.startModelScopeInit({
                 datasets: selected.length === all.length ? undefined : selected,
                 mode,
-                rebuild_state: rebuildState,
-                with_pg: withPg,
-                with_qlib: withQlib,
             });
             setJob(resp.job);
             message.success('初始化数据已启动（后台执行）');
@@ -728,7 +722,15 @@ export const ModelScopeInitModal: React.FC<ModelScopeInitModalProps> = ({ open, 
             open={open}
             onCancel={onClose}
             width={880}
+            centered
             destroyOnHidden
+            styles={{
+                body: {
+                    maxHeight: 'calc(var(--app-h) - 260px)',
+                    overflowY: 'auto',
+                    paddingBottom: 140,
+                },
+            }}
             footer={
                 <Space>
                     {isRunning && (
@@ -789,9 +791,9 @@ export const ModelScopeInitModal: React.FC<ModelScopeInitModalProps> = ({ open, 
                         </Col>
                         <Col flex="1">
                             <Statistic
-                                title="需新增下载"
-                                value={formatBytes(preflight.download_bytes)}
-                                valueStyle={{ color: preflight.download_bytes > 0 ? '#1677ff' : '#52c41a' }}
+                                title="需新增空间"
+                                value={formatBytes(preflight.missing_bytes)}
+                                valueStyle={{ color: preflight.missing_bytes > 0 ? '#1677ff' : '#52c41a' }}
                             />
                         </Col>
                         <Col flex="1">
@@ -808,30 +810,12 @@ export const ModelScopeInitModal: React.FC<ModelScopeInitModalProps> = ({ open, 
                 )}
 
                 {!isRunning && (
-                    <Space direction="vertical" size={4} className="w-full">
-                        <Space wrap>
-                            <Text strong className="text-xs">覆盖模式：</Text>
-                            <Radio.Group size="small" value={mode} onChange={(e) => setMode(e.target.value)}>
-                                <Radio.Button value="overwrite">增量覆盖</Radio.Button>
-                                <Radio.Button value="purge">清空后重建</Radio.Button>
-                            </Radio.Group>
-                        </Space>
-                        <Space wrap>
-                            <Text strong className="text-xs">同步状态库：</Text>
-                            <Radio.Group size="small" value={rebuildState} onChange={(e) => setRebuildState(e.target.value)}>
-                                <Radio.Button value="meta">远端元数据（快）</Radio.Button>
-                                <Radio.Button value="rescan">全量重扫</Radio.Button>
-                                <Radio.Button value="none">不处理</Radio.Button>
-                            </Radio.Group>
-                        </Space>
-                        <Space wrap size="middle">
-                            <Checkbox checked={withPg} onChange={(e) => setWithPg(e.target.checked)}>
-                                <Text className="text-xs">拉取后填充 PG stock_daily_latest</Text>
-                            </Checkbox>
-                            <Checkbox checked={withQlib} onChange={(e) => setWithQlib(e.target.checked)}>
-                                <Text className="text-xs">拉取后重建 Qlib 缓存</Text>
-                            </Checkbox>
-                        </Space>
+                    <Space wrap>
+                        <Text strong className="text-xs">覆盖模式：</Text>
+                        <Radio.Group size="small" value={mode} onChange={(e) => setMode(e.target.value)}>
+                            <Radio.Button value="overwrite">增量覆盖</Radio.Button>
+                            <Radio.Button value="purge">清空后重建</Radio.Button>
+                        </Radio.Group>
                     </Space>
                 )}
 

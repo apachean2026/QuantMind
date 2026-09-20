@@ -262,17 +262,29 @@ def _partition(
     return present, pending
 
 
-def _present_bytes(root: Path, files: list[RemoteFile]) -> int:
-    """统计本地已存在且 size 一致的远端文件字节数（预检用，不做哈希）。"""
-    total = 0
+def _local_breakdown(root: Path, files: list[RemoteFile]) -> tuple[int, int, int]:
+    """按本地状态拆分远端文件字节数，返回 (已存在, 缺失, 存在但size不同)。
+
+    「缺失」才真正需要新增磁盘空间；「存在但size不同」是原地覆盖（os.replace），
+    基本不产生净增量，「已存在」直接跳过。
+    """
+    present = missing = changed = 0
     for f in files:
         try:
             target = _target_path(root, f.path)
-            if target.is_file() and (not f.size or target.stat().st_size == f.size):
-                total += f.size
-        except (OSError, ValueError):
+        except ValueError:
+            missing += f.size
             continue
-    return total
+        try:
+            if not target.is_file():
+                missing += f.size
+            elif f.size and target.stat().st_size != f.size:
+                changed += f.size
+            else:
+                present += f.size
+        except OSError:
+            changed += f.size
+    return present, missing, changed
 
 
 # ---------------------------------------------------------------------------
@@ -663,14 +675,18 @@ def preflight_modelscope(
     items = []
     total_bytes = 0
     existing_bytes = 0
+    missing_bytes = 0
+    changed_bytes = 0
     for spec in DATASETS:
         files = grouped.get(spec.dataset)
         if not files:
             continue
         ds_bytes = sum(f.size for f in files)
-        ds_existing = _present_bytes(root, files)
+        ds_present, ds_missing, ds_changed = _local_breakdown(root, files)
         total_bytes += ds_bytes
-        existing_bytes += ds_existing
+        existing_bytes += ds_present
+        missing_bytes += ds_missing
+        changed_bytes += ds_changed
         items.append(
             {
                 "dataset": spec.dataset,
@@ -680,7 +696,7 @@ def preflight_modelscope(
                 "rel_dir": spec.rel_dir,
                 "files": len(files),
                 "bytes": ds_bytes,
-                "existing_bytes": ds_existing,
+                "existing_bytes": ds_present,
             }
         )
 
@@ -690,13 +706,15 @@ def preflight_modelscope(
     except OSError:
         disk = {"total": 0, "used": 0, "free": 0}
 
-    # 覆盖式增量只下载缺失/变更的文件，余量按「需新增」而非全量判断
+    # 覆盖式增量只下载缺失/变更的文件；其中「缺失」才真正需要新增磁盘空间，
+    # 「存在但不同」是原地覆盖（先在同目录生成 .part 再 replace），几乎不占净增量。
     download_bytes = max(0, total_bytes - existing_bytes)
     warnings: list[str] = []
-    if disk["free"] and download_bytes and disk["free"] < download_bytes * 1.1:
+    if disk["free"] and missing_bytes and disk["free"] < missing_bytes * 1.1:
         warnings.append(
-            f"磁盘余量不足：本次仍需下载约 {download_bytes / 1024**3:.1f} GB，"
-            f"当前可用 {disk['free'] / 1024**3:.1f} GB"
+            f"磁盘余量不足：本地缺失约 {missing_bytes / 1024**3:.1f} GB 需新增空间，"
+            f"当前可用 {disk['free'] / 1024**3:.1f} GB。"
+            f"可改用「清空后重建」模式（先删后下，回收已占用空间）。"
         )
 
     ep = (endpoint or _endpoint()).rstrip("/")
@@ -710,6 +728,8 @@ def preflight_modelscope(
         "total_files": sum(it["files"] for it in items),
         "total_bytes": total_bytes,
         "existing_bytes": existing_bytes,
+        "missing_bytes": missing_bytes,
+        "changed_bytes": changed_bytes,
         "download_bytes": download_bytes,
         "disk": disk,
         "warnings": warnings,
