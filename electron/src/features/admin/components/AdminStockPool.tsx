@@ -1132,14 +1132,30 @@ const AdminStockPool: React.FC = () => {
                 />
             </Card>
 
-            {/* 新建 */}
+            {/* 新建 — 统一样式 */}
             <Modal
-                title="新建股票池"
+                title={
+                    <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
+                            <PlusOutlined />
+                        </div>
+                        <span className="font-black text-slate-800">新建股票池</span>
+                    </div>
+                }
                 open={createOpen}
                 onOk={handleCreate}
                 onCancel={() => setCreateOpen(false)}
                 okText="创建"
+                okButtonProps={{ className: 'rounded-xl font-bold' }}
+                cancelButtonProps={{ className: 'rounded-xl' }}
+                centered
                 destroyOnClose
+                styles={{
+                    content: { borderRadius: 24, padding: 0, overflow: 'hidden' },
+                    header: { padding: '16px 24px', margin: 0, borderBottom: '1px solid #f1f5f9' },
+                    body: { padding: 24 },
+                    footer: { padding: '12px 24px', borderTop: '1px solid #f1f5f9' },
+                }}
             >
                 <Form form={createForm} layout="vertical" initialValues={{ market: 'CN', pool_type: 'static' }}>
                     <Form.Item
@@ -1326,35 +1342,64 @@ const AdminStockPool: React.FC = () => {
                 )}
             </Drawer>
 
-            {/* 解析调试 */}
+            {/* 解析调试 — 统一样式：与数据管理弹窗一致 */}
             <Modal
-                title="股票池解析调试"
+                title={
+                    <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                            <ExperimentOutlined />
+                        </div>
+                        <span className="font-black text-slate-800">股票池解析调试</span>
+                    </div>
+                }
                 open={resolveOpen}
                 onCancel={() => setResolveOpen(false)}
                 footer={null}
                 width={760}
+                centered
                 destroyOnClose
+                styles={{
+                    content: { borderRadius: 24, padding: 0, overflow: 'hidden' },
+                    header: { padding: '16px 24px', margin: 0, borderBottom: '1px solid #f1f5f9' },
+                    body: { padding: 24 },
+                }}
             >
-                <Paragraph type="secondary" style={{ fontSize: 12 }}>
-                    验证各功能实际会拿到什么成分。支持 <Text code>pool:code</Text>、裸内置名{' '}
-                    <Text code>csi300</Text>、<Text code>list:SH600036,SZ000001</Text>、
-                    <Text code>file:/path/x.txt</Text>、<Text code>all</Text>。
-                </Paragraph>
+                <div className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2.5 mb-4">
+                    <Text type="secondary" className="text-xs leading-relaxed">
+                        验证各功能实际会拿到什么成分。支持 <Text code className="text-xs">pool:code</Text>、裸内置名{' '}
+                        <Text code className="text-xs">csi300</Text>、<Text code className="text-xs">list:SH600036,SZ000001</Text>、
+                        <Text code className="text-xs">file:/path/x.txt</Text>、<Text code className="text-xs">all</Text>。
+                    </Text>
+                </div>
                 <Space.Compact style={{ width: '100%' }}>
                     <Input
                         value={resolveRef}
                         onChange={(e) => setResolveRef(e.target.value)}
                         placeholder="pool:csi300"
                         onPressEnter={handleResolve}
+                        className="rounded-l-xl"
+                        style={{ height: 40, fontSize: 13 }}
                     />
-                    <Button type="primary" loading={resolving} onClick={handleResolve}>
+                    <Button
+                        type="primary"
+                        loading={resolving}
+                        onClick={handleResolve}
+                        className="rounded-r-xl font-bold"
+                        style={{ height: 40, padding: '0 20px' }}
+                    >
                         解析
                     </Button>
                 </Space.Compact>
 
                 {resolveResult && (
-                    <div style={{ marginTop: 12 }}>
-                        <Descriptions size="small" column={2} bordered>
+                    <div className="mt-4 space-y-3">
+                        <Descriptions
+                            size="small"
+                            column={2}
+                            bordered
+                            styles={{ label: { background: '#f8fafc', fontSize: 12 }, content: { fontSize: 12 } }}
+                            className="rounded-xl overflow-hidden"
+                        >
                             <Descriptions.Item label="来源">
                                 {SOURCE_LABEL[resolveResult.source] || resolveResult.source}
                             </Descriptions.Item>
@@ -1368,12 +1413,12 @@ const AdminStockPool: React.FC = () => {
                             <Alert
                                 type="warning"
                                 showIcon
-                                style={{ marginTop: 8 }}
+                                className="rounded-xl"
                                 message="解析告警"
                                 description={
                                     <Space direction="vertical" size={2}>
                                         {resolveResult.warnings.map((w, i) => (
-                                            <Text key={i} style={{ fontSize: 12 }}>
+                                            <Text key={i} className="text-xs">
                                                 {w}
                                             </Text>
                                         ))}
@@ -1381,11 +1426,9 @@ const AdminStockPool: React.FC = () => {
                                 }
                             />
                         )}
-                        <div style={{ marginTop: 8 }}>
-                            <Text type="secondary" style={{ fontSize: 12 }}>
-                                样本（API 前缀式）：
-                            </Text>
-                            <Paragraph style={{ fontSize: 12 }}>
+                        <div className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2.5">
+                            <Text type="secondary" className="text-xs">样本（API 前缀式）：</Text>
+                            <Paragraph className="text-xs mt-1 mb-0 break-all">
                                 {(resolveResult.sample || []).join(', ') || '（空）'}
                             </Paragraph>
                         </div>

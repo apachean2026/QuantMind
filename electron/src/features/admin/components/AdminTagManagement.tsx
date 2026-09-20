@@ -6,6 +6,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   Button,
   Card,
   Col,
@@ -22,11 +23,14 @@ import {
   Table,
   Tag,
   Typography,
+  Upload,
   message,
 } from 'antd';
 import {
+  CloudUploadOutlined,
   DeleteOutlined,
   EditOutlined,
+  InboxOutlined,
   PlusOutlined,
   ReloadOutlined,
   SearchOutlined,
@@ -66,6 +70,52 @@ const EVENT_TAG_OPTIONS = [
   { value: '概念板块', label: '概念板块' },
 ];
 
+const KIND_LABEL_TO_VALUE: Record<string, string> = {
+  '情感(利好)': 'sentiment_pos',
+  '情感(利空)': 'sentiment_neg',
+  '事件/实体': 'event',
+  '部门': 'department',
+  '利好': 'sentiment_pos',
+  '利空': 'sentiment_neg',
+};
+
+function parseCSV(text: string): string[][] {
+  const rows: string[][] = [];
+  let cur = '';
+  let row: string[] = [];
+  let inQuote = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuote) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { cur += '"'; i++; }
+        else inQuote = false;
+      } else cur += c;
+    } else {
+      if (c === '"') inQuote = true;
+      else if (c === ',') { row.push(cur.trim()); cur = ''; }
+      else if (c === '\n') { row.push(cur.trim()); rows.push(row); row = []; cur = ''; }
+      else if (c === '\r') { /* ignore */ }
+      else cur += c;
+    }
+  }
+  row.push(cur.trim());
+  if (row.some((v) => v !== '')) rows.push(row);
+  return rows.filter((r) => r.some((v) => v !== ''));
+}
+
+function normalizeKind(v: string): string {
+  const s = (v || '').trim();
+  if (!s) return 'event';
+  if (KIND_OPTIONS.find((o) => o.value === s)) return s;
+  if (KIND_LABEL_TO_VALUE[s]) return KIND_LABEL_TO_VALUE[s];
+  const lower = s.toLowerCase();
+  if (['sentiment_pos', 'pos', 'positive'].includes(lower)) return 'sentiment_pos';
+  if (['sentiment_neg', 'neg', 'negative'].includes(lower)) return 'sentiment_neg';
+  if (['department'].includes(lower)) return 'department';
+  return 'event';
+}
+
 export const AdminTagManagement: React.FC = () => {
   const [tags, setTags] = useState<LexiconTag[]>([]);
   const [total, setTotal] = useState(0);
@@ -78,6 +128,12 @@ export const AdminTagManagement: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTag, setEditingTag] = useState<LexiconTag | null>(null);
   const [form] = Form.useForm();
+
+  // CSV 导入解析
+  const [importOpen, setImportOpen] = useState(false);
+  const [importRows, setImportRows] = useState<Array<{ key: string; term: string; kind: string; event_tag: string | null; weight: number; note: string | null }>>([]);
+  const [importFileName, setImportFileName] = useState('');
+  const [importing, setImporting] = useState(false);
 
   const loadTags = useCallback(async () => {
     setLoading(true);
@@ -184,6 +240,69 @@ export const AdminTagManagement: React.FC = () => {
     }
   };
 
+  // CSV 导入：解析表头自动填充
+  const handleCSVFile = (file: File) => {
+    setImportFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const raw = String(reader.result || '');
+      // 去 BOM
+      const text = raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
+      const rows = parseCSV(text);
+      if (!rows.length) { message.warning('CSV 为空'); return; }
+      const header = rows[0].map((h) => h.trim().toLowerCase());
+      const hasHeader = header.some((h) => ['term', '词条', '词语', 'keyword'].includes(h) || ['kind', '类型'].includes(h));
+      const dataRows = hasHeader ? rows.slice(1) : rows;
+      const idx = (names: string[]) => {
+        for (let i = 0; i < header.length; i++) if (names.includes(header[i])) return i;
+        return -1;
+      };
+      const termIdx = hasHeader ? idx(['term', '词条', '词语', 'keyword', 'word']) : 0;
+      const kindIdx = hasHeader ? idx(['kind', '类型']) : 1;
+      const tagIdx = hasHeader ? idx(['event_tag', '标签', 'label', 'tag', '分类']) : 2;
+      const weightIdx = hasHeader ? idx(['weight', '权重']) : 3;
+      const noteIdx = hasHeader ? idx(['note', '备注', '说明']) : 4;
+      const parsed = dataRows.map((r, i) => {
+        const term = (r[termIdx >= 0 ? termIdx : 0] || '').trim();
+        const kindRaw = (r[kindIdx >= 0 ? kindIdx : 1] || '').trim();
+        const evt = (r[tagIdx >= 0 ? tagIdx : 2] || '').trim();
+        const wRaw = (r[weightIdx >= 0 ? weightIdx : 3] || '').trim();
+        const note = (r[noteIdx >= 0 ? noteIdx : 4] || '').trim() || null;
+        return {
+          key: String(i),
+          term,
+          kind: normalizeKind(kindRaw),
+          event_tag: evt && EVENT_TAG_OPTIONS.find((o) => o.value === evt) ? evt : (EVENT_TAG_OPTIONS.find((o) => o.label === evt)?.value || null),
+          weight: wRaw ? Number(wRaw) || 1 : 1,
+          note,
+        };
+      }).filter((r) => r.term);
+      if (!parsed.length) { message.warning('未解析到有效词条（首列需为词条）'); return; }
+      setImportRows(parsed);
+      message.success(`已解析 ${parsed.length} 条，自动填充字段`);
+    };
+    reader.readAsText(file, 'utf-8');
+    return false;
+  };
+
+  const handleBatchImport = async () => {
+    if (!importRows.length) { message.warning('请先导入 CSV'); return; }
+    setImporting(true);
+    let ok = 0; let fail = 0;
+    for (const r of importRows) {
+      try {
+        await newsService.adminCreateTag({ term: r.term, kind: r.kind, event_tag: r.event_tag || undefined, weight: r.weight, note: r.note || undefined });
+        ok++;
+      } catch { fail++; }
+    }
+    setImporting(false);
+    message.success(`批量导入完成：成功 ${ok} 条${fail ? `，失败 ${fail} 条` : ''}`);
+    setImportOpen(false);
+    setImportRows([]);
+    setImportFileName('');
+    loadTags();
+  };
+
   const kindColor = (kind: string) => {
     if (kind === 'sentiment_pos') return 'red';
     if (kind === 'sentiment_neg') return 'green';
@@ -279,6 +398,7 @@ export const AdminTagManagement: React.FC = () => {
         </div>
         <Space>
           <Button icon={<ReloadOutlined />} onClick={loadTags} style={{ borderRadius: 6 }}>刷新</Button>
+          <Button icon={<CloudUploadOutlined />} onClick={() => setImportOpen(true)} style={{ borderRadius: 6 }}>导入 CSV</Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate} style={{ borderRadius: 6 }}>新增词条</Button>
         </Space>
       </div>
@@ -360,8 +480,14 @@ export const AdminTagManagement: React.FC = () => {
         okText="保存"
         cancelText="取消"
         destroyOnHidden
+        styles={{
+          content: { borderRadius: 24, padding: 0, overflow: 'hidden' },
+          header: { padding: '16px 24px', margin: 0, borderBottom: '1px solid #f1f5f9' },
+          body: { padding: 24 },
+          footer: { padding: '12px 24px', borderTop: '1px solid #f1f5f9' },
+        }}
       >
-        <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+        <Form form={form} layout="vertical" style={{ marginTop: 0 }}>
           <Form.Item name="term" label="词条" rules={[{ required: true, message: '请输入词条' }]}>
             <Input placeholder="如：国务院、央行、利好" />
           </Form.Item>
@@ -378,6 +504,69 @@ export const AdminTagManagement: React.FC = () => {
             <Input.TextArea rows={2} placeholder="备注说明（可选）" />
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* CSV 导入解析 — 自动填充字段 */}
+      <Modal
+        title={
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
+              <CloudUploadOutlined />
+            </div>
+            <span className="font-black text-slate-800">导入词条 CSV</span>
+          </div>
+        }
+        open={importOpen}
+        onCancel={() => { setImportOpen(false); setImportRows([]); setImportFileName(''); }}
+        onOk={handleBatchImport}
+        okText={`确认导入 ${importRows.length ? `(${importRows.length} 条)` : ''}`}
+        okButtonProps={{ disabled: !importRows.length, loading: importing, className: 'rounded-xl font-bold' }}
+        cancelButtonProps={{ className: 'rounded-xl' }}
+        width={860}
+        destroyOnClose
+        styles={{
+          content: { borderRadius: 24, padding: 0, overflow: 'hidden' },
+          header: { padding: '16px 24px', margin: 0, borderBottom: '1px solid #f1f5f9' },
+          body: { padding: 24 },
+          footer: { padding: '12px 24px', borderTop: '1px solid #f1f5f9' },
+        }}
+      >
+        <div className="space-y-4">
+          <Alert
+            type="info"
+            showIcon
+            className="rounded-xl"
+            message="支持 CSV 表头：term/词条, kind/类型, event_tag/标签, weight/权重, note/备注（大小写不敏感）"
+            description={<span className="text-xs">无表头时按顺序解析 5 列；类型支持中英文与别名自动映射，缺省权重 1.0，未匹配标签自动置空。示例：<Text code>term,kind,event_tag,weight,note</Text> 首行</span>}
+          />
+          <Upload.Dragger
+            accept=".csv,.txt"
+            showUploadList={false}
+            beforeUpload={handleCSVFile}
+            className="rounded-xl"
+          >
+            <p className="ant-upload-drag-icon"><InboxOutlined /></p>
+            <p className="ant-upload-text">点击或拖拽 CSV 文件到此处</p>
+            <p className="ant-upload-hint">支持 UTF-8 / GBK，自动识别表头并填充</p>
+          </Upload.Dragger>
+          {importFileName && <div className="text-xs text-slate-500">已选择：<Text code>{importFileName}</Text> · 已解析 {importRows.length} 条</div>}
+          {importRows.length > 0 && (
+            <Table
+              rowKey="key"
+              dataSource={importRows}
+              size="small"
+              pagination={{ pageSize: 8, showSizeChanger: false }}
+              scroll={{ y: 260 }}
+              columns={[
+                { title: '词条', dataIndex: 'term', width: 160, render: (v: string) => <Text strong>{v}</Text> },
+                { title: '类型', dataIndex: 'kind', width: 130, render: (v: string) => <Tag color={v === 'sentiment_pos' ? 'red' : v === 'sentiment_neg' ? 'green' : v === 'department' ? 'geekblue' : 'blue'}>{v}</Tag> },
+                { title: '标签', dataIndex: 'event_tag', width: 100, render: (v: string | null) => v ? <Tag>{v}</Tag> : <Text type="secondary">—</Text> },
+                { title: '权重', dataIndex: 'weight', width: 80 },
+                { title: '备注', dataIndex: 'note', ellipsis: true, render: (v: string | null) => v || '—' },
+              ]}
+            />
+          )}
+        </div>
       </Modal>
     </div>
   );
