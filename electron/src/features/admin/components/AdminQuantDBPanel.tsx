@@ -615,14 +615,34 @@ export const ModelScopeInitModal: React.FC<ModelScopeInitModalProps> = ({ open, 
         }
     }, []);
 
+    // 打开弹窗时：若后台已有运行中的任务，直接回到下载进度页；否则做预检
     useEffect(() => {
-        if (open) {
+        if (!open) return undefined;
+        let alive = true;
+        (async () => {
+            try {
+                const resp = await dataPlatformService.listModelScopeInitJobs();
+                const active = resp.jobs
+                    .filter((j) => j.status === 'running')
+                    .sort((a, b) => (a.started_at < b.started_at ? 1 : -1))[0];
+                if (!alive) return;
+                if (active) {
+                    setJob(active);
+                    return;
+                }
+            } catch {
+                // 忽略：回退到正常预检
+            }
+            if (!alive) return;
             setJob(null);
             loadPreflight();
-        }
+        })();
+        return () => {
+            alive = false;
+        };
     }, [open, loadPreflight]);
 
-    // 轮询初始化任务进度；完成/失败时提示并刷新目录统计
+    // 轮询初始化任务进度；结束后回到预检（可再次发起）并刷新目录统计
     useEffect(() => {
         if (!job || job.status !== 'running') return undefined;
         const timer = setInterval(async () => {
@@ -633,17 +653,20 @@ export const ModelScopeInitModal: React.FC<ModelScopeInitModalProps> = ({ open, 
                     const s = resp.job.summary;
                     message.success(`初始化完成：下载 ${s?.downloaded ?? 0}，跳过 ${s?.skipped ?? 0}，失败 ${s?.errors ?? 0}`);
                     onCompleted();
+                    loadPreflight();
                 } else if (resp.job.status === 'failed') {
                     message.error(`初始化失败: ${resp.job.error ?? '未知错误'}`);
+                    loadPreflight();
                 } else if (resp.job.status === 'cancelled') {
                     message.warning('初始化已取消');
+                    loadPreflight();
                 }
             } catch {
                 // 单次轮询失败忽略，下一轮重试
             }
         }, INIT_JOB_POLL_INTERVAL_MS);
         return () => clearInterval(timer);
-    }, [job, onCompleted]);
+    }, [job, onCompleted, loadPreflight]);
 
     const doStart = async () => {
         setStarting(true);
