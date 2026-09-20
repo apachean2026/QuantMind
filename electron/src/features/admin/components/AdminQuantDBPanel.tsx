@@ -124,7 +124,7 @@ export const AdminQuantDBPanel: React.FC = () => {
                 }
                 extra={
                     <Space size="middle">
-                        <Tooltip title="从魔搭（ModelScope）公开数据集一键拉取 QuantDB 全量数据并覆盖本地数据目录，无需 QuantDB API Key / 流量；全量约 56GB，预计 3-4 小时，可稍后回来查看进度。仓库：https://www.modelscope.cn/datasets/qusong0627/LightGBM_Alpha300">
+                        <Tooltip title="从魔搭（ModelScope）公开数据集一键拉取 QuantDB 全量数据并覆盖本地数据目录，无需 QuantDB API Key / 流量；全量约 56GB，预计 1-3 小时，可稍后回来查看进度。仓库：https://www.modelscope.cn/datasets/qusong0627/LightGBM_Alpha300">
                             <Button
                                 type="primary"
                                 size="large"
@@ -750,7 +750,7 @@ export const ModelScopeInitModal: React.FC<ModelScopeInitModalProps> = ({ open, 
                 <Alert
                     type="warning"
                     showIcon
-                    message="首次全量同步约需 3-4 小时，请耐心等待，您可稍后回来查看"
+                    message="首次全量同步约需 1-3 小时，请耐心等待，您可稍后回来查看"
                     description="数据总量约 56GB，下载在后台执行。启动后可以关闭本窗口或离开页面，稍后回来查看进度；已完整下载的文件会自动跳过，中断后重新发起可断点续传。"
                 />
 
@@ -836,7 +836,7 @@ export const ModelScopeInitModal: React.FC<ModelScopeInitModalProps> = ({ open, 
                         </Text>
                         {job.status === 'running' && (
                             <Text type="secondary" className="text-xs">
-                                首次全量约需 3-4 小时，可关闭本窗口或离开页面，稍后回来查看进度。
+                                首次全量约需 1-3 小时，可关闭本窗口或离开页面，稍后回来查看进度。
                             </Text>
                         )}
                         {job.status === 'completed' && job.summary && (
