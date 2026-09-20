@@ -80,13 +80,13 @@
 `quantmind-engine` 使用 Celery 处理耗时的异步回测和复杂的参数优化任务。Worker 进程必须独立于主 API 服务启动。
 当前已统一为 Celery 异步执行：`/api/v1/pipeline/*`、`/api/v1/qlib/backtest?async_mode=true`、`/api/v1/strategy-backtest-loop/*`。
 API 进程仅负责入队或同步请求处理，不再保留 `BackgroundTasks` / `create_task` / 线程池式后台执行路径。
-“明日信号生成”支持三种触发方式：管理员手动触发 `POST /api/v1/admin/models/run-inference`、策略激活后按当前 `tenant_id + user_id(8位)` 异步触发一次推理、以及 Celery Beat 00:00 自动兜底 `engine.tasks.auto_inference_if_needed`（周一至周五，见 `celery_config.beat_schedule`）。
-生产部署必须同时运行 `celery-worker` 与 `celery-beat`；仅启动 worker 不会触发 00:00 自动推理。
+“明日信号生成”支持三种触发方式：管理员手动触发 `POST /api/v1/admin/models/run-inference`、策略激活后按当前 `tenant_id + user_id(8位)` 异步触发一次推理、以及 Celery Beat 工作日 08:00 扫描 `engine.tasks.auto_inference_if_needed`（仅 running 组合 + 已启用的自动推理设置，见 `celery_config.beat_schedule`）。
+生产部署必须同时运行 `celery-worker` 与 `celery-beat`；仅启动 worker 不会触发定时自动推理。
 如需因硬件压力临时暂停自动推理，可在运行环境设置 `AUTO_INFERENCE_ENABLED=false`（仅关闭 Beat 定时调度，不影响手动触发）。
 推理链路已升级为“多用户模型解析”：
 - 解析优先级：`显式 model_id > 策略绑定 > 用户默认`
 - 用户模型目录：`models/users/{tenant_id}/{user_id}/{model_id}`
-- 系统内置 `model_qlib / alpha158` 已废弃，不再有隐式兜底模型
+- 系统内置 `model_qlib / alpha158 / production` 已废弃，**无隐式系统兜底模型**
 四条入口统一输出：`fallback_used/fallback_reason/active_model_id/effective_model_id/model_source/active_data_source`；
 `pipeline` 会将这些字段同时保存在 `inference_result` 和 `result_json` 顶层。
 

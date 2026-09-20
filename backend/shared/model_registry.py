@@ -996,23 +996,8 @@ class ModelRegistryService:
                 status=str(default.get("status") or "active"),
             )
 
+        # 系统 production 兜底已下线：无显式模型 / 策略绑定 / 用户默认时直接未配置
         fallback_reason = "; ".join(reason_parts).strip()
-        if self.primary_model_id and Path(self.primary_model_dir).is_dir():
-            if fallback_reason:
-                fallback_reason = f"{fallback_reason}; fallback to system model"
-            else:
-                fallback_reason = "no user model configured, fallback to system model"
-
-            return ResolvedModel(
-                effective_model_id=self.primary_model_id,
-                model_source="system_fallback",
-                fallback_used=True,
-                fallback_reason=fallback_reason,
-                storage_path=self.primary_model_dir,
-                model_file="model.lgb",
-                status="active",
-            )
-
         return ResolvedModel(
             effective_model_id=None,
             model_source="none",
@@ -1250,23 +1235,8 @@ class ModelRegistryService:
                 status=str(default.get("status") or "active"),
             ).to_dict()
 
+        # 系统 production 兜底已下线：无显式模型 / 策略绑定 / 用户默认时直接未配置
         fallback_reason = "; ".join(reason_parts).strip()
-        if self.primary_model_id and Path(self.primary_model_dir).is_dir():
-            if fallback_reason:
-                fallback_reason = f"{fallback_reason}; fallback to system model"
-            else:
-                fallback_reason = "no user model configured, fallback to system model"
-
-            return ResolvedModel(
-                effective_model_id=self.primary_model_id,
-                model_source="system_fallback",
-                fallback_used=True,
-                fallback_reason=fallback_reason,
-                storage_path=self.primary_model_dir,
-                model_file="model.lgb",
-                status="active",
-            ).to_dict()
-
         return ResolvedModel(
             effective_model_id=None,
             model_source="none",

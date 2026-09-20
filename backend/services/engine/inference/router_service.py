@@ -86,7 +86,7 @@ def _get_model_data_dir(model_dir: Path) -> str:
 
 
 class InferenceRouterService:
-    """统一推理编排层：显式模型/策略绑定/默认模型 + 系统兜底。"""
+    """统一推理编排层：显式模型 / 策略绑定 / 用户默认模型。"""
 
     def __init__(self, inference_service: InferenceService | None = None):
         self.inference_service = inference_service or InferenceService()

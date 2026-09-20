@@ -20,7 +20,7 @@ stdout 输出（JSON 数组，每项含 symbol 和 score）：
 exit code：
     0  = 成功
     1  = 致命错误
-    2  = 数据质量不足，触发兜底模型推理
+    2  = 数据质量不足（直接失败，不再触发兜底）
     其他非零 = 失败
 """
 
@@ -237,16 +237,12 @@ class InferenceScriptRunner:
     1. 主模型推理脚本（默认 inference.py）
        - exit 0 → 成功
        - exit 1 → 致命失败，返回错误
-       - exit 2 → 数据质量不足，自动执行兜底模型脚本
-    2. 兜底模型推理脚本（默认 inference.py）
-       - exit 0 → 兜底成功，结果标记 fallback_used=True
-       - 非 0   → 兜底失败，返回错误
+       - exit 2 → 数据质量不足，直接失败（脚本级兜底已彻底移除）
 
-    注：系统内置 model_qlib/兜底模型已废弃，仅在显式配置
-    fallback_model_dir/fallback_model_id 时兜底才有意义。
+    系统内置 model_qlib / production 兜底模型已废弃，不再切换第二套脚本。
     """
 
-    # exit code 2: 数据质量不足，触发兜底
+    # exit code 2: 数据质量不足（历史约定；现直接失败，不再触发兜底）
     _EXIT_DATA_QUALITY = 2
 
     def __init__(
@@ -874,7 +870,7 @@ class InferenceScriptRunner:
         pool_id: str | None = None,
     ) -> ExecutionResult:
         """已彻底移除：不再执行任何兜底脚本，直接返回失败。"""
-
+        _ = (tenant_id, user_id, redis_client, persist, pool_id)  # 保留签名兼容调用方
         return ExecutionResult(
             success=False,
             exit_code=self._EXIT_DATA_QUALITY,
@@ -887,224 +883,6 @@ class InferenceScriptRunner:
             failure_stage="fallback_removed",
             active_model_id=self.primary_model_id,
             active_data_source=self.primary_data_dir,
-            data_trade_date=date,
-            prediction_trade_date=prediction_trade_date,
-        )
-        fallback_path = self.fallback_model_dir / self.fallback_script_name
-        if not fallback_path.is_file():
-            return ExecutionResult(
-                success=False,
-                exit_code=self._EXIT_DATA_QUALITY,
-                stdout="",
-                stderr=v10_stderr,
-                error=f"v10 数据质量不足且兜底脚本不存在: {fallback_path}",
-                run_id=run_id,
-                fallback_used=False,
-                fallback_reason=fallback_reason,
-                failure_stage="fallback_script",
-                active_model_id=self.fallback_model_id,
-                active_data_source=self.fallback_data_dir,
-                data_trade_date=date,
-                prediction_trade_date=prediction_trade_date,
-            )
-
-        env = self._get_subprocess_env()
-        env.update(
-            {
-                "MODEL_DIR": str(self.fallback_model_dir),
-                "TRADE_DATE": date,
-                "OUTPUT_FORMAT": "json",
-                "QLIB_PROVIDER_URI": self.fallback_data_dir,
-            }
-        )
-
-        out_file = self.fallback_model_dir / f"fallback_{run_id}.json"
-
-        try:
-            from backend.shared.notification_publisher import publish_notification
-
-            publish_notification(
-                user_id="system",
-                tenant_id="default",
-                title="触发兜底模型",
-                content=f"由于 [{fallback_reason}] 触发了兜底机制，请尽快排查主模型和数据状态。",
-                type="system",
-                level="error",
-            )
-        except Exception as e:
-            logger.warning("[InferenceScriptRunner] 发布兜底告警通知失败: %s", e)
-
-        python_exec = self._get_python_executable()
-        try:
-            # 增加环境诊断
-            diag_cmd = [
-                python_exec,
-                "-c",
-                "import sys, os; print(f'SUB_PATH: {sys.path}'); import qlib; print(f'QLIB_OK: {qlib.__file__}')",
-            ]
-            diag_proc = subprocess.run(
-                diag_cmd, capture_output=True, text=False, env=env, timeout=10
-            )
-            logger.info(
-                f"[InferenceScriptRunner] 子进程环境诊断: stdout={diag_proc.stdout.decode('utf-8', errors='replace').strip()}, stderr={diag_proc.stderr.decode('utf-8', errors='replace').strip()}"
-            )
-
-            cmd = [
-                python_exec,
-                str(fallback_path),
-                "--date",
-                date,
-                "--output",
-                str(out_file),
-            ]
-            proc = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=False,
-                cwd=str(self.fallback_model_dir),
-                env=env,
-                timeout=_SCRIPT_TIMEOUT_SEC,
-            )
-        except subprocess.TimeoutExpired as exc:
-            return ExecutionResult(
-                success=False,
-                exit_code=-1,
-                stdout=(exc.stdout or b"").decode("utf-8", errors="replace"),
-                stderr=(exc.stderr or b"").decode("utf-8", errors="replace"),
-                error=f"兜底模型脚本超时 ({_SCRIPT_TIMEOUT_SEC}s)",
-                run_id=run_id,
-                fallback_used=True,
-                fallback_reason=fallback_reason,
-                failure_stage="fallback_script",
-                active_model_id=self.fallback_model_id,
-                active_data_source=self.fallback_data_dir,
-                data_trade_date=date,
-                prediction_trade_date=prediction_trade_date,
-            )
-        except Exception as exc:
-            return ExecutionResult(
-                success=False,
-                exit_code=-1,
-                stdout="",
-                stderr="",
-                error=f"兜底模型脚本启动失败: {exc}",
-                run_id=run_id,
-                fallback_used=True,
-                fallback_reason=fallback_reason,
-                failure_stage="fallback_script",
-                active_model_id=self.fallback_model_id,
-                active_data_source=self.fallback_data_dir,
-                data_trade_date=date,
-                prediction_trade_date=prediction_trade_date,
-            )
-
-        fb_stdout = (proc.stdout or b"").decode("utf-8", errors="replace")
-        fb_stderr = (
-            v10_stderr + "\n--- fallback ---\n" + (proc.stderr or b"").decode("utf-8", errors="replace")
-        ).strip()
-        fb_exitcode = proc.returncode
-
-        if fb_exitcode != 0:
-            logger.error(
-                f"[InferenceScriptRunner] 兜底模型脚本失败 exit={fb_exitcode}, run_id={run_id}"
-            )
-            return ExecutionResult(
-                success=False,
-                exit_code=fb_exitcode,
-                stdout=fb_stdout,
-                stderr=fb_stderr,
-                error=f"兜底模型脚本返回非零退出码: {fb_exitcode}",
-                run_id=run_id,
-                fallback_used=True,
-                fallback_reason=fallback_reason,
-                failure_stage="fallback_script",
-                active_model_id=self.fallback_model_id,
-                active_data_source=self.fallback_data_dir,
-                data_trade_date=date,
-                prediction_trade_date=prediction_trade_date,
-            )
-
-        signals = self._parse_signals(str(out_file))
-        if signals is None:
-            return ExecutionResult(
-                success=False,
-                exit_code=0,
-                stdout=fb_stdout,
-                stderr=fb_stderr,
-                error="兜底模型未能写入合法的 JSON 信号数组",
-                run_id=run_id,
-                fallback_used=True,
-                fallback_reason=fallback_reason,
-                failure_stage="fallback_script",
-                active_model_id=self.fallback_model_id,
-                active_data_source=self.fallback_data_dir,
-                data_trade_date=date,
-                prediction_trade_date=prediction_trade_date,
-            )
-
-        logger.info(
-            f"[InferenceScriptRunner] 兜底模型成功，{len(signals)} 条信号, run_id={run_id}"
-        )
-        # 兜底路径同样必须过池（否则池过滤会被 exit=2 兜底静默绕过）
-        kept, pool_error = self._pool_filter_signals(
-            signals,
-            pool_id=pool_id,
-            tenant_id=tenant_id,
-            user_id=user_id,
-            run_id=run_id,
-        )
-        if kept is None:
-            return ExecutionResult(
-                success=False,
-                exit_code=0,
-                stdout=fb_stdout,
-                stderr=fb_stderr,
-                error=pool_error or "池过滤后无信号",
-                run_id=run_id,
-                fallback_used=True,
-                fallback_reason=fallback_reason,
-                failure_stage="pool_filter",
-                active_model_id=self.fallback_model_id,
-                active_data_source=self.fallback_data_dir,
-                data_trade_date=date,
-                prediction_trade_date=prediction_trade_date,
-            )
-        signals = kept
-        if persist:
-            self._persist_and_publish(
-                run_id,
-                prediction_trade_date,
-                tenant_id,
-                user_id,
-                signals,
-                active_model_id=self.fallback_model_id,
-                data_trade_date=date,
-                # 兜底+池组合同样局部覆盖，避免池 run 清空同日全市场信号
-                partial=bool(pool_id),
-            )
-
-        if persist and redis_client is not None:
-            try:
-                redis_client.set(
-                    f"{_COMPLETED_REDIS_KEY_PREFIX}:{prediction_trade_date}",
-                    run_id,
-                    ex=86400,
-                )
-            except Exception as exc:
-                logger.warning(f"[InferenceScriptRunner] 写 Redis 完成标记失败: {exc}")
-
-        return ExecutionResult(
-            success=True,
-            exit_code=0,
-            stdout=fb_stdout,
-            stderr=fb_stderr,
-            signals_count=len(signals),
-            run_id=run_id,
-            signals=signals,
-            fallback_used=True,
-            fallback_reason=fallback_reason,
-            active_model_id=self.fallback_model_id,
-            active_data_source=self.fallback_data_dir,
             data_trade_date=date,
             prediction_trade_date=prediction_trade_date,
         )
