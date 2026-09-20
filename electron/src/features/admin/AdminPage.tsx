@@ -36,10 +36,9 @@ const AdminPage: React.FC = () => {
             icon: <GlobalOutlined />,
             label: '数据管理',
             children: [
-                { key: 'data', label: '数据集目录' },
+                { key: 'data', label: '数据管理' },
                 { key: 'qlib', label: 'Qlib 引擎' },
                 { key: 'stock-pools', label: '全局股票池' },
-                { key: 'quotes', label: '数据源监控' },
                 { key: 'news', label: '新闻情感' },
             ]
         },

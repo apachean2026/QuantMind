@@ -55,7 +55,6 @@ const AdminDataManagement = lazy(() => import('./features/admin/components/Admin
 const AdminQlibDataPanel = lazy(() => import('./features/admin/components/AdminQlibDataPanel').then(m => ({ default: m.AdminQlibDataPanel })));
 const AdminStrategyTemplates = lazy(() => import('./features/admin/components/AdminStrategyTemplates').then(m => ({ default: m.AdminStrategyTemplates })));
 const AdminNewsPage = lazy(() => import('./features/news/components/NewsPanel').then(m => ({ default: m.NewsPanel })));
-const AdminDataPlatform = lazy(() => import('./features/admin/components/AdminDataPlatform').then(m => ({ default: m.AdminDataPlatform })));
 const AdminNewsEmotion = lazy(() => import('./features/admin/components/AdminNewsEmotion').then(m => ({ default: m.default })));
 const AdminFeatureCatalog = lazy(() => import('./features/admin/components/AdminFeatureCatalog').then(m => ({ default: m.AdminFeatureCatalog })));
 const AdminTrainingDatasets = lazy(() => import('./features/admin/components/AdminTrainingDatasets').then(m => ({ default: m.AdminTrainingDatasets })));
@@ -617,7 +616,7 @@ export default function App() {
                     <Route path="inference" element={<Suspense fallback={<RouteFallback />}><AdminInferenceMonitor /></Suspense>} />
                     <Route path="orders" element={<Suspense fallback={<RouteFallback />}><AdminOrderManagement /></Suspense>} />
                     <Route path="risk" element={<Suspense fallback={<RouteFallback />}><AdminRiskControl /></Suspense>} />
-                    <Route path="quotes" element={<Suspense fallback={<RouteFallback />}><AdminDataPlatform /></Suspense>} />
+                    <Route path="quotes" element={<Navigate to="/admin/overview" replace />} />
                     <Route path="settings" element={<Suspense fallback={<RouteFallback />}><AdminSystemSettings /></Suspense>} />
                   </Route>
 

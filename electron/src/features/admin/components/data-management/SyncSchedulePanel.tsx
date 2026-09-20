@@ -91,11 +91,11 @@ export const SyncSchedulePanel: React.FC<SyncSchedulePanelProps> = ({
     };
 
     return (
-        <div className="mt-4 p-3 rounded-lg border border-dashed border-amber-400/60 bg-amber-50/40">
-            <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-amber-700 flex items-center">
-                    <ClockCircleOutlined className="mr-1" />
-                    定时同步（每天自动同步上游数据，建议设置到次日 00:00 以后）
+        <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
+            <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                    <ClockCircleOutlined className="text-amber-500" />
+                    定时同步 · 每天自动同步上游数据（建议次日 00:00 以后错峰）
                 </span>
                 <Switch
                     size="small"
@@ -107,55 +107,47 @@ export const SyncSchedulePanel: React.FC<SyncSchedulePanelProps> = ({
                 />
             </div>
             {enabled && (
-                <>
-                    <div className="flex flex-wrap items-center gap-2">
-                        <Space size="small">
-                            <span className="text-xs text-gray-600">每天</span>
-                            <TimePicker
-                                size="small"
-                                format="HH:mm"
-                                minuteStep={5}
-                                value={time}
-                                onChange={(v) => v && setTime(v)}
-                                style={{ width: 90 }}
-                            />
-                            <span className="text-xs text-gray-600">同步最近</span>
-                            <InputNumber
-                                size="small"
-                                min={1}
-                                max={365}
-                                value={days}
-                                onChange={(v) => setDays(v ?? defaultDays)}
-                                style={{ width: 70 }}
-                            />
-                            <span className="text-xs text-gray-600">
-                                {market === 'BC' ? '个自然日' : '个交易日'}
-                            </span>
-                        </Space>
+                <div className="space-y-3">
+                    <div className="flex flex-wrap items-center gap-2 bg-white rounded-xl border border-slate-100 px-3 py-2.5">
+                        <span className="text-xs text-slate-500 font-medium">每天</span>
+                        <TimePicker
+                            size="small"
+                            format="HH:mm"
+                            minuteStep={5}
+                            value={time}
+                            onChange={(v) => v && setTime(v)}
+                            style={{ width: 96 }}
+                        />
+                        <span className="text-xs text-slate-500">同步最近</span>
+                        <InputNumber
+                            size="small"
+                            min={1}
+                            max={365}
+                            value={days}
+                            onChange={(v) => setDays(v ?? defaultDays)}
+                            style={{ width: 72 }}
+                        />
+                        <span className="text-xs text-slate-500">
+                            {market === 'BC' ? '个自然日' : '个交易日'}
+                        </span>
                     </div>
-                    <div className="text-xs text-gray-500 mt-1">
+                    <div className="text-[11px] text-slate-400 px-1">
                         {datasets.length > 0
-                            ? `定时同步数据集: ${datasets.join(', ')}（来自当前勾选）`
-                            : '未指定数据集时按各市场默认全量同步'}
+                            ? `将同步：${datasets.join(', ')}（跟随下方勾选）`
+                            : '未指定时按该市场默认全量同步'}
                     </div>
-                    <Alert
-                        className="mt-2"
-                        type="info"
-                        showIcon
-                        message={
-                            <span className="text-xs">
-                                按需错峰触发，避免集中请求；同步在后台执行（Celery），到点自动触发，时区 Asia/Shanghai。
-                            </span>
-                        }
-                    />
-                </>
+                    <div className="text-[11px] text-slate-400 bg-white rounded-lg border border-slate-100 px-3 py-2">
+                        后台 Celery 到点自动触发，时区 Asia/Shanghai，请按需错峰避免集中请求。
+                    </div>
+                </div>
             )}
-            <div className="flex gap-2 mt-2">
-                <Button size="small" type="primary" ghost onClick={handleSave} loading={saving}>
+            <div className="flex gap-2 mt-3">
+                <Button size="small" type="primary" className="rounded-lg font-bold" onClick={handleSave} loading={saving}>
                     保存定时配置
                 </Button>
                 <Button
                     size="small"
+                    className="rounded-lg"
                     icon={<ThunderboltOutlined />}
                     onClick={handleRunNow}
                     loading={running}

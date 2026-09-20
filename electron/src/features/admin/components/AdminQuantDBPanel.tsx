@@ -1,14 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    Alert, Button, Card, Checkbox, Col, Descriptions, Input, Modal, Progress,
+    Alert, Button, Checkbox, Col, Input, Modal, Progress,
     Row, Space, Statistic, Table, Tag, Tooltip, Typography, message,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
     ApiOutlined, CheckCircleFilled, CloseCircleFilled, CloudDownloadOutlined,
     DatabaseOutlined, FileSearchOutlined, KeyOutlined, ReloadOutlined,
-    StopOutlined,
+    SettingOutlined, StopOutlined, CloudSyncOutlined,
 } from '@ant-design/icons';
 import {
     dataPlatformService, QuantDBDataset, QuantDBLocalScanJob,
@@ -19,6 +19,7 @@ import { QuantDBCatalogPanel } from './quantdb/QuantDBCatalogPanel';
 import { QuantDBPreviewDrawer } from './quantdb/QuantDBPreviewDrawer';
 import { describeError, httpStatusOf } from './quantdb/utils';
 import { SyncSchedulePanel } from './data-management/SyncSchedulePanel';
+import { SectionCard } from './data-management/SectionCard';
 
 const { Text } = Typography;
 
@@ -109,188 +110,168 @@ export const AdminQuantDBPanel: React.FC = () => {
         : 0;
 
     return (
-        <div className="space-y-4">
-            {/* QuantDB SDK / 账号状态卡片 */}
-            <Card
-                size="small"
-                title={
-                    <Space>
-                        <DatabaseOutlined />
-                        <span>QuantDB 云端直供状态 (A股)</span>
-                        <Tag color={info?.connected ? 'green' : 'red'}>
+        <div className="space-y-5">
+            {/* ① 数据就绪 — 紧凑状态 + 显眼按钮（去引导化） */}
+            <SectionCard
+                index="01"
+                title="数据就绪"
+                desc="环境与授权状态 · 一键落盘"
+                icon={<CloudDownloadOutlined />}
+                tone="indigo"
+                extra={
+                    <Space size="small">
+                        <Tag color={info?.connected ? 'green' : 'red'} className="m-0 rounded-full px-2.5 font-bold border-none">
                             {info?.connected ? '已连接' : '未连接'}
                         </Tag>
-                    </Space>
-                }
-                extra={
-                    <Space size="middle">
-                        <Tooltip title="从魔搭（ModelScope）公开数据集一键拉取 QuantDB 全量数据并覆盖本地数据目录，无需 QuantDB API Key / 流量；全量约 56GB，预计 1-3 小时，可稍后回来查看进度。仓库：https://www.modelscope.cn/datasets/qusong0627/LightGBM_Alpha300">
-                            <Button
-                                type="primary"
-                                size="large"
-                                icon={<CloudDownloadOutlined />}
-                                style={{ height: 40, padding: '0 18px', fontWeight: 600 }}
-                                onClick={() => setInitOpen(true)}
-                            >
-                                初始化数据
-                            </Button>
-                        </Tooltip>
-                        <Tooltip title="扫描本地离线数据并建立 SQLite 同步状态库，配置 API 后首次同步即增量，避免全量重拉">
-                            <Button
-                                size="large"
-                                icon={<FileSearchOutlined />}
-                                style={{ height: 40, padding: '0 18px', fontWeight: 500 }}
-                                onClick={() => setScanOpen(true)}
-                            >
-                                本地扫描
-                            </Button>
-                        </Tooltip>
-                        <Button
-                            size="large"
-                            icon={<ReloadOutlined />}
-                            style={{ height: 40, padding: '0 18px', fontWeight: 500 }}
-                            onClick={() => { loadInfo(); loadSources(); }}
-                            loading={loading}
-                        >
+                        <Button size="small" icon={<ReloadOutlined />} loading={loading} onClick={() => { loadInfo(); loadSources(); }} className="rounded-lg">
                             刷新
                         </Button>
                     </Space>
                 }
             >
-                {info?.error && <Alert type="error" message={info.error} className="mb-4" showIcon />}
+                {info?.error && <Alert type="error" message={info.error} className="mb-4 rounded-xl" showIcon />}
 
-                <Row gutter={16}>
-                    <Col span={6}>
-                        <Statistic
-                            title="SDK 状态"
-                            value={info?.installed ? `已安装${info.version ? ` v${info.version}` : ''}` : '未安装'}
-                            prefix={info?.installed
-                                ? <CheckCircleFilled style={{ color: '#52c41a' }} />
-                                : <CloseCircleFilled style={{ color: '#ff4d4f' }} />}
-                            valueStyle={{ fontSize: 16 }}
-                        />
-                    </Col>
-                    <Col span={6}>
-                        <Statistic
-                            title="API Key"
-                            value={info?.api_key_configured ? '已配置' : '未配置'}
-                            prefix={<ApiOutlined />}
-                            valueStyle={{ fontSize: 16, color: info?.api_key_configured ? '#52c41a' : '#ff4d4f' }}
-                        />
-                    </Col>
-                    <Col span={6}>
-                        <Statistic
-                            title="已用流量"
-                            value={info?.usage?.used_gb?.toFixed(2) ?? '-'}
-                            suffix="GB"
-                            prefix={<DatabaseOutlined />}
-                            valueStyle={{ fontSize: 16 }}
-                        />
-                    </Col>
-                    <Col span={6}>
-                        <Statistic
-                            title="剩余流量"
-                            value={info?.usage?.remaining_gb?.toFixed(2) ?? '-'}
-                            suffix="GB"
-                            valueStyle={{
-                                fontSize: 16,
-                                color: (info?.usage?.remaining_gb ?? 0) < LOW_QUOTA_GB ? '#ff4d4f' : '#52c41a',
-                            }}
-                        />
-                    </Col>
-                </Row>
+                {/* 紧凑状态行 */}
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                    <Tag color={info?.installed ? 'green' : 'red'} icon={info?.installed ? <CheckCircleFilled /> : <CloseCircleFilled />} className="rounded-full font-bold m-0">
+                        {info?.installed ? `已安装${info.version ? ` v${info.version}` : ''}` : '未安装 SDK'}
+                    </Tag>
+                    <Tag color={info?.api_key_configured ? 'green' : 'red'} icon={<ApiOutlined />} className="rounded-full font-bold m-0">
+                        {info?.api_key_configured ? '已授权' : '未配置密钥'}
+                    </Tag>
+                    {info?.account?.username && (
+                        <span className="text-xs text-slate-500">
+                            账户 <Text code className="text-xs">{info.account.username}</Text>
+                            <Text type="secondary" className="text-xs ml-1">{info.account.email}</Text>
+                        </span>
+                    )}
+                    {info?.api_key_configured && (
+                        <Button type="link" size="small" className="p-0 text-xs font-bold" onClick={() => navigate('/user-center?tab=data-platform')}>
+                            去个人中心 →
+                        </Button>
+                    )}
+                </div>
 
+                {/* 流量条（有数据时才显示） */}
                 {info?.usage && (
-                    <div className="mt-4">
+                    <div className="bg-slate-50 rounded-xl border border-slate-100 px-3 py-2.5 mb-4">
+                        <div className="flex items-center justify-between mb-1.5">
+                            <Text type="secondary" className="text-xs">流量使用</Text>
+                            <Text type="secondary" className="text-xs font-mono">{info.usage.used_gb.toFixed(1)} / {info.usage.limit_gb} GB · 剩余 {info.usage.remaining_gb.toFixed(1)} GB</Text>
+                        </div>
                         <Progress
                             percent={usagePercent}
-                            status={usagePercent > USAGE_DANGER_PERCENT
-                                ? 'exception'
-                                : usagePercent > USAGE_WARN_PERCENT ? 'active' : 'normal'}
-                            format={() => `${info.usage!.used_gb.toFixed(1)} / ${info.usage!.limit_gb} GB`}
+                            showInfo={false}
+                            size="small"
+                            status={usagePercent > USAGE_DANGER_PERCENT ? 'exception' : usagePercent > USAGE_WARN_PERCENT ? 'active' : 'normal'}
                         />
-                        <div className="flex gap-4 mt-2">
-                            {info.usage.subscription && (
-                                <Tag color="blue">订阅: {info.usage.subscription.status}</Tag>
-                            )}
-                            {info.usage.credit_gb !== undefined && info.usage.credit_gb > 0 && (
-                                <Tag color="green">赠送: {info.usage.credit_gb} GB</Tag>
-                            )}
+                        <div className="flex gap-2 mt-2 flex-wrap">
+                            {info.usage.subscription && <Tag color="blue" className="rounded-full text-[11px] m-0">订阅: {info.usage.subscription.status}</Tag>}
+                            {info.usage.credit_gb !== undefined && info.usage.credit_gb > 0 && <Tag color="green" className="rounded-full text-[11px] m-0">赠送 {info.usage.credit_gb} GB</Tag>}
+                            {(info.usage.remaining_gb ?? 0) < LOW_QUOTA_GB && <Tag color="red" className="rounded-full text-[11px] m-0">余量偏低</Tag>}
+                            <span className="text-[11px] text-slate-400 ml-auto">{usagePercent}% 已用</span>
                         </div>
                     </div>
                 )}
 
-                {info?.account && (
-                    <Descriptions size="small" column={2} className="mt-4">
-                        <Descriptions.Item label="用户名">{info.account.username}</Descriptions.Item>
-                        <Descriptions.Item label="邮箱">{info.account.email}</Descriptions.Item>
-                    </Descriptions>
-                )}
-            </Card>
-
-            {/* 数据源勾选配置 */}
-            <div className="p-3 bg-gray-50 rounded">
-                <Space direction="vertical" className="w-full" size="small">
-                    <Space>
-                        <DatabaseOutlined />
-                        <Text strong>数据源</Text>
-                        <Text type="secondary" className="text-xs">默认 QuantDB A股/akshare/北向/南向；雅虎默认关闭不勾选</Text>
-                    </Space>
-                    <Space wrap size="small">
-                        {sources.map((s) => (
-                            <Checkbox
-                                key={s.source}
-                                checked={s.enabled}
-                                disabled={sourcesLoading}
-                                onChange={(e) => saveSources(s.source, e.target.checked)}
-                            >
-                                <Text className="text-xs">{s.label}</Text>
-                                <Text type="secondary" className="text-xs">({s.source})</Text>
-                            </Checkbox>
-                        ))}
-                    </Space>
-                </Space>
-            </div>
-
-            {/* API Key 状态与个人中心设置入口 */}
-            <div className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-4 py-2.5 shadow-2xs">
-                <Space size="middle">
-                    <KeyOutlined className="text-blue-500" />
-                    <Text className="text-xs font-semibold">API Key 授权状态:</Text>
-                    <Tag
-                        color={info?.api_key_configured ? 'green' : 'red'}
-                        icon={<ApiOutlined />}
-                        className="m-0"
+                {/* 显眼操作区 */}
+                <div className="flex flex-wrap items-center gap-3 bg-white rounded-2xl border border-slate-100 p-3">
+                    <Button
+                        type="primary"
+                        size="large"
+                        icon={<CloudDownloadOutlined />}
+                        onClick={() => setInitOpen(true)}
+                        className="rounded-xl font-black shadow-sm"
+                        style={{ height: 44, padding: '0 22px', fontSize: 14 }}
                     >
-                        {info?.api_key_configured ? '已授权配置' : '未配置密钥'}
-                    </Tag>
-                    {info?.account?.username && (
-                        <Text type="secondary" className="text-xs">
-                            账户: <Text code>{info.account.username}</Text>
-                        </Text>
-                    )}
-                </Space>
-                <Button
-                    type="link"
-                    size="small"
-                    className="text-xs text-blue-600 hover:text-blue-700 p-0 font-medium"
-                    onClick={() => navigate('/user-center?tab=data-platform')}
-                >
-                    前往「个人中心 - 数据平台」绑定或更新密钥 →
-                </Button>
-            </div>
+                        初始化数据
+                    </Button>
+                    <Button
+                        size="large"
+                        icon={<FileSearchOutlined />}
+                        onClick={() => setScanOpen(true)}
+                        className="rounded-xl font-bold border-slate-200 bg-white"
+                        style={{ height: 44, padding: '0 22px', fontSize: 14 }}
+                    >
+                        本地扫描
+                    </Button>
+                    <span className="text-xs text-slate-400 leading-relaxed">
+                        免流量拉取 56GB 全量（ModelScope 断点续传）或扫描已有离线包建增量
+                    </span>
+                </div>
+                <div className="text-[11px] text-slate-400 mt-2 px-1">
+                    已有网盘/归档包建议先 <b className="text-slate-600">本地扫描</b> 再走增量；无本地数据直接 <b className="text-slate-600">初始化数据</b>。
+                </div>
+            </SectionCard>
 
-            {/* 定时同步调度面板（建议次日 00:00 以后按需错峰，具体时间以前端设置为准） */}
-            <SyncSchedulePanel market="A" defaultDays={5} />
+            {/* ② 数据同步 */}
+            <SectionCard
+                index="02"
+                title="数据同步"
+                desc="数据集目录 · 增量同步 · 后台任务"
+                icon={<DatabaseOutlined />}
+                tone="blue"
+            >
+                <QuantDBCatalogPanel
+                    connected={Boolean(info?.connected)}
+                    onPreview={setPreviewDataset}
+                    refreshSignal={catalogRefreshSignal}
+                    embedded
+                />
+            </SectionCard>
 
-            {/* QuantDB 数据集目录与详情 */}
-            <QuantDBCatalogPanel
-                connected={Boolean(info?.connected)}
-                onPreview={setPreviewDataset}
-                refreshSignal={catalogRefreshSignal}
-            />
+            {/* ③ 同步设置 */}
+            <SectionCard
+                index="03"
+                title="同步设置"
+                desc="数据源策略与定时同步"
+                icon={<SettingOutlined />}
+                tone="amber"
+                extra={<Tag className="m-0 rounded-full bg-slate-50 border-slate-200 text-slate-500 text-[11px] font-bold">A 股专用</Tag>}
+            >
+                <div className="space-y-4">
+                    <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
+                        <div className="flex items-center gap-2 mb-3">
+                            <DatabaseOutlined className="text-slate-600" />
+                            <Text strong className="text-sm">数据源策略</Text>
+                            <Text type="secondary" className="text-xs">默认 QuantDB / akshare / 北向 / 南向；雅虎默认关闭</Text>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {sources.map((s) => (
+                                <Checkbox
+                                    key={s.source}
+                                    checked={s.enabled}
+                                    disabled={sourcesLoading}
+                                    onChange={(e) => saveSources(s.source, e.target.checked)}
+                                    className="bg-white rounded-lg border border-slate-100 px-2.5 py-1.5 m-0"
+                                >
+                                    <Text className="text-xs font-medium">{s.label}</Text>
+                                    <Text type="secondary" className="text-[11px] ml-1">({s.source})</Text>
+                                </Checkbox>
+                            ))}
+                            {sources.length === 0 && <Text type="secondary" className="text-xs">加载中...</Text>}
+                        </div>
+                    </div>
 
-            {/* 数据集抽屉预览；抽屉内增量同步完成后刷新目录统计 */}
+                    <div className="rounded-2xl border border-slate-100 bg-white p-4 flex items-center justify-between">
+                        <Space size="middle">
+                            <KeyOutlined className="text-blue-500" />
+                            <Text className="text-xs font-bold">API Key 授权状态</Text>
+                            <Tag color={info?.api_key_configured ? 'green' : 'red'} icon={<ApiOutlined />} className="m-0 rounded-full font-bold">
+                                {info?.api_key_configured ? '已授权' : '未配置'}
+                            </Tag>
+                            {info?.account?.username && <Text type="secondary" className="text-xs">账户 <Text code className="text-xs">{info.account.username}</Text></Text>}
+                        </Space>
+                        <Button type="link" size="small" className="text-xs font-bold p-0" onClick={() => navigate('/user-center?tab=data-platform')}>
+                            前往个人中心更新 →
+                        </Button>
+                    </div>
+
+                    <SyncSchedulePanel market="A" defaultDays={5} />
+                </div>
+            </SectionCard>
+
+                        {/* 数据集抽屉预览；抽屉内增量同步完成后刷新目录统计 */}
             <QuantDBPreviewDrawer
                 dataset={previewDataset}
                 onClose={() => setPreviewDataset(null)}

@@ -47,9 +47,10 @@ interface QuantDBCatalogPanelProps {
     onPreview: (dataset: QuantDBDataset) => void;
     /** 外部（如预览抽屉）同步完成后递增，触发目录统计刷新 */
     refreshSignal?: number;
+    embedded?: boolean;
 }
 
-export function QuantDBCatalogPanel({ connected, onPreview, refreshSignal = 0 }: QuantDBCatalogPanelProps) {
+export function QuantDBCatalogPanel({ connected, onPreview, refreshSignal = 0, embedded = false }: QuantDBCatalogPanelProps) {
     const [groups, setGroups] = useState<QuantDBGroup[]>([]);
     const [datasets, setDatasets] = useState<QuantDBDataset[]>([]);
     const [dataDir, setDataDir] = useState('');
@@ -306,26 +307,25 @@ export function QuantDBCatalogPanel({ connected, onPreview, refreshSignal = 0 }:
     const totalSizeMb = groups.reduce((sum, g) => sum + g.size_mb, 0);
     const isJobRunning = activeJob?.status === 'running' || activeJob?.status === 'cancelling';
 
-    return (
-        <Card
-            size="small"
-            title={<Space><DatabaseOutlined />数据集目录与分板块同步</Space>}
-            extra={
-                <Space>
-                    <Text type="secondary" className="text-xs">
-                        {datasets.filter((d) => d.synced).length}/{datasets.length} 已同步 · {formatSize(totalSizeMb)}
-                    </Text>
-                    <Button size="small" icon={<ReloadOutlined />} onClick={loadCatalog} loading={loading}>
-                        刷新
-                    </Button>
-                </Space>
-            }
-        >
+    const headerExtra = (
+        <Space>
+            <Text type="secondary" className="text-xs">
+                {datasets.filter((d) => d.synced).length}/{datasets.length} 已同步 · {formatSize(totalSizeMb)}
+            </Text>
+            <Button size="small" icon={<ReloadOutlined />} onClick={loadCatalog} loading={loading}>
+                刷新
+            </Button>
+        </Space>
+    );
+
+    const inner = (
+        <>
             {dataDir && (
                 <Text type="secondary" className="text-xs block mb-3">
                     本地目录 <Text code>{dataDir}</Text>
                 </Text>
             )}
+            {!embedded && <div className="mb-3 flex justify-end">{headerExtra}</div>}
 
             {/* Diff summary card */}
             <div className="mb-3">
@@ -423,6 +423,20 @@ export function QuantDBCatalogPanel({ connected, onPreview, refreshSignal = 0 }:
             </div>
 
             {activeJob && <SyncJobProgress job={activeJob} />}
+        </>
+    );
+
+    if (embedded) {
+        return <div className="space-y-3">{inner}</div>;
+    }
+
+    return (
+        <Card
+            size="small"
+            title={<Space><DatabaseOutlined />数据集目录与分板块同步</Space>}
+            extra={headerExtra}
+        >
+            {inner}
         </Card>
     );
 }

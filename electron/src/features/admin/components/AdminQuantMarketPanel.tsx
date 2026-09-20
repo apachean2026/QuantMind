@@ -5,7 +5,7 @@ import {
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
-    CloudServerOutlined, CloudSyncOutlined, DatabaseOutlined, EyeOutlined,
+    CloudServerOutlined, CloudSyncOutlined, DatabaseOutlined, EyeOutlined, SettingOutlined,
     ReloadOutlined, StopOutlined, SyncOutlined,
 } from '@ant-design/icons';
 import {
@@ -14,6 +14,7 @@ import {
 } from '../services/dataPlatformService';
 import { describeError, formatPartitionDate, formatSize } from './quantdb/utils';
 import { SyncSchedulePanel } from './data-management/SyncSchedulePanel';
+import { SectionCard, VerticalStep } from './data-management/SectionCard';
 
 const { Text } = Typography;
 
@@ -304,155 +305,176 @@ export function AdminQuantMarketPanel({ market, marketLabel, color }: AdminQuant
     const totalSizeMb = groups.reduce((sum, g) => sum + g.size_mb, 0);
     const isJobRunning = activeJob?.status === 'running' || activeJob?.status === 'cancelling';
 
+    const hasSources = sources.length > 0;
+    const enabledCount = sources.filter(x=>x.enabled).length;
+    const syncReady = selected.length>0 && !isJobRunning;
+
     return (
-        <Card
-            size="small"
-            title={
-                <Space>
-                    <CloudServerOutlined style={{ color }} />
-                    <span>{marketLabel} 本地数据</span>
-                </Space>
-            }
-            extra={
-                <Space>
-                    <Text type="secondary" className="text-xs">
-                        {datasets.filter((d) => d.synced).length}/{datasets.length} 已同步 · {formatSize(totalSizeMb)}
-                    </Text>
-                    <Button size="small" icon={<ReloadOutlined />} onClick={loadCatalog} loading={loading}>
-                        刷新
-                    </Button>
-                </Space>
-            }
-        >
-            {dataDir && (
-                <Text type="secondary" className="text-xs block mb-3">
-                    本地目录 <Text code>{dataDir}</Text>
-                </Text>
-            )}
-
-            {/* 数据源勾选配置 */}
-            <div className="mb-3 p-3 bg-gray-50 rounded">
-                <Space direction="vertical" className="w-full" size="small">
-                    <Space>
-                        <DatabaseOutlined />
-                        <Text strong>数据源</Text>
-                        <Text type="secondary" className="text-xs">{market === 'quantbc' ? '默认启用 Binance；区块链数据源单一' : '按勾选的数据源分发同步：akshare / CCASS / 南向 / 北向 等'}</Text>                    </Space>
-                    <Space wrap size="small">
-                        {sources.map((s) => (
-                            <Checkbox
-                                key={s.source}
-                                checked={s.enabled}
-                                disabled={sourcesLoading}
-                                onChange={(e) => saveSources(s.source, e.target.checked)}
-                            >
-                                <Text className="text-xs">{s.label}</Text>
-                                <Text type="secondary" className="text-xs">({s.source})</Text>
-                            </Checkbox>
-                        ))}
-                    </Space>
-                </Space>
-            </div>
-
-            <Collapse
-                defaultActiveKey={groups.length > 0 ? [groups[0].id] : []}
-                items={groups.map((group) => {
-                    const members = datasetsByGroup.get(group.id) ?? [];
-                    const names = members.map((d) => d.dataset);
-                    const checkedCount = names.filter((n) => selected.includes(n)).length;
-                    return {
-                        key: group.id,
-                        label: (
-                            <Space onClick={(e) => e.stopPropagation()}>
-                                <Checkbox
-                                    checked={checkedCount > 0 && checkedCount === names.length}
-                                    indeterminate={checkedCount > 0 && checkedCount < names.length}
-                                    onChange={(e) => toggleGroup(group.id, e.target.checked)}
-                                >
-                                    <Text strong>{group.name}</Text>
-                                </Checkbox>
-                                <Tag>{group.synced_count}/{group.dataset_count} 已同步</Tag>
-                                <Text type="secondary" className="text-xs">{formatSize(group.size_mb)}</Text>
-                            </Space>
-                        ),
-                        children: (
-                            <Table
-                                dataSource={members}
-                                columns={columns}
-                                rowKey="dataset"
-                                size="small"
-                                pagination={false}
-                                scroll={{ x: 'max-content' }}
-                                onRow={(record) => ({
-                                    onClick: () => setDetailDataset(record),
-                                    style: { cursor: 'pointer' },
-                                })}
-                                rowSelection={{
-                                    selectedRowKeys: selected.filter((n) => names.includes(n)),
-                                    onChange: (keys) => {
-                                        const picked = keys as string[];
-                                        setSelected([
-                                            ...selected.filter((n) => !names.includes(n)),
-                                            ...picked,
-                                        ]);
-                                    },
-                                }}
-                            />
-                        ),
-                    };
-                })}
-            />
-
-            <div className="mt-4">
-                <Space wrap className="w-full">
-                    <Text type="secondary" className="text-xs">同步最近</Text>
-                    <InputNumber
-                        min={1}
-                        max={365}
-                        value={days}
-                        onChange={(v) => setDays(v ?? 5)}
-                        style={{ width: 80 }}
+        <div className="space-y-5">
+            {/* ① 引导 — 纵向 */}
+            <SectionCard
+                index="01"
+                title="引导初始化"
+                desc={`${marketLabel} · 数据源与本地环境`}
+                icon={<CloudServerOutlined style={{ color }} />}
+                tone="indigo"
+                extra={<Tag className="m-0 rounded-full bg-slate-50 border-slate-200 text-slate-500 text-[11px] font-bold">{hasSources ? `${enabledCount}/${sources.length} 源已启用` : '加载中'}</Tag>}
+            >
+                <div className="flex flex-col">
+                    <VerticalStep
+                        done={enabledCount>0}
+                        title="数据源配置"
+                        desc="按勾选的数据源分发同步任务，关闭不需要的源可减少无效请求"
+                        extra={
+                            <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-3">
+                                <div className="flex flex-wrap gap-2">
+                                    {sources.map((s) => (
+                                        <Checkbox
+                                            key={s.source}
+                                            checked={s.enabled}
+                                            disabled={sourcesLoading}
+                                            onChange={(e) => saveSources(s.source, e.target.checked)}
+                                            className="bg-white rounded-lg border border-slate-100 px-2.5 py-1.5 m-0"
+                                        >
+                                            <span className="text-xs font-medium">{s.label}</span>
+                                            <span className="text-[11px] text-slate-400 ml-1">({s.source})</span>
+                                        </Checkbox>
+                                    ))}
+                                    {sources.length===0 && <span className="text-xs text-slate-400">加载中...</span>}
+                                </div>
+                            </div>
+                        }
                     />
-                    <Text type="secondary" className="text-xs">{market === 'quantbc' ? '个自然日' : '个交易日'}</Text>
-                    <Button
-                        type="primary"
-                        icon={<CloudSyncOutlined />}
-                        onClick={triggerSync}
-                        loading={submitting}
-                        disabled={selected.length === 0 || isJobRunning}
-                        className="flex-1"
-                    >
-                        {isJobRunning
-                            ? '已有同步任务进行中...'
-                            : `按数据源同步 ${selected.length} 个数据集`}
-                    </Button>
-                    {isJobRunning && activeJob?.status === 'running' && (
+                    <VerticalStep
+                        done={datasets.some(d=>d.synced)}
+                        active={enabledCount>0}
+                        isLast
+                        title="本地落盘"
+                        desc={dataDir ? `本地目录 ${dataDir} · ${datasets.filter(d=>d.synced).length}/${datasets.length} 已同步` : '本地数据目录检测中'}
+                        extra={
+                            <div className="text-[11px] text-slate-500 bg-white rounded-xl border border-slate-100 px-3 py-2">
+                                {dataDir ? <span>目录 <code className="text-xs bg-slate-50 px-1 py-0.5 rounded border">{dataDir}</code></span> : '—'} · 按需勾选下方数据集后在“数据同步”区发起同步
+                            </div>
+                        }
+                    />
+                </div>
+            </SectionCard>
+
+            {/* ② 数据同步 */}
+            <SectionCard
+                index="02"
+                title="数据同步"
+                desc="数据集目录 · 增量同步 · 后台任务"
+                icon={<DatabaseOutlined />}
+                tone="blue"
+                extra={
+                    <Space size="small">
+                        <span className="text-xs text-slate-400 hidden sm:inline">{datasets.filter((d) => d.synced).length}/{datasets.length} 已同步 · {formatSize(totalSizeMb)}</span>
+                        <Button size="small" icon={<ReloadOutlined />} onClick={loadCatalog} loading={loading} className="rounded-lg">刷新</Button>
+                    </Space>
+                }
+            >
+                <div className="space-y-4">
+                    <Collapse
+                        defaultActiveKey={groups.length > 0 ? [groups[0].id] : []}
+                        items={groups.map((group) => {
+                            const members = datasetsByGroup.get(group.id) ?? [];
+                            const names = members.map((d) => d.dataset);
+                            const checkedCount = names.filter((n) => selected.includes(n)).length;
+                            return {
+                                key: group.id,
+                                label: (
+                                    <Space onClick={(e) => e.stopPropagation()}>
+                                        <Checkbox
+                                            checked={checkedCount > 0 && checkedCount === names.length}
+                                            indeterminate={checkedCount > 0 && checkedCount < names.length}
+                                            onChange={(e) => toggleGroup(group.id, e.target.checked)}
+                                        >
+                                            <Text strong>{group.name}</Text>
+                                        </Checkbox>
+                                        <Tag>{group.synced_count}/{group.dataset_count} 已同步</Tag>
+                                        <Text type="secondary" className="text-xs">{formatSize(group.size_mb)}</Text>
+                                    </Space>
+                                ),
+                                children: (
+                                    <Table
+                                        dataSource={members}
+                                        columns={columns}
+                                        rowKey="dataset"
+                                        size="small"
+                                        pagination={false}
+                                        scroll={{ x: 'max-content' }}
+                                        onRow={(record) => ({
+                                            onClick: () => setDetailDataset(record),
+                                            style: { cursor: 'pointer' },
+                                        })}
+                                        rowSelection={{
+                                            selectedRowKeys: selected.filter((n) => names.includes(n)),
+                                            onChange: (keys) => {
+                                                const picked = keys as string[];
+                                                setSelected([
+                                                    ...selected.filter((n) => !names.includes(n)),
+                                                    ...picked,
+                                                ]);
+                                            },
+                                        }}
+                                    />
+                                ),
+                            };
+                        })}
+                    />
+
+                    <div className="flex flex-wrap items-center gap-2 bg-slate-50 rounded-2xl border border-slate-100 p-3">
+                        <span className="text-xs text-slate-500 font-medium">同步最近</span>
+                        <InputNumber
+                            min={1}
+                            max={365}
+                            value={days}
+                            onChange={(v) => setDays(v ?? 5)}
+                            style={{ width: 80 }}
+                            size="small"
+                        />
+                        <span className="text-xs text-slate-500">{market === 'quantbc' ? '个自然日' : '个交易日'}</span>
+                        <div className="flex-1" />
                         <Button
-                            danger
-                            icon={<StopOutlined />}
-                            onClick={handleCancelSync}
-                            loading={cancelling}
+                            type="primary"
+                            icon={<CloudSyncOutlined />}
+                            onClick={triggerSync}
+                            loading={submitting}
+                            disabled={selected.length === 0 || isJobRunning}
+                            className="rounded-xl font-bold"
                         >
-                            取消同步
+                            {isJobRunning ? '已有同步任务进行中...' : `按数据源同步 ${selected.length} 个数据集`}
                         </Button>
-                    )}
-                </Space>
-                <Alert
-                    className="mt-3"
-                    type="info"
-                    showIcon
-                    message={market === 'quantbc'
-                        ? '数据源为 Binance 公开 API，实时拉取后按 QuantDB 格式落盘本地 parquet（A股格式一致）。'
-                        : '数据源按勾选分发：日线/财务/分析师走 Yahoo Finance，估值/财务指标/公司资料/指数走 akshare，落盘后按 QuantDB 格式存本地 parquet（A股格式一致）。'}
+                        {isJobRunning && activeJob?.status === 'running' && (
+                            <Button danger icon={<StopOutlined />} onClick={handleCancelSync} loading={cancelling} className="rounded-xl">取消同步</Button>
+                        )}
+                    </div>
+                    <div className="text-[11px] text-slate-400 bg-white rounded-xl border border-slate-100 px-3 py-2">
+                        {market === 'quantbc'
+                            ? '数据源为 Binance 公开 API，实时拉取后按 QuantDB 格式落盘本地 parquet（A股格式一致）。'
+                            : '数据源按勾选分发：日线/财务/分析师走 Yahoo Finance，估值/财务指标/公司资料/指数走 akshare，落盘后按 QuantDB 格式存本地 parquet（A股格式一致）。'}
+                    </div>
+                    {activeJob && <MarketSyncJobProgress job={activeJob} />}
+                </div>
+            </SectionCard>
+
+            {/* ③ 同步设置 */}
+            <SectionCard
+                index="03"
+                title="同步设置"
+                desc="定时同步 · 后台自动执行"
+                icon={<SettingOutlined />}
+                tone="amber"
+            >
+                <SyncSchedulePanel
+                    market={MARKET_KEY_TO_SCHEDULE[market]}
+                    selectedDatasets={selected}
+                    defaultDays={market === 'quantbc' ? 365 : 5}
                 />
-            </div>
+            </SectionCard>
 
-            <SyncSchedulePanel
-                market={MARKET_KEY_TO_SCHEDULE[market]}
-                selectedDatasets={selected}
-                defaultDays={market === 'quantbc' ? 365 : 5}
-            />
 
-            {activeJob && <MarketSyncJobProgress job={activeJob} />}
 
             <MarketDataModal
                 market={market}
@@ -462,7 +484,7 @@ export function AdminQuantMarketPanel({ market, marketLabel, color }: AdminQuant
                 onRefreshCatalog={loadCatalog}
                 onSync={(ds) => triggerSingleSync(ds)}
             />
-        </Card>
+        </div>
     );
 }
 
