@@ -1,12 +1,14 @@
 # QuantDB 数据包解压指南
 
-本文档说明如何将 **QuantDB 数据包**（`quant_data.7z`）解压到项目标准数据目录，以启用 A 股 K 线、财务、因子等本地数据能力。
+> **已下线**：`quant_data.7z`（百度网盘）已彻底下线，请勿再使用。现请通过 **ModelScope** 数据集 <https://www.modelscope.cn/datasets/qusong0627/LightGBM_Alpha300> 获取，或直接在部署后到【管理后台】→【数据管理】点击【初始化数据】自动拉取。下文保留历史目录结构说明，仅作参考。
+
+本文档说明 **QuantDB 本地数据目录**的标准布局与验证方法。
 
 > 该数据包是 **QuantDB 本地数据仓库**（按数据集目录组织），与 `docs/数据包安装指南.md` 中的 `tar.gz` 备份包不是同一类数据，两者独立安装。注：旧文档中的 `feature_snapshots` 目录已废弃，请忽略。
 
 ## 1. 数据包内容
 
-`quant_data.7z` 解压后包含以下按数据集组织的顶层目录（约 **56 GB / 13 万文件**）：
+历史 `quant_data.7z` 解压后包含以下按数据集组织的顶层目录（约 **56 GB / 7.4 万文件**，现以 ModelScope 为准）：
 
 | 目录 | 说明 | 解压大小 |
 |------|------|----------|
@@ -48,8 +50,8 @@ df -h /opt/quantmind/data
 ### 4.1 确认压缩包与目标目录
 
 ```bash
-# 压缩包示例路径
-ls -lh /opt/quantmind-downloads/quant_data.7z
+# 已下线：不再提供 quant_data.7z，改用管理后台初始化数据
+# 数据集：https://www.modelscope.cn/datasets/qusong0627/LightGBM_Alpha300
 
 # 创建目标目录
 mkdir -p /opt/quantmind/data/quantdb
@@ -60,15 +62,8 @@ mkdir -p /opt/quantmind/data/quantdb
 进入目标目录，用 `7z` 解压（与已有少量本地数据自动合并）：
 
 ```bash
-cd /opt/quantmind/data/quantdb
-7z x -y /opt/quantmind-downloads/quant_data.7z
-```
-
-- 若需后台执行（避免 SSH 断连中断）：
-
-```bash
-cd /opt/quantmind/data/quantdb
-nohup 7z x -y /opt/quantmind-downloads/quant_data.7z > /tmp/quantdb_extract.log 2>&1 &
+# 已下线：不再提供 7z 解压，请到管理后台点击初始化数据
+# 如需离线导入，请从 ModelScope 下载后按目录结构放置到 /opt/quantmind/data/quantdb
 ```
 
 - 查看后台解压进度：
@@ -83,7 +78,7 @@ ps aux | grep "7z x" | grep -v grep | wc -l
 解压并核验无误后，可删除压缩包释放约 36 GB 空间：
 
 ```bash
-rm -f /opt/quantmind-downloads/quant_data.7z
+# 已下线，无需清理 quant_data.7z
 df -h /opt/quantmind/data
 ```
 
@@ -135,8 +130,8 @@ docker compose restart quantmind celery-worker
 确保是在 `data/quantdb` 目录内解压（`7z x` 会把顶层 `1_kline_data` 等目录解出）：
 
 ```bash
-cd /opt/quantmind/data/quantdb
-7z x -y /opt/quantmind-downloads/quant_data.7z
+# 已下线：该路径不再提供 7z 包
+ls /opt/quantmind/data/quantdb
 ```
 
 ### Q: 磁盘空间不足？

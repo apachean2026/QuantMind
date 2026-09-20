@@ -110,17 +110,17 @@ sudo bash deploy/update.sh
 >   docker exec quantmind python backend/scripts/quantdb_daily_sync.py
 >   ```
 
-> **方式二：QuantDB 离线数据包（备选 · 全量离线导入）**
+> **方式二：ModelScope 离线数据包（备选 · 全量离线导入）**
 >
-> * 包含完整的 A 股量化历史行情、QuantDB 因子与 L1/L2 因子预计算数据（约 56 GB / 13 万文件）；
+> * 包含完整的 A 股量化历史行情、QuantDB 因子与 L1/L2 因子预计算数据（约 56 GB / 7.4 万文件）；
 >
-> * 下载链接：<https://pan.baidu.com/s/5IT4p5nFlglZ7zu_0H_fA8Q>
+> * 数据集：<https://www.modelscope.cn/datasets/qusong0627/LightGBM_Alpha300>
 >
-> * **解压到标准目录** `/opt/quantmind/data/quantdb/`（容器内通过 `./data:/data` 挂载读取 `/data/quantdb`），详细步骤见 [`docs/QuantDB_数据包解压指南.md`](docs/QuantDB_数据包解压指南.md)：
+> * 部署完成后请到【管理后台】→【数据管理】点击【初始化数据】拉取，或按文档**解压到标准目录** `/opt/quantmind/data/quantdb/`（容器内通过 `./data:/data` 挂载读取 `/data/quantdb`），详见 [`docs/QuantDB_数据包解压指南.md`](docs/QuantDB_数据包解压指南.md)：
 >
 >   ```bash
->   cd /opt/quantmind/data/quantdb
->   7z x -y /path/to/quant_data.7z
+>   # 推荐：部署完成后到【管理后台】→【数据管理】点击【初始化数据】自动拉取
+>   # 数据集：https://www.modelscope.cn/datasets/qusong0627/LightGBM_Alpha300
 >   ```
 
 ***
