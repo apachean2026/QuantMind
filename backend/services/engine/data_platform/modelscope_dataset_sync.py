@@ -646,17 +646,19 @@ def preflight_modelscope(
     remote = list_remote_files(endpoint=endpoint, repo_id=repo_id, revision=revision)
     grouped = _group_remote(remote, datasets)
 
-    by_name = {spec.dataset: spec for spec in DATASETS}
+    # 按 DATASETS 规格顺序输出（天然按 6 大类分组），不按标识字母排序
     items = []
-    for name, files in sorted(grouped.items()):
-        spec = by_name.get(name)
+    for spec in DATASETS:
+        files = grouped.get(spec.dataset)
+        if not files:
+            continue
         items.append(
             {
-                "dataset": name,
-                "name": spec.name if spec else name,
-                "group": spec.group if spec else "",
-                "layout": spec.layout if spec else "partition",
-                "rel_dir": spec.rel_dir if spec else "",
+                "dataset": spec.dataset,
+                "name": spec.name,
+                "group": spec.group,
+                "layout": spec.layout,
+                "rel_dir": spec.rel_dir,
                 "files": len(files),
                 "bytes": sum(f.size for f in files),
             }
@@ -676,8 +678,11 @@ def preflight_modelscope(
             f"当前可用 {disk['free'] / 1024**3:.1f} GB"
         )
 
+    ep = (endpoint or _endpoint()).rstrip("/")
+    repo = repo_id or _repo_id()
     return {
-        "repo_id": repo_id or _repo_id(),
+        "repo_id": repo,
+        "repo_url": f"{ep}/datasets/{repo}",
         "revision": revision or _revision(),
         "root": str(root),
         "datasets": items,

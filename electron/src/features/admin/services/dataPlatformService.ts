@@ -260,6 +260,7 @@ export interface QuantDBModelScopeDataset {
 
 export interface QuantDBModelScopePreflight {
     repo_id: string;
+    repo_url: string;
     revision: string;
     root: string;
     datasets: QuantDBModelScopeDataset[];

@@ -124,7 +124,7 @@ export const AdminQuantDBPanel: React.FC = () => {
                 }
                 extra={
                     <Space size="middle">
-                        <Tooltip title="从魔搭（ModelScope）公开数据集一键拉取 QuantDB 全量数据并覆盖本地数据目录，无需 QuantDB API Key / 流量；全量约 56GB，预计 3-4 小时，可稍后回来查看进度">
+                        <Tooltip title="从魔搭（ModelScope）公开数据集一键拉取 QuantDB 全量数据并覆盖本地数据目录，无需 QuantDB API Key / 流量；全量约 56GB，预计 3-4 小时，可稍后回来查看进度。仓库：https://www.modelscope.cn/datasets/qusong0627/LightGBM_Alpha300">
                             <Button
                                 type="primary"
                                 size="large"
@@ -700,6 +700,8 @@ export const ModelScopeInitModal: React.FC<ModelScopeInitModalProps> = ({ open, 
     const percent = job && job.bytes_total > 0
         ? Math.min(100, Math.round((job.bytes_done / job.bytes_total) * 100))
         : job && job.total > 0 ? Math.round((job.done / job.total) * 100) : 0;
+    const repoUrl = preflight?.repo_url
+        ?? `https://www.modelscope.cn/datasets/${preflight?.repo_id ?? 'qusong0627/LightGBM_Alpha300'}`;
 
     const columns: ColumnsType<QuantDBModelScopePreflight['datasets'][number]> = [
         { title: '数据集', dataIndex: 'name', width: 130 },
@@ -751,7 +753,12 @@ export const ModelScopeInitModal: React.FC<ModelScopeInitModalProps> = ({ open, 
                 <Alert
                     type="info"
                     showIcon
-                    message={`从魔搭公开数据集仓库拉取 QuantDB A股数据并覆盖本地数据目录（免 QuantDB API Key / 流量）。已存在且大小一致的文件自动跳过，可重复执行、断点续传。仓库：${preflight?.repo_id ?? 'qusong0627/LightGBM_Alpha300'}`}
+                    message={
+                        <span>
+                            从魔搭公开数据集仓库拉取 QuantDB A股数据并覆盖本地数据目录（免 QuantDB API Key / 流量）。已存在且大小一致的文件自动跳过，可重复执行、断点续传。仓库：
+                            <a href={repoUrl} target="_blank" rel="noreferrer">{repoUrl}</a>
+                        </span>
+                    }
                 />
 
                 <Alert

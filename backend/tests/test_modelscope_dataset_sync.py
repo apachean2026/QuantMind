@@ -297,3 +297,61 @@ def test_init_purge_removes_selected_dir(tmp_path, monkeypatch):
 
     assert not stale.exists()
     assert (root / remote[0].path).exists()
+
+
+def test_classify_per_share():
+    assert ms._classify("3_financial_data/per_share/000001.SZ.parquet") == (
+        "per_share",
+        "v1_symbol",
+    )
+
+
+def test_preflight_orders_by_spec_and_has_repo_url(tmp_path, monkeypatch):
+    root = tmp_path / "quantdb"
+    monkeypatch.setenv("QM_QUANTDB_DATA_DIR", str(root))
+    monkeypatch.setenv("QUANTDB_STATE_DIR", str(tmp_path / "state"))
+
+    # 故意乱序、跨类别，验证输出按 DATASETS 规格顺序（即 6 大类分组）
+    remote = [
+        ms.RemoteFile(
+            path="5_technical_derived/valuation/dt=20260101/data.parquet",
+            size=1,
+            sha256="a",
+            dataset="valuation",
+            layout="v2_daily_partition",
+        ),
+        ms.RemoteFile(
+            path="1_kline_data/daily_forward/dt=20260101/data.parquet",
+            size=1,
+            sha256="b",
+            dataset="daily_forward",
+            layout="v2_daily_partition",
+        ),
+        ms.RemoteFile(
+            path="3_financial_data/per_share/000001.SZ.parquet",
+            size=1,
+            sha256="c",
+            dataset="per_share",
+            layout="v1_symbol",
+        ),
+        ms.RemoteFile(
+            path="6_ml_datasets/l1_factors/dt=20260101/data.parquet",
+            size=1,
+            sha256="d",
+            dataset="l1_factors",
+            layout="v2_daily_partition",
+        ),
+    ]
+    monkeypatch.setattr(ms, "list_remote_files", lambda **kw: remote)
+
+    pf = ms.preflight_modelscope()
+    assert [d["dataset"] for d in pf["datasets"]] == [
+        "daily_forward",
+        "per_share",
+        "valuation",
+        "l1_factors",
+    ]
+    assert (
+        pf["repo_url"]
+        == "https://www.modelscope.cn/datasets/qusong0627/LightGBM_Alpha300"
+    )
