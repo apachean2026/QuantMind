@@ -631,7 +631,7 @@ export const ModelScopeInitModal: React.FC<ModelScopeInitModalProps> = ({ open, 
                 setJob(resp.job);
                 if (resp.job.status === 'completed') {
                     const s = resp.job.summary;
-                    message.success(`初始化完成：下载 ${s?.downloaded ?? 0}，失败 ${s?.errors ?? 0}`);
+                    message.success(`初始化完成：下载 ${s?.downloaded ?? 0}，跳过 ${s?.skipped ?? 0}，失败 ${s?.errors ?? 0}`);
                     onCompleted();
                 } else if (resp.job.status === 'failed') {
                     message.error(`初始化失败: ${resp.job.error ?? '未知错误'}`);
@@ -741,7 +741,7 @@ export const ModelScopeInitModal: React.FC<ModelScopeInitModalProps> = ({ open, 
                     showIcon
                     message={
                         <span>
-                            从魔搭公开数据集仓库全量拉取 QuantDB A股数据并覆盖本地数据目录（免 QuantDB API Key / 流量）。每次都会下载全部文件并原地覆盖，保证与魔搭社区完全对齐。仓库：
+                            从魔搭公开数据集仓库拉取 QuantDB A股数据并覆盖本地数据目录（免 QuantDB API Key / 流量）。逐文件校验 sha256 后原地覆盖；已完整下载的文件自动跳过，支持断点续传。仓库：
                             <a href={repoUrl} target="_blank" rel="noreferrer">{repoUrl}</a>
                         </span>
                     }
@@ -751,7 +751,7 @@ export const ModelScopeInitModal: React.FC<ModelScopeInitModalProps> = ({ open, 
                     type="warning"
                     showIcon
                     message="首次全量同步约需 3-4 小时，请耐心等待，您可稍后回来查看"
-                    description="数据总量约 56GB，下载在后台执行。启动后可以关闭本窗口或离开页面，稍后回来查看进度；若中途中断，重新发起会从头全量下载。"
+                    description="数据总量约 56GB，下载在后台执行。启动后可以关闭本窗口或离开页面，稍后回来查看进度；已完整下载的文件会自动跳过，中断后重新发起可断点续传。"
                 />
 
                 {preflight?.warnings.map((w, i) => (
@@ -843,6 +843,7 @@ export const ModelScopeInitModal: React.FC<ModelScopeInitModalProps> = ({ open, 
                             <>
                                 <Space wrap>
                                     <Tag color="green">下载 {job.summary.downloaded.toLocaleString()}</Tag>
+                                    <Tag>跳过 {job.summary.skipped.toLocaleString()}</Tag>
                                     <Tag color={job.summary.errors ? 'red' : 'default'}>
                                         失败 {job.summary.errors}
                                     </Tag>

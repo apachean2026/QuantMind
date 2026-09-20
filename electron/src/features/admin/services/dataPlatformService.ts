@@ -283,6 +283,7 @@ export interface QuantDBModelScopeInitJob {
     datasets?: string[] | null;
     total: number;
     done: number;
+    skipped: number;
     files_total: number;
     bytes_total: number;
     bytes_done: number;
@@ -294,6 +295,7 @@ export interface QuantDBModelScopeInitJob {
         total?: number;
         files?: number;
         pending?: number;
+        skipped?: number;
     } | null;
     summary?: {
         root: string;
@@ -301,6 +303,7 @@ export interface QuantDBModelScopeInitJob {
         cancelled: boolean;
         total_files: number;
         downloaded: number;
+        skipped: number;
         errors: number;
         downloaded_bytes: number;
         error_samples: string[];
@@ -315,6 +318,7 @@ export interface QuantDBModelScopeInitJob {
         datasets: Record<string, {
             files: number;
             downloaded: number;
+            skipped: number;
             errors: number;
             bytes: number;
         }>;

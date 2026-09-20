@@ -1170,15 +1170,21 @@ def _run_modelscope_init_job(job_id: str, payload: ModelScopeInitRequest) -> Non
                 job["current"] = f"远端 {kw.get('files')} 个文件，开始下载"
             elif event == "dataset_start":
                 job["stage"] = "download"
-                job["current"] = f"{kw.get('dataset')} 下载（待下 {kw.get('pending')}/{kw.get('files')}）"
+                job["current"] = (
+                    f"{kw.get('dataset')} 下载（待下 {kw.get('pending')}/{kw.get('files')}，"
+                    f"跳过 {kw.get('skipped', 0)}）"
+                )
                 job["current_detail"] = {
                     "dataset": kw.get("dataset"),
                     "phase": "dataset_start",
                     "files": kw.get("files"),
                     "pending": kw.get("pending"),
+                    "skipped": kw.get("skipped"),
                 }
             elif event == "file":
-                job["bytes_done"] = kw.get("downloaded") or job.get("bytes_done") or 0
+                job["bytes_done"] = (
+                    kw.get("processed") or kw.get("downloaded") or job.get("bytes_done") or 0
+                )
                 job["current_detail"] = {
                     "dataset": kw.get("dataset"),
                     "phase": "downloading",
@@ -1187,9 +1193,10 @@ def _run_modelscope_init_job(job_id: str, payload: ModelScopeInitRequest) -> Non
                 }
             elif event == "dataset_done":
                 job["done"] = job.get("done", 0) + 1
+                job["skipped"] = job.get("skipped", 0) + (kw.get("skipped") or 0)
                 job["current"] = (
                     f"{kw.get('dataset')} 完成（下载 {kw.get('downloaded')}，"
-                    f"失败 {kw.get('errors')}）"
+                    f"跳过 {kw.get('skipped', 0)}，失败 {kw.get('errors')}）"
                 )
 
     started_at = _now_iso()
@@ -1238,6 +1245,7 @@ async def start_modelscope_init(
         "datasets": payload.datasets,
         "total": 0,  # 数据集数，enumerate_done 回填
         "done": 0,
+        "skipped": 0,
         "files_total": 0,
         "bytes_total": 0,
         "bytes_done": 0,

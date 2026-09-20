@@ -11,11 +11,11 @@ parquet 清单（含 sha256 / size），并发流式下载到 ``QM_QUANTDB_DATA_
 
 设计要点：
   - 只依赖 stdlib + httpx（requirements 已含），不引入 modelscope SDK。
-  - 幂等可断点：已存在且 size 一致的文件跳过，重跑只补缺失/变更。
   - 下载走 302 → CDN 签名 URL，httpx 自动跟随重定向。
-  - 全量覆盖：逐文件下载并原地替换（os.replace），与魔搭社区完全对齐；
-    不比对、不增量，已存在的文件直接覆盖。
-  - 状态库：下载完成后用远端 sha256 写 objects（免 56GB 重哈希）。
+  - 全量覆盖：逐文件下载并原地替换（os.replace），与魔搭社区完全对齐。
+  - 断点续传：仅当本地存在 + size 一致 + 状态库登记 sha256 == 远端 sha256
+    才跳过；否则重下覆盖。每批完成即增量登记状态，中断后重跑只补未完成项。
+  - 状态库：用远端 sha256 写 objects（免 56GB 重哈希）。
 """
 
 from __future__ import annotations
@@ -268,6 +268,34 @@ def _local_breakdown(root: Path, files: list[RemoteFile]) -> tuple[int, int, int
     return present, missing, changed
 
 
+def _split_resumable(
+    root: Path, files: list[RemoteFile], state_shas: dict[str, str]
+) -> tuple[list[RemoteFile], list[RemoteFile]]:
+    """按「本地已完整下载」拆分为 (可跳过, 待下载)。
+
+    判据：本地文件存在、size 与远端一致，且状态库登记的同 key sha256 == 远端 sha256。
+    任一不满足则重下并原地覆盖（保证与魔搭对齐）。
+    """
+    skippable: list[RemoteFile] = []
+    pending: list[RemoteFile] = []
+    for f in files:
+        try:
+            target = _target_path(root, f.path)
+            if (
+                f.size
+                and f.sha256
+                and target.is_file()
+                and target.stat().st_size == f.size
+                and state_shas.get(f.path) == f.sha256
+            ):
+                skippable.append(f)
+                continue
+        except (OSError, ValueError):
+            pass
+        pending.append(f)
+    return skippable, pending
+
+
 # ---------------------------------------------------------------------------
 # 状态库重建
 # ---------------------------------------------------------------------------
@@ -327,6 +355,55 @@ def _write_state_meta(
         finally:
             conn.close()
     return {label: str(p) for label, p in targets}, written
+
+
+def _state_db_paths(root: Path) -> tuple[Path, ...]:
+    from backend.scripts.quantdb_daily_sync import _state_path
+
+    return (_state_path(root), root / "quantdb_sync.sqlite")
+
+
+def _load_state_shas(root: Path, datasets: list[str]) -> dict[str, str]:
+    """读同步状态库：key → 已登记的 sha256（用于断点续传跳过已下载文件）。"""
+    import sqlite3
+
+    if not datasets:
+        return {}
+    db_path = _state_db_paths(root)[0]
+    if not db_path.exists():
+        return {}
+    try:
+        conn = sqlite3.connect(str(db_path), timeout=10)
+    except sqlite3.Error:
+        return {}
+    try:
+        placeholders = ",".join("?" for _ in datasets)
+        rows = conn.execute(
+            f"SELECT key, sha256 FROM objects WHERE dataset IN ({placeholders})",
+            datasets,
+        )
+        return {key: sha for key, sha in rows if sha}
+    except sqlite3.Error:
+        return {}
+    finally:
+        conn.close()
+
+
+def _upsert_state_rows(root: Path, rows: list[tuple]) -> None:
+    """增量登记已下载对象到两个状态库（中断后续传据此跳过）。"""
+    if not rows:
+        return
+    for db_path in _state_db_paths(root):
+        conn = _open_state_db(db_path)
+        try:
+            conn.executemany(
+                "INSERT OR REPLACE INTO objects(key, etag, sha256, size, path, layout, dataset)"
+                " VALUES(?,?,?,?,?,?,?)",
+                rows,
+            )
+            conn.commit()
+        finally:
+            conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -411,7 +488,10 @@ def init_from_modelscope(
     batch = max(workers, workers * BATCH_FACTOR)
     timeout = httpx.Timeout(30.0, read=300.0, write=120.0, pool=60.0)
 
-    downloaded = errors = downloaded_bytes = 0
+    # 断点续传：已完整下载（size 一致且状态库 sha256 == 远端 sha256）的文件跳过
+    state_shas = _load_state_shas(root, list(grouped))
+    downloaded = skipped = errors = downloaded_bytes = 0
+    processed_bytes = 0
     error_samples: list[str] = []
     per_dataset_result: dict[str, dict[str, Any]] = {}
     cancelled = False
@@ -426,6 +506,10 @@ def init_from_modelscope(
             if should_cancel is not None and should_cancel():
                 cancelled = True
                 break
+
+            skippable, pending = _split_resumable(root, files, state_shas)
+            skipped += len(skippable)
+            processed_bytes += sum(f.size for f in skippable)
             _progress(
                 progress_cb,
                 "dataset_start",
@@ -433,15 +517,17 @@ def init_from_modelscope(
                 index=idx,
                 total=len(grouped),
                 files=len(files),
-                pending=len(files),
+                pending=len(pending),
+                skipped=len(skippable),
             )
             ds_downloaded = ds_errors = done_in_ds = 0
 
-            for start in range(0, len(files), batch):
+            for start in range(0, len(pending), batch):
                 if should_cancel is not None and should_cancel():
                     cancelled = True
                     break
-                window = files[start : start + batch]
+                window = pending[start : start + batch]
+                done_rows: list[tuple] = []
                 with ThreadPoolExecutor(max_workers=workers) as pool:
                     futures = {
                         pool.submit(
@@ -459,6 +545,18 @@ def init_from_modelscope(
                             fut.result()
                             ds_downloaded += 1
                             downloaded_bytes += f.size
+                            processed_bytes += f.size
+                            done_rows.append(
+                                (
+                                    f.path,
+                                    f.sha256,
+                                    f.sha256,
+                                    f.size,
+                                    str(_target_path(root, f.path)),
+                                    f.layout,
+                                    dataset,
+                                )
+                            )
                         except Exception as exc:  # noqa: BLE001
                             ds_errors += 1
                             if len(error_samples) < 20:
@@ -471,10 +569,13 @@ def init_from_modelscope(
                                 "file",
                                 dataset=dataset,
                                 done=done_in_ds,
-                                total=len(files),
+                                total=len(pending),
+                                processed=processed_bytes,
                                 downloaded=downloaded_bytes,
                                 errors=errors + ds_errors,
                             )
+                # 每批完成即增量登记状态，保证中断后重跑可跳过
+                _upsert_state_rows(root, done_rows)
                 if cancelled:
                     break
 
@@ -483,6 +584,7 @@ def init_from_modelscope(
             per_dataset_result[dataset] = {
                 "files": len(files),
                 "downloaded": ds_downloaded,
+                "skipped": len(skippable),
                 "errors": ds_errors,
                 "bytes": sum(f.size for f in files),
             }
@@ -491,12 +593,14 @@ def init_from_modelscope(
                 "dataset_done",
                 dataset=dataset,
                 downloaded=ds_downloaded,
+                skipped=len(skippable),
                 errors=ds_errors,
             )
             log.info(
-                "[MODELSCOPE] %s: 下载 %d / %d 失败 %d",
+                "[MODELSCOPE] %s: 下载 %d 跳过 %d (共 %d) 失败 %d",
                 dataset,
                 ds_downloaded,
+                len(skippable),
                 len(files),
                 ds_errors,
             )
@@ -530,6 +634,7 @@ def init_from_modelscope(
         "datasets": per_dataset_result,
         "total_files": total_files,
         "downloaded": downloaded,
+        "skipped": skipped,
         "errors": errors,
         "downloaded_bytes": downloaded_bytes,
         "error_samples": error_samples,

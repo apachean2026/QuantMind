@@ -256,14 +256,14 @@ def test_init_downloads_and_writes_state(tmp_path, monkeypatch):
     assert rows[0][2] == remote[0].size
 
 
-def test_init_full_download_overwrites_existing(tmp_path, monkeypatch):
-    """全量覆盖：已存在的文件也会重新下载并替换，不做增量跳过。"""
+def test_init_redownloads_without_state(tmp_path, monkeypatch):
+    """状态库无登记（或内容不符）时不跳过，重下并原地覆盖。"""
     root = tmp_path / "quantdb"
     monkeypatch.setenv("QM_QUANTDB_DATA_DIR", str(root))
     monkeypatch.setenv("QUANTDB_STATE_DIR", str(tmp_path / "state"))
 
     c1, c2, remote = _make_remote()
-    # 预先放好第一个文件，内容为旧数据
+    # 预先放好第一个文件，内容为旧数据（且状态库无登记）
     target = root / remote[0].path
     target.parent.mkdir(parents=True)
     target.write_bytes(b"old-content")
@@ -276,8 +276,86 @@ def test_init_full_download_overwrites_existing(tmp_path, monkeypatch):
     summary = ms.init_from_modelscope(["daily_forward"])
 
     assert summary["downloaded"] == 2
+    assert summary["skipped"] == 0
     assert _FakeClient.stream_calls == 2
     assert target.read_bytes() == c1  # 已被魔搭内容覆盖
+
+
+def test_init_resumes_skipping_completed_files(tmp_path, monkeypatch):
+    """断点续传：size 一致且状态库 sha256 == 远端 sha256 的文件跳过。"""
+    root = tmp_path / "quantdb"
+    monkeypatch.setenv("QM_QUANTDB_DATA_DIR", str(root))
+    monkeypatch.setenv("QUANTDB_STATE_DIR", str(tmp_path / "state"))
+
+    c1, c2, remote = _make_remote()
+    # 文件 1 已完整下载：本地存在且 size 一致 + 状态库登记 sha256 与远端一致
+    t1 = root / remote[0].path
+    t1.parent.mkdir(parents=True)
+    t1.write_bytes(c1)
+    ms._upsert_state_rows(
+        root,
+        [
+            (
+                remote[0].path,
+                remote[0].sha256,
+                remote[0].sha256,
+                remote[0].size,
+                str(t1),
+                remote[0].layout,
+                "daily_forward",
+            )
+        ],
+    )
+
+    # 文件 2 缺失 → 需下载
+    _FakeClient.payloads = {remote[1].path: c2}
+    _FakeClient.stream_calls = 0
+    monkeypatch.setattr(ms.httpx, "Client", _FakeClient)
+    monkeypatch.setattr(ms, "list_remote_files", lambda **kw: remote)
+
+    summary = ms.init_from_modelscope(["daily_forward"])
+
+    assert summary["skipped"] == 1
+    assert summary["downloaded"] == 1
+    assert _FakeClient.stream_calls == 1
+    assert summary["datasets"]["daily_forward"]["skipped"] == 1
+
+
+def test_init_redownloads_when_state_sha_differs(tmp_path, monkeypatch):
+    """状态库 sha256 与远端不一致 → 不跳过，重下覆盖。"""
+    root = tmp_path / "quantdb"
+    monkeypatch.setenv("QM_QUANTDB_DATA_DIR", str(root))
+    monkeypatch.setenv("QUANTDB_STATE_DIR", str(tmp_path / "state"))
+
+    c1, c2, remote = _make_remote()
+    t1 = root / remote[0].path
+    t1.parent.mkdir(parents=True)
+    t1.write_bytes(c1)
+    # 状态库登记的是旧的 sha256（与远端不同）
+    ms._upsert_state_rows(
+        root,
+        [
+            (
+                remote[0].path,
+                "0" * 64,
+                "0" * 64,
+                remote[0].size,
+                str(t1),
+                remote[0].layout,
+                "daily_forward",
+            )
+        ],
+    )
+
+    _FakeClient.payloads = {remote[0].path: c1, remote[1].path: c2}
+    _FakeClient.stream_calls = 0
+    monkeypatch.setattr(ms.httpx, "Client", _FakeClient)
+    monkeypatch.setattr(ms, "list_remote_files", lambda **kw: remote)
+
+    summary = ms.init_from_modelscope(["daily_forward"])
+
+    assert summary["skipped"] == 0
+    assert summary["downloaded"] == 2
 
 
 def test_init_rejects_unknown_dataset(tmp_path, monkeypatch):
