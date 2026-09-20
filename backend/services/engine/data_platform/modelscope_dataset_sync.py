@@ -262,6 +262,19 @@ def _partition(
     return present, pending
 
 
+def _present_bytes(root: Path, files: list[RemoteFile]) -> int:
+    """统计本地已存在且 size 一致的远端文件字节数（预检用，不做哈希）。"""
+    total = 0
+    for f in files:
+        try:
+            target = _target_path(root, f.path)
+            if target.is_file() and (not f.size or target.stat().st_size == f.size):
+                total += f.size
+        except (OSError, ValueError):
+            continue
+    return total
+
+
 # ---------------------------------------------------------------------------
 # 状态库重建
 # ---------------------------------------------------------------------------
@@ -648,10 +661,16 @@ def preflight_modelscope(
 
     # 按 DATASETS 规格顺序输出（天然按 6 大类分组），不按标识字母排序
     items = []
+    total_bytes = 0
+    existing_bytes = 0
     for spec in DATASETS:
         files = grouped.get(spec.dataset)
         if not files:
             continue
+        ds_bytes = sum(f.size for f in files)
+        ds_existing = _present_bytes(root, files)
+        total_bytes += ds_bytes
+        existing_bytes += ds_existing
         items.append(
             {
                 "dataset": spec.dataset,
@@ -660,7 +679,8 @@ def preflight_modelscope(
                 "layout": spec.layout,
                 "rel_dir": spec.rel_dir,
                 "files": len(files),
-                "bytes": sum(f.size for f in files),
+                "bytes": ds_bytes,
+                "existing_bytes": ds_existing,
             }
         )
 
@@ -670,11 +690,12 @@ def preflight_modelscope(
     except OSError:
         disk = {"total": 0, "used": 0, "free": 0}
 
-    total_bytes = sum(it["bytes"] for it in items)
+    # 覆盖式增量只下载缺失/变更的文件，余量按「需新增」而非全量判断
+    download_bytes = max(0, total_bytes - existing_bytes)
     warnings: list[str] = []
-    if disk["free"] and total_bytes and disk["free"] < total_bytes * 1.1:
+    if disk["free"] and download_bytes and disk["free"] < download_bytes * 1.1:
         warnings.append(
-            f"磁盘余量不足：需要约 {total_bytes / 1024**3:.1f} GB，"
+            f"磁盘余量不足：本次仍需下载约 {download_bytes / 1024**3:.1f} GB，"
             f"当前可用 {disk['free'] / 1024**3:.1f} GB"
         )
 
@@ -688,6 +709,8 @@ def preflight_modelscope(
         "datasets": items,
         "total_files": sum(it["files"] for it in items),
         "total_bytes": total_bytes,
+        "existing_bytes": existing_bytes,
+        "download_bytes": download_bytes,
         "disk": disk,
         "warnings": warnings,
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),

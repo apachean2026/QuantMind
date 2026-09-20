@@ -774,17 +774,28 @@ export const ModelScopeInitModal: React.FC<ModelScopeInitModalProps> = ({ open, 
 
                 {preflight && (
                     <Row gutter={16}>
-                        <Col span={6}>
+                        <Col flex="1">
                             <Statistic title="远端文件" value={preflight.total_files} />
                         </Col>
-                        <Col span={6}>
+                        <Col flex="1">
                             <Statistic title="远端总量" value={formatBytes(preflight.total_bytes)} />
                         </Col>
-                        <Col span={6}>
-                            <Statistic title="目标目录可用" value={formatBytes(preflight.disk.free)} />
+                        <Col flex="1">
+                            <Statistic
+                                title="本地已存在"
+                                value={formatBytes(preflight.existing_bytes)}
+                                valueStyle={{ color: '#52c41a' }}
+                            />
                         </Col>
-                        <Col span={6}>
-                            <Statistic title="目标数据集" value={preflight.datasets.length} />
+                        <Col flex="1">
+                            <Statistic
+                                title="需新增下载"
+                                value={formatBytes(preflight.download_bytes)}
+                                valueStyle={{ color: preflight.download_bytes > 0 ? '#1677ff' : '#52c41a' }}
+                            />
+                        </Col>
+                        <Col flex="1">
+                            <Statistic title="目标目录可用" value={formatBytes(preflight.disk.free)} />
                         </Col>
                     </Row>
                 )}
@@ -792,7 +803,7 @@ export const ModelScopeInitModal: React.FC<ModelScopeInitModalProps> = ({ open, 
                 {preflight && (
                     <div className="text-xs text-slate-400 break-all">
                         目标目录：<Text code>{preflight.root}</Text>（
-                        <Text code>QM_QUANTDB_DATA_DIR</Text>）
+                        <Text code>QM_QUANTDB_DATA_DIR</Text>）· 共 {preflight.datasets.length} 个数据集
                     </div>
                 )}
 

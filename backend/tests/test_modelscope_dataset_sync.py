@@ -344,6 +344,11 @@ def test_preflight_orders_by_spec_and_has_repo_url(tmp_path, monkeypatch):
     ]
     monkeypatch.setattr(ms, "list_remote_files", lambda **kw: remote)
 
+    # 本地已存在 daily_forward 的 1 字节文件（size 一致）→ 计入已存在、不计入需新增
+    local = root / "1_kline_data" / "daily_forward" / "dt=20260101" / "data.parquet"
+    local.parent.mkdir(parents=True)
+    local.write_bytes(b"x")
+
     pf = ms.preflight_modelscope()
     assert [d["dataset"] for d in pf["datasets"]] == [
         "daily_forward",
@@ -355,3 +360,6 @@ def test_preflight_orders_by_spec_and_has_repo_url(tmp_path, monkeypatch):
         pf["repo_url"]
         == "https://www.modelscope.cn/datasets/qusong0627/LightGBM_Alpha300"
     )
+    assert pf["total_bytes"] == 4
+    assert pf["existing_bytes"] == 1
+    assert pf["download_bytes"] == 3
