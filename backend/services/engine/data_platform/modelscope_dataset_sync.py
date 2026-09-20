@@ -13,10 +13,9 @@ parquet 清单（含 sha256 / size），并发流式下载到 ``QM_QUANTDB_DATA_
   - 只依赖 stdlib + httpx（requirements 已含），不引入 modelscope SDK。
   - 幂等可断点：已存在且 size 一致的文件跳过，重跑只补缺失/变更。
   - 下载走 302 → CDN 签名 URL，httpx 自动跟随重定向。
-  - 覆盖语义：overwrite=增量覆盖（改动覆盖、缺失补齐、不删无关文件）；
-    purge=先删选中数据集目录再全量拉取。
-  - 状态库重建：meta=直接用远端 sha256 写 objects（免 56GB 重哈希）；
-    rescan=全量重扫（慢，但会校验 parquet magic）；none=不动状态库。
+  - 全量覆盖：逐文件下载并原地替换（os.replace），与魔搭社区完全对齐；
+    不比对、不增量，已存在的文件直接覆盖。
+  - 状态库：下载完成后用远端 sha256 写 objects（免 56GB 重哈希）。
 """
 
 from __future__ import annotations
@@ -244,24 +243,6 @@ def _download_one(
     raise last_exc if last_exc else RuntimeError("下载失败")
 
 
-def _partition(
-    root: Path, files: list[RemoteFile]
-) -> tuple[list[RemoteFile], list[RemoteFile]]:
-    """按 size 分流为 (已存在, 待下载)。"""
-    present: list[RemoteFile] = []
-    pending: list[RemoteFile] = []
-    for f in files:
-        try:
-            target = _target_path(root, f.path)
-        except ValueError:
-            continue
-        if target.is_file() and (not f.size or target.stat().st_size == f.size):
-            present.append(f)
-        else:
-            pending.append(f)
-    return present, pending
-
-
 def _local_breakdown(root: Path, files: list[RemoteFile]) -> tuple[int, int, int]:
     """按本地状态拆分远端文件字节数，返回 (已存在, 缺失, 存在但size不同)。
 
@@ -348,23 +329,6 @@ def _write_state_meta(
     return {label: str(p) for label, p in targets}, written
 
 
-def _purge_datasets(root: Path, datasets: list[str]) -> list[str]:
-    """删除选中数据集的本地目录（仅限已知 rel_dir，防误删）。"""
-    from backend.shared.quantdb_datasets import get_dataset_spec
-
-    removed: list[str] = []
-    root_resolved = str(root.resolve())
-    for name in datasets:
-        spec = get_dataset_spec(name)
-        d = (root / spec.rel_dir).resolve()
-        if not str(d).startswith(root_resolved):
-            continue
-        if d.is_dir():
-            shutil.rmtree(d)
-            removed.append(spec.rel_dir)
-    return removed
-
-
 # ---------------------------------------------------------------------------
 # 主流程
 # ---------------------------------------------------------------------------
@@ -392,29 +356,19 @@ def _group_remote(
 def init_from_modelscope(
     datasets: list[str] | None = None,
     *,
-    mode: str = "overwrite",
-    rebuild_state: str = "meta",
-    with_pg: bool = False,
-    with_qlib: bool = False,
-    dry_run: bool = False,
     repo_id: str | None = None,
     revision: str | None = None,
     endpoint: str | None = None,
     progress_cb: Callable[..., None] | None = None,
     should_cancel: Callable[[], bool] | None = None,
 ) -> dict[str, Any]:
-    """从魔搭拉取 QuantDB 数据并覆盖本地目录。
+    """从魔搭全量拉取 QuantDB 数据并原地覆盖本地目录。
 
+    目标是与魔搭社区数据集完全对齐：不比对、不增量，逐文件下载并覆盖
+    已存在的文件；完成后用远端 sha256 重建同步状态库。
     datasets: 数据集名列表（DATASETS 规格）；None=仓库内可识别的全部。
-    mode: overwrite（增量覆盖）| purge（先删选中数据集再全量拉取）。
-    rebuild_state: meta | rescan | none。
     """
     from backend.shared.quantdb_datasets import DATASETS
-
-    if mode not in ("overwrite", "purge"):
-        raise ValueError(f"未知覆盖模式: {mode}")
-    if rebuild_state not in ("meta", "rescan", "none"):
-        raise ValueError(f"未知状态库模式: {rebuild_state}")
 
     known = {spec.dataset for spec in DATASETS}
     if datasets is not None:
@@ -453,29 +407,11 @@ def init_from_modelscope(
         bytes=total_bytes,
     )
 
-    if dry_run:
-        return {
-            "dry_run": True,
-            "root": str(root),
-            "mode": mode,
-            "datasets": {
-                k: {"files": len(v), "bytes": sum(f.size for f in v)}
-                for k, v in grouped.items()
-            },
-            "total_files": total_files,
-            "total_bytes": total_bytes,
-            "elapsed_sec": round(time.time() - started, 1),
-        }
-
-    if mode == "purge":
-        _progress(progress_cb, "phase", phase="purge", message="清空选中数据集目录")
-        _purge_datasets(root, list(grouped))
-
     workers = _workers()
     batch = max(workers, workers * BATCH_FACTOR)
     timeout = httpx.Timeout(30.0, read=300.0, write=120.0, pool=60.0)
 
-    downloaded = up_to_date = errors = downloaded_bytes = 0
+    downloaded = errors = downloaded_bytes = 0
     error_samples: list[str] = []
     per_dataset_result: dict[str, dict[str, Any]] = {}
     cancelled = False
@@ -490,9 +426,6 @@ def init_from_modelscope(
             if should_cancel is not None and should_cancel():
                 cancelled = True
                 break
-            present, pending = _partition(root, files)
-            up_to_date += len(present)
-            downloaded_bytes += sum(f.size for f in present)
             _progress(
                 progress_cb,
                 "dataset_start",
@@ -500,15 +433,15 @@ def init_from_modelscope(
                 index=idx,
                 total=len(grouped),
                 files=len(files),
-                pending=len(pending),
+                pending=len(files),
             )
             ds_downloaded = ds_errors = done_in_ds = 0
 
-            for start in range(0, len(pending), batch):
+            for start in range(0, len(files), batch):
                 if should_cancel is not None and should_cancel():
                     cancelled = True
                     break
-                window = pending[start : start + batch]
+                window = files[start : start + batch]
                 with ThreadPoolExecutor(max_workers=workers) as pool:
                     futures = {
                         pool.submit(
@@ -538,7 +471,7 @@ def init_from_modelscope(
                                 "file",
                                 dataset=dataset,
                                 done=done_in_ds,
-                                total=len(pending),
+                                total=len(files),
                                 downloaded=downloaded_bytes,
                                 errors=errors + ds_errors,
                             )
@@ -550,7 +483,6 @@ def init_from_modelscope(
             per_dataset_result[dataset] = {
                 "files": len(files),
                 "downloaded": ds_downloaded,
-                "up_to_date": len(present),
                 "errors": ds_errors,
                 "bytes": sum(f.size for f in files),
             }
@@ -559,21 +491,21 @@ def init_from_modelscope(
                 "dataset_done",
                 dataset=dataset,
                 downloaded=ds_downloaded,
-                up_to_date=len(present),
                 errors=ds_errors,
             )
             log.info(
-                "[MODELSCOPE] %s: 下载 %d 跳过 %d 失败 %d",
+                "[MODELSCOPE] %s: 下载 %d / %d 失败 %d",
                 dataset,
                 ds_downloaded,
-                len(present),
+                len(files),
                 ds_errors,
             )
             if cancelled:
                 break
 
-    state_info: dict[str, Any] = {"mode": rebuild_state, "status": "skipped"}
-    if rebuild_state == "meta" and not cancelled:
+    # 用远端元数据重建同步状态库（本地已是魔搭内容，直接登记 sha256）
+    state_info: dict[str, Any] = {"mode": "meta", "status": "skipped"}
+    if not cancelled:
         _progress(progress_cb, "phase", phase="state", message="写入同步状态库")
         try:
             per_ds_files = {
@@ -590,67 +522,18 @@ def init_from_modelscope(
         except Exception as exc:  # noqa: BLE001
             state_info = {"mode": "meta", "status": "failed", "reason": str(exc)}
             log.error("[MODELSCOPE] 状态库写入失败: %s", exc, exc_info=True)
-    elif rebuild_state == "rescan" and not cancelled:
-        _progress(progress_cb, "phase", phase="state", message="全量重扫建立状态库")
-        try:
-            from backend.scripts.quantdb_local_scan import scan_local_data
-
-            summary = scan_local_data(
-                root=root,
-                datasets=list(grouped),
-                force=True,
-                should_cancel=should_cancel,
-            )
-            state_info = {
-                "mode": "rescan",
-                "status": "ok",
-                "registered": summary.get("registered"),
-                "invalid_files": summary.get("invalid_files"),
-                "state_dbs": summary.get("state_dbs"),
-            }
-        except Exception as exc:  # noqa: BLE001
-            state_info = {"mode": "rescan", "status": "failed", "reason": str(exc)}
-            log.error("[MODELSCOPE] 状态库重扫失败: %s", exc, exc_info=True)
-
-    pg_info: dict[str, Any] = {"status": "skipped"}
-    if with_pg and not cancelled:
-        _progress(
-            progress_cb, "phase", phase="pg", message="填充 PG stock_daily_latest"
-        )
-        try:
-            from backend.scripts.quantdb_daily_sync import fill_pg_from_parquet
-
-            pg_info = {"status": "ok", "result": fill_pg_from_parquet()}
-        except Exception as exc:  # noqa: BLE001
-            pg_info = {"status": "failed", "reason": str(exc)}
-            log.error("[MODELSCOPE] PG 填充失败: %s", exc, exc_info=True)
-
-    qlib_info: dict[str, Any] = {"status": "skipped"}
-    if with_qlib and not cancelled:
-        _progress(progress_cb, "phase", phase="qlib", message="重建 Qlib 缓存")
-        try:
-            from backend.scripts.quantdb_daily_sync import update_qlib_cache
-
-            qlib_info = {"status": "ok", "provider_uri": update_qlib_cache()}
-        except Exception as exc:  # noqa: BLE001
-            qlib_info = {"status": "failed", "reason": str(exc)}
-            log.error("[MODELSCOPE] Qlib 重建失败: %s", exc, exc_info=True)
 
     return {
         "root": str(root),
         "repo_id": repo,
-        "mode": mode,
         "cancelled": cancelled,
         "datasets": per_dataset_result,
         "total_files": total_files,
         "downloaded": downloaded,
-        "up_to_date": up_to_date,
         "errors": errors,
         "downloaded_bytes": downloaded_bytes,
         "error_samples": error_samples,
         "state": state_info,
-        "pg": pg_info,
-        "qlib": qlib_info,
         "elapsed_sec": round(time.time() - started, 1),
     }
 
@@ -706,15 +589,13 @@ def preflight_modelscope(
     except OSError:
         disk = {"total": 0, "used": 0, "free": 0}
 
-    # 覆盖式增量只下载缺失/变更的文件；其中「缺失」才真正需要新增磁盘空间，
-    # 「存在但不同」是原地覆盖（先在同目录生成 .part 再 replace），几乎不占净增量。
-    download_bytes = max(0, total_bytes - existing_bytes)
+    # 全量覆盖下载：已存在的文件原地替换（同目录 .part → os.replace），几乎不占净增量；
+    # 只有本地缺失的文件才真正需要新增磁盘空间。
     warnings: list[str] = []
     if disk["free"] and missing_bytes and disk["free"] < missing_bytes * 1.1:
         warnings.append(
             f"磁盘余量不足：本地缺失约 {missing_bytes / 1024**3:.1f} GB 需新增空间，"
-            f"当前可用 {disk['free'] / 1024**3:.1f} GB。"
-            f"可改用「清空后重建」模式（先删后下，回收已占用空间）。"
+            f"当前可用 {disk['free'] / 1024**3:.1f} GB。请先清理磁盘再执行。"
         )
 
     ep = (endpoint or _endpoint()).rstrip("/")
@@ -730,7 +611,6 @@ def preflight_modelscope(
         "existing_bytes": existing_bytes,
         "missing_bytes": missing_bytes,
         "changed_bytes": changed_bytes,
-        "download_bytes": download_bytes,
         "disk": disk,
         "warnings": warnings,
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),

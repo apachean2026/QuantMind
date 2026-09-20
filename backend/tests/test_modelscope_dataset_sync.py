@@ -121,7 +121,7 @@ def test_target_path_rejects_traversal(tmp_path):
     assert ms._target_path(tmp_path, "1_kline_data/a.parquet").is_relative_to(tmp_path)
 
 
-def test_partition_splits_by_size(tmp_path):
+def test_local_breakdown(tmp_path):
     content = b"x" * 32
     remote = ms.RemoteFile(
         path="1_kline_data/daily_forward/dt=20260101/data.parquet",
@@ -130,22 +130,35 @@ def test_partition_splits_by_size(tmp_path):
         dataset="daily_forward",
         layout="v2_daily_partition",
     )
-    other = ms.RemoteFile(
+    missing = ms.RemoteFile(
         path="1_kline_data/daily_forward/dt=20260102/data.parquet",
-        size=len(content),
+        size=8,
         sha256="",
         dataset="daily_forward",
         layout="v2_daily_partition",
     )
-    present, pending = ms._partition(tmp_path, [remote, other])
-    assert [f.path for f in pending] == [remote.path, other.path]
+    changed = ms.RemoteFile(
+        path="1_kline_data/daily_forward/dt=20260103/data.parquet",
+        size=16,
+        sha256="",
+        dataset="daily_forward",
+        layout="v2_daily_partition",
+    )
+    # 未落地：全部计入 missing
+    assert ms._local_breakdown(tmp_path, [remote, missing, changed]) == (
+        0,
+        32 + 8 + 16,
+        0,
+    )
 
     target = tmp_path / remote.path
     target.parent.mkdir(parents=True)
-    target.write_bytes(content)
-    present, pending = ms._partition(tmp_path, [remote, other])
-    assert [f.path for f in present] == [remote.path]
-    assert [f.path for f in pending] == [other.path]
+    target.write_bytes(content)  # size 一致 → present
+    stale = tmp_path / changed.path
+    stale.parent.mkdir(parents=True, exist_ok=True)
+    stale.write_bytes(b"y")  # size 不同 → changed
+
+    assert ms._local_breakdown(tmp_path, [remote, missing, changed]) == (32, 8, 16)
 
 
 # ---------------------------------------------------------------------------
@@ -223,10 +236,9 @@ def test_init_downloads_and_writes_state(tmp_path, monkeypatch):
     monkeypatch.setattr(ms.httpx, "Client", _FakeClient)
     monkeypatch.setattr(ms, "list_remote_files", lambda **kw: remote)
 
-    summary = ms.init_from_modelscope(["daily_forward"], rebuild_state="meta")
+    summary = ms.init_from_modelscope(["daily_forward"])
 
     assert summary["downloaded"] == 2
-    assert summary["up_to_date"] == 0
     assert summary["errors"] == 0
     assert (root / remote[0].path).read_bytes() == c1
     assert (root / remote[1].path).read_bytes() == c2
@@ -244,27 +256,28 @@ def test_init_downloads_and_writes_state(tmp_path, monkeypatch):
     assert rows[0][2] == remote[0].size
 
 
-def test_init_skips_present_and_is_idempotent(tmp_path, monkeypatch):
+def test_init_full_download_overwrites_existing(tmp_path, monkeypatch):
+    """全量覆盖：已存在的文件也会重新下载并替换，不做增量跳过。"""
     root = tmp_path / "quantdb"
     monkeypatch.setenv("QM_QUANTDB_DATA_DIR", str(root))
     monkeypatch.setenv("QUANTDB_STATE_DIR", str(tmp_path / "state"))
 
     c1, c2, remote = _make_remote()
-    # 预先放好第一个文件（size 一致）
+    # 预先放好第一个文件，内容为旧数据
     target = root / remote[0].path
     target.parent.mkdir(parents=True)
-    target.write_bytes(c1)
+    target.write_bytes(b"old-content")
 
-    _FakeClient.payloads = {remote[1].path: c2}
+    _FakeClient.payloads = {remote[0].path: c1, remote[1].path: c2}
     _FakeClient.stream_calls = 0
     monkeypatch.setattr(ms.httpx, "Client", _FakeClient)
     monkeypatch.setattr(ms, "list_remote_files", lambda **kw: remote)
 
-    summary = ms.init_from_modelscope(["daily_forward"], rebuild_state="none")
+    summary = ms.init_from_modelscope(["daily_forward"])
 
-    assert summary["up_to_date"] == 1
-    assert summary["downloaded"] == 1
-    assert _FakeClient.stream_calls == 1
+    assert summary["downloaded"] == 2
+    assert _FakeClient.stream_calls == 2
+    assert target.read_bytes() == c1  # 已被魔搭内容覆盖
 
 
 def test_init_rejects_unknown_dataset(tmp_path, monkeypatch):
@@ -277,26 +290,6 @@ def test_init_rejects_unknown_dataset(tmp_path, monkeypatch):
 
     with pytest.raises(ValueError):
         ms.init_from_modelscope(["not_a_dataset"])
-
-
-def test_init_purge_removes_selected_dir(tmp_path, monkeypatch):
-    root = tmp_path / "quantdb"
-    monkeypatch.setenv("QM_QUANTDB_DATA_DIR", str(root))
-    monkeypatch.setenv("QUANTDB_STATE_DIR", str(tmp_path / "state"))
-
-    stale = root / "1_kline_data" / "daily_forward" / "dt=20250101" / "data.parquet"
-    stale.parent.mkdir(parents=True)
-    stale.write_bytes(b"stale")
-
-    c1, c2, remote = _make_remote()
-    _FakeClient.payloads = {remote[0].path: c1, remote[1].path: c2}
-    monkeypatch.setattr(ms.httpx, "Client", _FakeClient)
-    monkeypatch.setattr(ms, "list_remote_files", lambda **kw: remote)
-
-    ms.init_from_modelscope(["daily_forward"], mode="purge", rebuild_state="none")
-
-    assert not stale.exists()
-    assert (root / remote[0].path).exists()
 
 
 def test_classify_per_share():
@@ -364,4 +357,3 @@ def test_preflight_orders_by_spec_and_has_repo_url(tmp_path, monkeypatch):
     assert pf["existing_bytes"] == 1
     assert pf["missing_bytes"] == 3
     assert pf["changed_bytes"] == 0
-    assert pf["download_bytes"] == 3

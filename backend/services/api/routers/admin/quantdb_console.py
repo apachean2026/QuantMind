@@ -1113,12 +1113,6 @@ async def cancel_local_scan_job(job_id: str, current_user: dict = Depends(requir
 # ---------------------------------------------------------------------------
 class ModelScopeInitRequest(BaseModel):
     datasets: list[str] | None = Field(None, description="数据集名列表，留空=仓库内全部")
-    mode: str = Field("overwrite", description="overwrite=增量覆盖 | purge=清空后重建")
-    rebuild_state: str = Field(
-        "meta", description="meta=用远端元数据重建状态库 | rescan=全量重扫 | none"
-    )
-    with_pg: bool = Field(False, description="拉取后填充 PG stock_daily_latest")
-    with_qlib: bool = Field(False, description="拉取后重建 Qlib 缓存")
 
 
 # 独立于 _jobs / _scan_jobs：目录组件轮询 sync-jobs 并取 jobs[0]，
@@ -1195,17 +1189,13 @@ def _run_modelscope_init_job(job_id: str, payload: ModelScopeInitRequest) -> Non
                 job["done"] = job.get("done", 0) + 1
                 job["current"] = (
                     f"{kw.get('dataset')} 完成（下载 {kw.get('downloaded')}，"
-                    f"跳过 {kw.get('up_to_date')}）"
+                    f"失败 {kw.get('errors')}）"
                 )
 
     started_at = _now_iso()
     try:
         summary = init_from_modelscope(
             payload.datasets,
-            mode=payload.mode,
-            rebuild_state=payload.rebuild_state,
-            with_pg=payload.with_pg,
-            with_qlib=payload.with_qlib,
             progress_cb=_on_progress,
             should_cancel=_cancelled,
         )
@@ -1234,11 +1224,7 @@ def _run_modelscope_init_job(job_id: str, payload: ModelScopeInitRequest) -> Non
 async def start_modelscope_init(
     payload: ModelScopeInitRequest, current_user: dict = Depends(require_admin)
 ):
-    """启动「初始化数据」：从魔搭拉取并覆盖本地 QuantDB 数据目录（后台线程）。"""
-    if payload.mode not in ("overwrite", "purge"):
-        raise HTTPException(status_code=400, detail=f"未知模式: {payload.mode}")
-    if payload.rebuild_state not in ("meta", "rescan", "none"):
-        raise HTTPException(status_code=400, detail=f"未知状态库模式: {payload.rebuild_state}")
+    """启动「初始化数据」：从魔搭全量拉取并覆盖本地 QuantDB 数据目录（后台线程）。"""
     if payload.datasets:
         for name in payload.datasets:
             _spec(name)
@@ -1250,10 +1236,6 @@ async def start_modelscope_init(
         "status": "running",
         "stage": "enumerate",
         "datasets": payload.datasets,
-        "mode": payload.mode,
-        "rebuild_state": payload.rebuild_state,
-        "with_pg": payload.with_pg,
-        "with_qlib": payload.with_qlib,
         "total": 0,  # 数据集数，enumerate_done 回填
         "done": 0,
         "files_total": 0,

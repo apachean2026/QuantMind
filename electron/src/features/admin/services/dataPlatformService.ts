@@ -270,7 +270,6 @@ export interface QuantDBModelScopePreflight {
     existing_bytes: number;
     missing_bytes: number;
     changed_bytes: number;
-    download_bytes: number;
     disk: { total: number; used: number; free: number };
     warnings: string[];
     timestamp: string;
@@ -282,10 +281,6 @@ export interface QuantDBModelScopeInitJob {
     status: 'running' | 'completed' | 'failed' | 'cancelled' | 'cancelling';
     stage: string;
     datasets?: string[] | null;
-    mode: string;
-    rebuild_state: string;
-    with_pg: boolean;
-    with_qlib: boolean;
     total: number;
     done: number;
     files_total: number;
@@ -303,11 +298,9 @@ export interface QuantDBModelScopeInitJob {
     summary?: {
         root: string;
         repo_id: string;
-        mode: string;
         cancelled: boolean;
         total_files: number;
         downloaded: number;
-        up_to_date: number;
         errors: number;
         downloaded_bytes: number;
         error_samples: string[];
@@ -318,13 +311,10 @@ export interface QuantDBModelScopeInitJob {
             state_dbs?: Record<string, string>;
             reason?: string;
         };
-        pg?: { status: string; reason?: string };
-        qlib?: { status: string; provider_uri?: string; reason?: string };
         elapsed_sec: number;
         datasets: Record<string, {
             files: number;
             downloaded: number;
-            up_to_date: number;
             errors: number;
             bytes: number;
         }>;
@@ -789,10 +779,6 @@ class DataPlatformService {
 
     async startModelScopeInit(payload: {
         datasets?: string[];
-        mode?: 'overwrite' | 'purge';
-        rebuild_state?: 'meta' | 'rescan' | 'none';
-        with_pg?: boolean;
-        with_qlib?: boolean;
     }): Promise<{ job: QuantDBModelScopeInitJob }> {
         const resp = await this.axiosInstance.post(
             '/admin/data-platform/quantdb/modelscope/init',
