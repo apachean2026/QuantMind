@@ -17,7 +17,7 @@ import {
 } from '../services/dataPlatformService';
 import { QuantDBCatalogPanel } from './quantdb/QuantDBCatalogPanel';
 import { QuantDBPreviewDrawer } from './quantdb/QuantDBPreviewDrawer';
-import { describeError } from './quantdb/utils';
+import { describeError, httpStatusOf } from './quantdb/utils';
 import { SyncSchedulePanel } from './data-management/SyncSchedulePanel';
 
 const { Text } = Typography;
@@ -380,7 +380,14 @@ export const LocalScanModal: React.FC<LocalScanModalProps> = ({ open, onClose, o
                 } else if (resp.job.status === 'failed') {
                     message.error(`本地扫描失败: ${resp.job.error ?? '未知错误'}`);
                 }
-            } catch {
+            } catch (error: unknown) {
+                if (httpStatusOf(error) === 404) {
+                    // 任务记录已不存在（服务重启/被清理）→ 停止轮询并回到预检
+                    setJob(null);
+                    loadPreflight();
+                    message.warning('扫描任务记录已失效（服务可能重启过），已重新预检。');
+                    return;
+                }
                 // 单次轮询失败忽略，下一轮重试
             }
         }, SCAN_JOB_POLL_INTERVAL_MS);
@@ -661,7 +668,14 @@ export const ModelScopeInitModal: React.FC<ModelScopeInitModalProps> = ({ open, 
                     message.warning('初始化已取消');
                     loadPreflight();
                 }
-            } catch {
+            } catch (error: unknown) {
+                if (httpStatusOf(error) === 404) {
+                    // 任务记录已不存在（服务重启/被清理）→ 停止轮询，回到预检
+                    setJob(null);
+                    loadPreflight();
+                    message.warning('后台任务记录已失效（服务可能重启过）。已下载的文件会保留，可再次发起续传。');
+                    return;
+                }
                 // 单次轮询失败忽略，下一轮重试
             }
         }, INIT_JOB_POLL_INTERVAL_MS);
@@ -782,31 +796,47 @@ export const ModelScopeInitModal: React.FC<ModelScopeInitModalProps> = ({ open, 
                 ))}
 
                 {preflight && (
-                    <Row gutter={16}>
+                    <Row gutter={12}>
                         <Col flex="1">
-                            <Statistic title="远端文件" value={preflight.total_files} />
+                            <Statistic title="远端文件" value={preflight.total_files} valueStyle={{ fontSize: 18 }} />
                         </Col>
                         <Col flex="1">
-                            <Statistic title="远端总量" value={formatBytes(preflight.total_bytes)} />
+                            <Statistic title="远端总量" value={formatBytes(preflight.total_bytes)} valueStyle={{ fontSize: 18 }} />
                         </Col>
                         <Col flex="1">
                             <Statistic
-                                title="本地已存在"
-                                value={formatBytes(preflight.existing_bytes)}
-                                valueStyle={{ color: '#52c41a' }}
+                                title="已就绪(将跳过)"
+                                value={formatBytes(preflight.skip_bytes)}
+                                valueStyle={{ fontSize: 18, color: '#52c41a' }}
+                            />
+                        </Col>
+                        <Col flex="1">
+                            <Statistic
+                                title="将原地覆盖"
+                                value={formatBytes(preflight.changed_bytes)}
+                                valueStyle={{ fontSize: 18, color: '#fa8c16' }}
                             />
                         </Col>
                         <Col flex="1">
                             <Statistic
                                 title="需新增空间"
                                 value={formatBytes(preflight.missing_bytes)}
-                                valueStyle={{ color: preflight.missing_bytes > 0 ? '#1677ff' : '#52c41a' }}
+                                valueStyle={{ fontSize: 18, color: preflight.missing_bytes > 0 ? '#1677ff' : '#52c41a' }}
                             />
                         </Col>
                         <Col flex="1">
-                            <Statistic title="目标目录可用" value={formatBytes(preflight.disk.free)} />
+                            <Statistic title="目录可用" value={formatBytes(preflight.disk.free)} valueStyle={{ fontSize: 18 }} />
                         </Col>
                     </Row>
+                )}
+
+                {preflight && (
+                    <div className="text-[11px] text-slate-400 leading-5">
+                        <Text type="secondary" className="text-[11px]">
+                            已就绪 = 大小与 sha256 一致（跳过 {preflight.skip_files.toLocaleString()} 个文件）；
+                            将原地覆盖 = 本地已有旧版本，替换不占净增空间；需新增空间 = 本地缺失。
+                        </Text>
+                    </div>
                 )}
 
                 {preflight && (

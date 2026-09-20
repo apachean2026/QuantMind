@@ -256,7 +256,7 @@ export interface QuantDBModelScopeDataset {
     rel_dir: string;
     files: number;
     bytes: number;
-    existing_bytes: number;
+    skip_bytes: number;
 }
 
 export interface QuantDBModelScopePreflight {
@@ -267,7 +267,8 @@ export interface QuantDBModelScopePreflight {
     datasets: QuantDBModelScopeDataset[];
     total_files: number;
     total_bytes: number;
-    existing_bytes: number;
+    skip_files: number;
+    skip_bytes: number;
     missing_bytes: number;
     changed_bytes: number;
     disk: { total: number; used: number; free: number };

@@ -415,10 +415,24 @@ def test_preflight_orders_by_spec_and_has_repo_url(tmp_path, monkeypatch):
     ]
     monkeypatch.setattr(ms, "list_remote_files", lambda **kw: remote)
 
-    # 本地已存在 daily_forward 的 1 字节文件（size 一致）→ 计入已存在、不计入需新增
+    # 本地已存在 daily_forward 的 1 字节文件，且状态库登记了与远端一致的 sha256
     local = root / "1_kline_data" / "daily_forward" / "dt=20260101" / "data.parquet"
     local.parent.mkdir(parents=True)
     local.write_bytes(b"x")
+    ms._upsert_state_rows(
+        root,
+        [
+            (
+                "1_kline_data/daily_forward/dt=20260101/data.parquet",
+                "b",
+                "b",
+                1,
+                str(local),
+                "v2_daily_partition",
+                "daily_forward",
+            )
+        ],
+    )
 
     pf = ms.preflight_modelscope()
     assert [d["dataset"] for d in pf["datasets"]] == [
@@ -432,6 +446,7 @@ def test_preflight_orders_by_spec_and_has_repo_url(tmp_path, monkeypatch):
         == "https://www.modelscope.cn/datasets/qusong0627/LightGBM_Alpha300"
     )
     assert pf["total_bytes"] == 4
-    assert pf["existing_bytes"] == 1
+    assert pf["skip_files"] == 1  # size 一致 + 状态库 sha256 一致
+    assert pf["skip_bytes"] == 1
     assert pf["missing_bytes"] == 3
     assert pf["changed_bytes"] == 0

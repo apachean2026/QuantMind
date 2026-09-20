@@ -659,10 +659,15 @@ def preflight_modelscope(
     remote = list_remote_files(endpoint=endpoint, repo_id=repo_id, revision=revision)
     grouped = _group_remote(remote, datasets)
 
+    # 续传判据（size 一致 + 状态库 sha256 一致）决定「已就绪(将跳过)」，
+    # 与 init_from_modelscope 的 `_split_resumable` 保持同一套口径。
+    state_shas = _load_state_shas(root, list(grouped))
+
     # 按 DATASETS 规格顺序输出（天然按 6 大类分组），不按标识字母排序
     items = []
     total_bytes = 0
-    existing_bytes = 0
+    skip_files = 0
+    skip_bytes = 0
     missing_bytes = 0
     changed_bytes = 0
     for spec in DATASETS:
@@ -670,9 +675,13 @@ def preflight_modelscope(
         if not files:
             continue
         ds_bytes = sum(f.size for f in files)
-        ds_present, ds_missing, ds_changed = _local_breakdown(root, files)
+        skippable, _pending = _split_resumable(root, files, state_shas)
+        # 缺失 = 路径不存在（真正占新增空间）；变更 = 存在但大小不同（原地覆盖）
+        _present, ds_missing, ds_changed = _local_breakdown(root, files)
+        ds_skip = sum(f.size for f in skippable)
         total_bytes += ds_bytes
-        existing_bytes += ds_present
+        skip_files += len(skippable)
+        skip_bytes += ds_skip
         missing_bytes += ds_missing
         changed_bytes += ds_changed
         items.append(
@@ -684,7 +693,7 @@ def preflight_modelscope(
                 "rel_dir": spec.rel_dir,
                 "files": len(files),
                 "bytes": ds_bytes,
-                "existing_bytes": ds_present,
+                "skip_bytes": ds_skip,
             }
         )
 
@@ -713,7 +722,8 @@ def preflight_modelscope(
         "datasets": items,
         "total_files": sum(it["files"] for it in items),
         "total_bytes": total_bytes,
-        "existing_bytes": existing_bytes,
+        "skip_files": skip_files,
+        "skip_bytes": skip_bytes,
         "missing_bytes": missing_bytes,
         "changed_bytes": changed_bytes,
         "disk": disk,
