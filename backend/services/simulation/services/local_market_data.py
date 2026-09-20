@@ -93,12 +93,12 @@ _CHINEXT_20PCT_FROM = date(2020, 8, 24)
 
 _CENT = Decimal("0.01")
 
-# amount/volume 的单位在 2026-07-21 前后发生切换，因此按日自动识别而非硬编码：
-#   旧口径：volume=股, amount=万元  -> close*volume/amount ≈ 1e4
-#   新口径：volume=手, amount=元    -> close*volume/amount ≈ 1e-2
-# 两者相差 6 个数量级，用中位数判别非常稳健。搞错会让成交额/vwap 偏 1e4 倍。
-_SCALE_LEGACY = 1e4  # amount 万元→元；volume 已是股
-_SCALE_CURRENT = 1e-2  # volume 手→股需 ×100，amount 已是元
+# QuantDB 日线当前统一口径：volume=股、amount=万元 -> close*volume/amount ≈ 1e4。
+# 历史上游个别分区出现过 volume=手、amount=元 的口径 -> 该比值 ≈ 1e-2，两者相差
+# 6 个数量级。因此按日中位数自动识别而非硬编码，兜住仍为旧口径的分区；认错会让
+# 成交额 / vwap 偏 1e4 倍。
+_SCALE_LEGACY = 1e4  # amount 万元→元；volume 保持「股」（当前统一口径）
+_SCALE_CURRENT = 1e-2  # volume 手→股需 ×100，amount 已是元（历史口径兜底）
 _SCALE_DECISION_BOUNDARY = 1.0
 
 _CACHE_SIZE = 32
@@ -355,11 +355,12 @@ class LocalMarketData:
         if today.empty:
             return {}
 
-        # 量额单位自动探测仅 CN（历史口径切换）；其余市场 volume=股/枚、
-        # amount=计价货币原样，vwap=amount/volume。
+        # 量额单位自动探测仅 CN；其余市场 volume=股/枚、amount=计价货币原样，
+        # vwap=amount/volume。CN 当前统一为 volume=股 / amount=万元，探测应命中
+        # LEGACY（amount 万元→元、volume 保持股）；CURRENT 分支仅历史口径兜底。
         if self.market is Market.CN:
             scale = _detect_amount_scale(today)
-            # volume 为"手"时（新口径）需换算为股，amount 已是元。
+            # volume 为「手」时（历史口径）需换算为股，amount 已是元。
             volume_to_shares = 100.0 if scale == _SCALE_CURRENT else 1.0
             amount_to_yuan = 1.0 if scale == _SCALE_CURRENT else _SCALE_LEGACY
         else:
