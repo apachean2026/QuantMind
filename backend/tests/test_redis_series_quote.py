@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 import json
+from unittest.mock import MagicMock
 
+import pytest
+
+from backend.services.simulation.services import redis_series_quote as quote_mod
 from backend.services.simulation.services.redis_series_quote import (
+    fetch_series_ticks,
     parse_series_member,
     series_key_for,
 )
@@ -36,8 +41,90 @@ def test_parse_stale_or_bad_tick_returns_none():
     # 超龄
     assert parse_series_member(member, 1_000_000.0, 1_000_400.0, 300) is None
     # 零价格
-    assert parse_series_member(json.dumps({"price": 0}), 1_000_000.0, 1_000_100.0, 300) is None
+    assert (
+        parse_series_member(json.dumps({"price": 0}), 1_000_000.0, 1_000_100.0, 300)
+        is None
+    )
     # 非法 JSON
     assert parse_series_member("not-json", 1_000_000.0, 1_000_100.0, 300) is None
     # 未来时间戳
     assert parse_series_member(member, 1_000_200.0, 1_000_100.0, 300) is None
+
+
+@pytest.mark.asyncio
+async def test_fetch_series_ticks_uses_latest_not_liquidity_window(monkeypatch):
+    """最新价走 zrevrange+max_age；流动性窗口只影响 recent_volume。
+
+    回归：曾用 60s zrangebyscore 兼作取价窗口，导致 >60s 无新 tick 的股票
+    被当成缺失，权益结算回退到过期收盘价，总资产在成本价/市价间跳动。
+    """
+    now = 1_000_000.0
+    monkeypatch.setattr(quote_mod.time, "time", lambda: now)
+
+    latest_member = json.dumps({"price": 1.38, "volume": 100.0, "source": "t"})
+    # 最新 tick 年龄 120s（超出默认流动性窗口 60s，但仍在 max_age 300s 内）
+    latest_rows = [(latest_member, now - 120)]
+    # 流动性窗口内无成交
+    window_rows: list = []
+
+    class FakePipe:
+        def __init__(self) -> None:
+            self.ops: list[str] = []
+
+        def zrevrange(self, *_args, **_kwargs):
+            self.ops.append("zrevrange")
+            return self
+
+        def zrangebyscore(self, *_args, **_kwargs):
+            self.ops.append("zrangebyscore")
+            return self
+
+        async def execute(self):
+            # 每个 symbol 两段：latest + window
+            return [latest_rows, window_rows]
+
+    pipe = FakePipe()
+    client = MagicMock()
+    client.pipeline.return_value = pipe
+    monkeypatch.setattr(quote_mod, "_get_client", lambda: client)
+    monkeypatch.setattr(
+        "backend.shared.quote_redis_config.sim_redis_quote_max_age_sec",
+        lambda: 300,
+    )
+
+    result = await fetch_series_ticks(["688121.SH"], volume_window_sec=60)
+    assert pipe.ops == ["zrevrange", "zrangebyscore"]
+    assert "688121.SH" in result
+    assert result["688121.SH"]["price"] == 1.38
+    assert result["688121.SH"]["age_s"] == 120.0
+    assert result["688121.SH"]["recent_volume"] is None
+
+
+@pytest.mark.asyncio
+async def test_fetch_series_ticks_drops_stale_beyond_max_age(monkeypatch):
+    now = 1_000_000.0
+    monkeypatch.setattr(quote_mod.time, "time", lambda: now)
+    stale_member = json.dumps({"price": 1.15, "volume": 1.0})
+    latest_rows = [(stale_member, now - 400)]  # > max_age 300
+    window_rows: list = []
+
+    class FakePipe:
+        def zrevrange(self, *_a, **_k):
+            return self
+
+        def zrangebyscore(self, *_a, **_k):
+            return self
+
+        async def execute(self):
+            return [latest_rows, window_rows]
+
+    client = MagicMock()
+    client.pipeline.return_value = FakePipe()
+    monkeypatch.setattr(quote_mod, "_get_client", lambda: client)
+    monkeypatch.setattr(
+        "backend.shared.quote_redis_config.sim_redis_quote_max_age_sec",
+        lambda: 300,
+    )
+
+    result = await fetch_series_ticks(["688121.SH"])
+    assert result == {}

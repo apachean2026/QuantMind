@@ -8,6 +8,7 @@
 """
 
 from backend.services.simulation.services.equity_settlement_worker import (
+    _codes_with_positive_mark,
     build_remark_updates,
     settle_cycle_timeout_seconds,
     settle_enabled,
@@ -56,6 +57,21 @@ def test_build_remark_updates_only_changed():
     updates = build_remark_updates(account, {"SH600036": 10.0, "SZ000001": 5.0})
     assert list(updates) == ["SH600036::long"]
     assert updates["SH600036::long"] == {"price": 10.0, "market_value": 10000.0}
+
+
+def test_codes_with_positive_mark():
+    accounts = [
+        {
+            "account": {
+                "positions": {
+                    "688121.SH": {"price": 1.38, "volume": 100},
+                    "603326.SH": {"price": 0, "volume": 100},
+                    "bad": "skip",
+                }
+            }
+        }
+    ]
+    assert _codes_with_positive_mark(accounts) == {"688121.SH"}
 
 
 def test_worker_config_defaults(monkeypatch):

@@ -153,6 +153,27 @@ def summarize_positions(
     return long_mv, short_mv, round(long_mv - short_mv, 4)
 
 
+def _codes_with_positive_mark(accounts: list[dict[str, Any]]) -> set[str]:
+    """扫描账户中已有正数 mark price 的标的集合。"""
+    marked: set[str] = set()
+    for item in accounts:
+        positions = item.get("account", {}).get("positions")
+        if not isinstance(positions, dict):
+            continue
+        for pos_key, pos in positions.items():
+            if not isinstance(pos, dict):
+                continue
+            try:
+                if float(pos.get("price") or 0) <= 0:
+                    continue
+            except (TypeError, ValueError):
+                continue
+            code, _side = split_position_key(str(pos_key))
+            if code:
+                marked.add(code)
+    return marked
+
+
 def build_remark_updates(
     account: dict[str, Any], prices: dict[str, float]
 ) -> dict[str, dict[str, float]]:
@@ -296,6 +317,7 @@ class SimulationEquitySettlementWorker:
             logger.warning("Equity settle remark step failed: %s", exc)
 
         # Step 3: 权益持久化（资金快照 upsert + 台账账户投影字段刷新）
+        # 重估写在 Redis；持久化前重读，避免用 remark 前的内存快照回写 PG。
         try:
             from backend.services.simulation.services.fund_snapshot_service import (
                 SimulationFundSnapshotService,
@@ -303,6 +325,7 @@ class SimulationEquitySettlementWorker:
 
             result = await SimulationFundSnapshotService.capture_all(self.redis)
             stats["snapshots"] = result.upserted_rows
+            accounts = await asyncio.to_thread(self._load_accounts)
             stats["pg_accounts"] = await self._update_pg_accounts(accounts)
         except Exception as exc:
             stats["error"] = stats.get("error") or f"persist: {exc}"
@@ -392,7 +415,13 @@ class SimulationEquitySettlementWorker:
             else:
                 fallback_codes.append(code)
 
+        # 日线收盘兜底：仅补「当前 Redis 尚无有效市价」的标的。
+        # 已有 mark 时保留原值，避免盘中 tick 短暂缺失时被过期收盘（≈成本）覆盖，
+        # 造成总资产在初始价与权益价之间跳动。
+        marked_codes = _codes_with_positive_mark(accounts)
         for code in fallback_codes:
+            if code in marked_codes:
+                continue
             px = await self._fallback_close(code, market_by_code[code])
             if px > 0:
                 prices[code] = px

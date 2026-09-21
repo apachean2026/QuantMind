@@ -115,7 +115,9 @@ def _get_client():
     return _client
 
 
-async def fetch_series_tick(symbol: str, max_age_sec: int | None = None) -> dict[str, Any] | None:
+async def fetch_series_tick(
+    symbol: str, max_age_sec: int | None = None
+) -> dict[str, Any] | None:
     """取 symbol 最新 tick；新鲜才返回，否则 None。
 
     max_age_sec 默认取 SIM_REDIS_QUOTE_MAX_AGE_SEC（默认 300），与 stream 侧
@@ -156,7 +158,14 @@ async def fetch_series_ticks(
     max_age_sec: int | None = None,
     volume_window_sec: int = 60,
 ) -> dict[str, dict[str, Any]]:
-    """Batch-load fresh ticks and recent incremental volume in one pipeline."""
+    """批量取最新 tick，并附带流动性窗口内的增量成交量。
+
+    最新价路径与 ``fetch_series_tick`` 一致：``zrevrange`` + ``max_age_sec``
+    （默认 300s）。``volume_window_sec``（默认 60s，可由
+    ``SIM_LIQUIDITY_WINDOW_SEC`` 覆盖）**只**用于 ``recent_volume``，不得再当作
+    取价窗口——否则盘中超过 60s 无新 tick 的股票会被误判为缺失，权益结算
+    回退到过期收盘价（≈成本价），总资产在「初始价 / 市价」之间跳动。
+    """
     from backend.shared.quote_redis_config import sim_redis_quote_max_age_sec
 
     if max_age_sec is None:
@@ -181,27 +190,32 @@ async def fetch_series_ticks(
     try:
         pipe = client.pipeline(transaction=False)
         for _, key in keyed:
+            # 最新价：不受流动性窗口限制
+            pipe.zrevrange(key, 0, 0, withscores=True)
+            # 流动性：仅统计窗口内成交量增量
             pipe.zrangebyscore(
                 key,
                 now_ts - max(1, volume_window_sec),
                 now_ts,
                 withscores=True,
             )
-        rows_by_symbol = await pipe.execute()
+        pipe_result = await pipe.execute()
     except Exception as exc:  # noqa: BLE001
         logger.warning("[RedisSeriesQuote] 批量读取失败: %s", exc)
         return {}
 
     result: dict[str, dict[str, Any]] = {}
-    for (symbol, _), rows in zip(keyed, rows_by_symbol, strict=True):
-        if not rows:
+    for idx, (symbol, _) in enumerate(keyed):
+        latest_rows = pipe_result[idx * 2]
+        window_rows = pipe_result[idx * 2 + 1]
+        if not latest_rows:
             continue
-        member, score = rows[-1]
+        member, score = latest_rows[0]
         tick = parse_series_member(member, float(score), now_ts, max_age_sec)
         if tick is None:
             continue
         volumes: list[float] = []
-        for raw_member, _raw_score in rows:
+        for raw_member, _raw_score in window_rows or ():
             try:
                 payload = json.loads(raw_member)
                 volume = float(payload.get("volume"))
