@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import random
 from datetime import datetime
 from typing import Any
 
@@ -36,26 +37,32 @@ DEFAULT_SCHEDULE = {
     "with_qlib": False,
 }
 
-# 各市场在没有用户配置时的建议触发时间（仅供前端「同步调度」预填，不参与自动触发）。
+# 没有用户配置时的建议触发时间（仅供前端「同步调度」预填，不参与自动触发）。
 #
 # 自动同步是否开启、何时触发，一律以用户在前端保存的配置为准（Redis
 # quantmind:sync_schedule:{market}，由 market-sync-dispatch 每分钟比对派发）。
 # 任何市场都不再内置 enabled=true 的默认调度：否则所有部署会在同一固定时刻
 # 全量同步，给上游数据源与服务器造成突发压力。
-# 建议时间遵循既有约定：每日自动同步上游数据建议设置到次日 00:00 以后，
-# 按需错峰触发，避免集中请求。下列仅为前端预填的推荐值，各市场互不错峰：
-#   A        01:00  QuantDB release 盘后发布，次日凌晨已就绪
-#   HK       02:00  雅虎/akshare/CCASS 次日凌晨陆续就绪
-#   FUTURES  03:00  日盘/夜盘结算数据落库后
-#   BC       04:15  加密市场全天候交易，选凌晨低谷时段拉取
-#   US       05:30  美股收盘(北京约 04:00/05:00)后，EOD 数据已稳定
-MARKET_SUGGESTED_TIMES: dict[str, str] = {
-    "A": "01:00",
-    "HK": "02:00",
-    "FUTURES": "03:00",
-    "BC": "04:15",
-    "US": "05:30",
-}
+#
+# 建议时间统一落在次日凌晨 01:00-06:00（上游 EOD/release 数据此时已就绪），
+# 并以 10 分钟为整数倍**随机**取值：各部署/各市场不再撞同一个固定时刻。
+SUGGESTED_TIME_WINDOW: tuple[str, str] = ("01:00", "06:00")
+SUGGESTED_TIME_STEP_MINUTES = 10
+
+
+def _minutes_of(hhmm: str) -> int:
+    """HH:MM -> 当日分钟数（仅用于建议时间的窗口计算）。"""
+    hour, minute = hhmm.split(":")
+    return int(hour) * 60 + int(minute)
+
+
+def suggested_time() -> str:
+    """随机建议触发时间：01:00-06:00 之间、10 分钟整数倍（仅预填，不参与触发）。"""
+    step = SUGGESTED_TIME_STEP_MINUTES
+    first = _minutes_of(SUGGESTED_TIME_WINDOW[0]) // step
+    last = _minutes_of(SUGGESTED_TIME_WINDOW[1]) // step
+    minutes = random.randrange(first, last + 1) * step
+    return f"{minutes // 60:02d}:{minutes % 60:02d}"
 
 
 def _redis():
@@ -68,9 +75,9 @@ def _redis():
 
 def _normalize(cfg: dict[str, Any] | None, market: str | None = None) -> dict[str, Any]:
     out = dict(DEFAULT_SCHEDULE)
-    # 建议时间只用于预填，不会把 enabled 置为 True
-    if market is not None and market in MARKET_SUGGESTED_TIMES:
-        out["time"] = MARKET_SUGGESTED_TIMES[market]
+    # 建议时间只用于预填，不会把 enabled 置为 True。
+    # market 参数保留：签名兼容既有调用方，随机建议已不再按市场区分。
+    out["time"] = suggested_time()
     for k in out:
         if k in (cfg or {}):
             out[k] = cfg[k]

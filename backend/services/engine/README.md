@@ -284,8 +284,7 @@ python -m celery -A backend.services.engine.qlib_app.celery_config:celery_app fl
 - 存储：Redis `quantmind:sync_schedule:{market}`；`celery-beat` 每分钟跑 `dispatch_market_sync` 比对派发 `run_market_scheduled_sync`。
 - **任何市场都不内置默认启用**：未保存配置时 5 个市场（A / HK / US / BC / FUTURES）全部 `enabled=false`。
   原因：内置固定时刻会让所有部署在同一分钟全量同步，给上游数据源和服务器造成突发压力。
-- `market_sync_scheduler.MARKET_SUGGESTED_TIMES` 只是**前端时间预填的建议值**，不参与触发；按既有约定统一放在次日 00:00 以后并互相错峰：
-  `A 01:00 / HK 02:00 / FUTURES 03:00 / BC 04:15 / US 05:30`。
+- `market_sync_scheduler.suggested_time()` 只是**前端时间预填的建议值**，不参与触发；统一落在次日 `01:00-06:00`（`SUGGESTED_TIME_WINDOW`），并以 10 分钟为整数倍（`SUGGESTED_TIME_STEP_MINUTES`）**随机**取值，不再按市场写死固定时刻——避免各部署撞到同一分钟。
 - 因此**新部署默认不会同步任何市场数据**，需要在前端显式开启；A 股不开则 `market_snapshot` 会持续 `skipped: stale`，推理质量回填也拿不到 T+5 真实收益。
 
 ### 3. 任务超时约束

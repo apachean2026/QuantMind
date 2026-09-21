@@ -1,7 +1,7 @@
 """市场定时同步调度器测试。
 
-覆盖 _normalize 的市场建议时间预填（MARKET_SUGGESTED_TIMES）、未配置时保持
-关闭、以及显式保存配置的覆盖行为，Redis 用桩对象替代。
+覆盖 _normalize 的建议时间预填（suggested_time：01:00-06:00 随机、10 分钟整数倍）、
+未配置时保持关闭、以及显式保存配置的覆盖行为，Redis 用桩对象替代。
 """
 
 from __future__ import annotations
@@ -10,11 +10,22 @@ import pytest
 
 from backend.services.engine.tasks.market_sync_scheduler import (
     DEFAULT_SCHEDULE,
-    MARKET_SUGGESTED_TIMES,
     MARKETS,
+    SUGGESTED_TIME_STEP_MINUTES,
+    SUGGESTED_TIME_WINDOW,
     get_schedule,
     save_schedule,
+    suggested_time,
 )
+
+
+def _in_window(t: str) -> bool:
+    return SUGGESTED_TIME_WINDOW[0] <= t <= SUGGESTED_TIME_WINDOW[1]
+
+
+def _on_step_grid(t: str) -> bool:
+    hour, minute = t.split(":")
+    return int(minute) % SUGGESTED_TIME_STEP_MINUTES == 0
 
 
 class _StubRedis:
@@ -56,25 +67,37 @@ def test_market_suggested_time_is_prefilled_without_enabling(stub_redis):
 
     # Assert：建议时间只作预填，enabled 仍为 False；其余字段沿用全局默认
     assert cfg["enabled"] is False
-    assert cfg["time"] == MARKET_SUGGESTED_TIMES["HK"]
+    assert _in_window(cfg["time"]), cfg["time"]
+    assert _on_step_grid(cfg["time"]), cfg["time"]
     assert cfg["days"] == DEFAULT_SCHEDULE["days"]
     assert cfg["datasets"] == []
 
 
-def test_suggested_times_are_staggered_and_after_midnight():
-    # Assert：各市场建议时间互不错峰，且都落在次日 00:00 以后的凌晨窗口
-    times = list(MARKET_SUGGESTED_TIMES.values())
-    assert len(times) == len(set(times)), "各市场建议触发时间必须错开"
-    assert all("00:00" <= t <= "06:00" for t in times), times
+def test_suggested_time_is_random_in_window_on_10min_grid():
+    # Act：多次取值
+    times = {suggested_time() for _ in range(200)}
+
+    # Assert：全部落在 01:00-06:00 且为 10 分钟整数倍
+    assert all(_in_window(t) for t in times), times
+    assert all(_on_step_grid(t) for t in times), times
+    # 随机性：200 次抽样不应恒定不变（窗口内共 31 个候选）
+    assert len(times) > 1, times
+
+
+def test_suggested_time_covers_full_window():
+    # Assert：窗口边界可被取到（含 01:00 与 06:00），不会退化成固定值
+    seen = {suggested_time() for _ in range(3000)}
+    assert SUGGESTED_TIME_WINDOW[0] in seen, seen
+    assert SUGGESTED_TIME_WINDOW[1] in seen, seen
 
 
 def test_ashare_stays_disabled_without_config(stub_redis):
     # Act：A 股未配置
     cfg = get_schedule("A")
 
-    # Assert：保持关闭，时间取 A 股建议值
+    # Assert：保持关闭，时间落在建议窗口内
     assert cfg["enabled"] is False
-    assert cfg["time"] == MARKET_SUGGESTED_TIMES["A"]
+    assert _in_window(cfg["time"]), cfg["time"]
 
 
 def test_user_can_enable_market_explicitly(stub_redis):
@@ -98,7 +121,7 @@ def test_explicit_saved_config_disables_market(stub_redis):
 
     # Assert：显式关闭生效；未覆盖字段沿用建议时间预填
     assert cfg["enabled"] is False
-    assert cfg["time"] == MARKET_SUGGESTED_TIMES["HK"]
+    assert _in_window(cfg["time"]), cfg["time"]
 
 
 def test_save_and_get_roundtrip_keeps_fields_not_set_by_caller(stub_redis):
@@ -128,5 +151,9 @@ def test_invalid_time_in_stored_config_falls_back_to_global_default(stub_redis):
 def test_normalize_of_missing_config_for_unknown_market_uses_global_defaults():
     from backend.services.engine.tasks.market_sync_scheduler import _normalize
 
-    # Act / Assert：未知 market 传入时仅应用全局默认，不抛错
-    assert _normalize(None, "XX") == dict(DEFAULT_SCHEDULE)
+    # Act：未知 market 传入时仅应用全局默认，不抛错
+    got = _normalize(None, "XX")
+
+    # Assert：除建议时间外与全局默认完全一致（时间为窗口内的随机预填值）
+    assert got == {**DEFAULT_SCHEDULE, "time": got["time"]}
+    assert _in_window(got["time"]), got["time"]

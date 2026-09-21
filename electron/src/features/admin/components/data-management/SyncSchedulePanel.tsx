@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Button, Checkbox, InputNumber, message, Space, Switch, TimePicker } from 'antd';
+import { Button, message, Space, Switch, TimePicker } from 'antd';
 import dayjs, { Dayjs } from 'dayjs';
 import { ClockCircleOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { adminService } from '../../services/adminService';
@@ -31,7 +31,9 @@ export const SyncSchedulePanel: React.FC<SyncSchedulePanelProps> = ({
     const [saving, setSaving] = useState(false);
     const [running, setRunning] = useState(false);
     const [enabled, setEnabled] = useState(false);
-    const [time, setTime] = useState<Dayjs>(dayjs('00:30', 'HH:mm'));
+    const [time, setTime] = useState<Dayjs>(dayjs('01:00', 'HH:mm'));
+    // days 不再暴露输入框（用户要求移除「同步最近 N 天」），但后端 US/HK/BC/FUTURES
+    // 的同步脚本仍消费该字段：读回原值后原样回存，避免保存时被静默重置成默认值。
     const [days, setDays] = useState(defaultDays);
     const [datasets, setDatasets] = useState<string[]>([]);
 
@@ -47,7 +49,7 @@ export const SyncSchedulePanel: React.FC<SyncSchedulePanelProps> = ({
             if (resp?.data) {
                 const s = resp.data;
                 setEnabled(!!s.enabled);
-                setTime(dayjs(s.time, 'HH:mm').isValid() ? dayjs(s.time, 'HH:mm') : dayjs('00:30', 'HH:mm'));
+                setTime(dayjs(s.time, 'HH:mm').isValid() ? dayjs(s.time, 'HH:mm') : dayjs('01:00', 'HH:mm'));
                 setDays(s.days ?? defaultDays);
                 setDatasets(s.datasets?.length ? s.datasets : [...selectedDatasets]);
             }
@@ -95,7 +97,7 @@ export const SyncSchedulePanel: React.FC<SyncSchedulePanelProps> = ({
             <div className="flex items-center justify-between mb-3">
                 <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                     <ClockCircleOutlined className="text-amber-500" />
-                    定时同步 · 每天自动同步上游数据（建议次日 00:00 以后错峰）
+                    定时同步 · 每天自动同步上游数据（建议次日 01:00-06:00 错峰）
                 </span>
                 <Switch
                     size="small"
@@ -113,23 +115,11 @@ export const SyncSchedulePanel: React.FC<SyncSchedulePanelProps> = ({
                         <TimePicker
                             size="small"
                             format="HH:mm"
-                            minuteStep={5}
+                            minuteStep={10}
                             value={time}
                             onChange={(v) => v && setTime(v)}
                             style={{ width: 96 }}
                         />
-                        <span className="text-xs text-slate-500">同步最近</span>
-                        <InputNumber
-                            size="small"
-                            min={1}
-                            max={365}
-                            value={days}
-                            onChange={(v) => setDays(v ?? defaultDays)}
-                            style={{ width: 72 }}
-                        />
-                        <span className="text-xs text-slate-500">
-                            {market === 'BC' ? '个自然日' : '个交易日'}
-                        </span>
                     </div>
                     <div className="text-[11px] text-slate-400 px-1">
                         {datasets.length > 0
