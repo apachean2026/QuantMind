@@ -367,16 +367,30 @@ export async function exportFactorToIde(
   return makeOk(res.data?.data ?? {});
 }
 
+/** 回测可选的因子项（下拉显示 name，提交用 id） */
+export interface FactorLibraryOption {
+  id: string;
+  name: string;
+  ic: number | null;
+  status: string;
+}
+
 export async function listFactorLibraries(): Promise<
-  ApiResponse<{ libraries: string[] }>
+  ApiResponse<{ libraries: FactorLibraryOption[] }>
 > {
   try {
-    const res = await apiClient.get(`/alpha-agent/factors`);
+    const res = await apiClient.get(`/alpha-agent/factors?limit=200`);
     const rawFactors: any[] = res.data?.data?.factors ?? [];
-    // Extract unique factor IDs as library identifiers
-    const libraries: string[] = rawFactors
-      .map((f: any) => f.id ?? f.factor_id ?? '')
-      .filter((id: string) => id.length > 0);
+    // 下拉项以因子为单位：显示 factor_name，值用 factor_id。
+    // 此前只回显裸 id（如 1897d59bf8cc143d3c339b5f105d2efd），用户无法判断是哪个因子。
+    const libraries: FactorLibraryOption[] = rawFactors
+      .map((f: any) => ({
+        id: String(f.factor_id ?? f.id ?? ''),
+        name: String(f.factor_name ?? f.name ?? ''),
+        ic: typeof f.ic_value === 'number' ? f.ic_value : null,
+        status: String(f.status ?? ''),
+      }))
+      .filter((o: FactorLibraryOption) => o.id.length > 0);
     return makeOk({ libraries });
   } catch {
     return makeOk({ libraries: [] });

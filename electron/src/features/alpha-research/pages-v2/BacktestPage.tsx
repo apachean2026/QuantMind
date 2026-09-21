@@ -21,6 +21,7 @@ import {
   listFactorLibraries,
   getUniverses,
 } from '../services-v2/api';
+import type { FactorLibraryOption } from '../services-v2/api';
 import type { UniverseId, UniverseInfo } from '../types-v2';
 import {
   AreaChart,
@@ -135,7 +136,7 @@ export const BacktestPage: React.FC = () => {
   } = useTaskContext();
 
   // -- Local UI State --
-  const [libraries, setLibraries] = useState<string[]>([]);
+  const [libraries, setLibraries] = useState<FactorLibraryOption[]>([]);
   // Initialize with saved library from localStorage if available
   const [selectedLibrary, setSelectedLibrary] = useState(localStorage.getItem('quantaalpha_active_library') || '');
   const [factorSource, setFactorSource] = useState<'custom' | 'combined'>('custom');
@@ -156,8 +157,8 @@ export const BacktestPage: React.FC = () => {
         const libs = resp.data.libraries || [];
         setLibraries(libs);
         // Auto-select first if current selection is empty or removed
-        if (libs.length > 0 && (!selectedLibrary || !libs.includes(selectedLibrary))) {
-          setSelectedLibrary(libs[0]);
+        if (libs.length > 0 && (!selectedLibrary || !libs.some(l => l.id === selectedLibrary))) {
+          setSelectedLibrary(libs[0].id);
         }
       }
     } catch {
@@ -305,7 +306,10 @@ export const BacktestPage: React.FC = () => {
                       <option value="">暂无因子库文件</option>
                     )}
                     {libraries.map(lib => (
-                      <option key={lib} value={lib}>{lib}</option>
+                      <option key={lib.id} value={lib.id}>
+                        {lib.name || lib.id}
+                        {lib.ic !== null ? `（IC ${lib.ic.toFixed(4)}）` : ''}
+                      </option>
                     ))}
                   </select>
                   <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
@@ -322,7 +326,7 @@ export const BacktestPage: React.FC = () => {
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                包含 {factorCount} 个因子
+                因子库共 {factorCount} 个因子
               </p>
             </div>
 
