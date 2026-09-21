@@ -66,7 +66,11 @@ class SimulationDailySnapshotService:
         cash = float(account_payload.get("cash") or 0.0)
         available_cash = float(account_payload.get("available_cash") or cash)
         short_market_value = float(account_payload.get("short_market_value") or 0.0)
-        market_value = float(account_payload.get("market_value") or 0.0)
+        long_market_value = float(
+            account_payload.get("long_market_value")
+            or account_payload.get("market_value")
+            or 0.0
+        )
 
         self.db.add(
             SimulationAccountDaily(
@@ -78,7 +82,7 @@ class SimulationDailySnapshotService:
                 cash=cash,
                 available_cash=available_cash,
                 frozen_cash=max(0.0, cash - available_cash),
-                long_market_value=max(0.0, market_value),
+                long_market_value=max(0.0, long_market_value),
                 short_market_value=max(0.0, short_market_value),
                 total_asset=total_asset,
                 liabilities=float(account_payload.get("liabilities") or 0.0),

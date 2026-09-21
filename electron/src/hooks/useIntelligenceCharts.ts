@@ -277,7 +277,101 @@ const parseIsoDateFromTimestamp = (timestamp: string): string | null => {
     return parsed.toISOString().slice(0, 10);
 };
 
+/** 上海日历日，避免 UTC 凌晨把「今天」算成昨天。 */
+const shanghaiTodayIso = (): string => {
+    try {
+        return new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Shanghai',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+        }).format(new Date());
+    } catch {
+        const now = new Date();
+        const utc = now.getTime() + now.getTimezoneOffset() * 60_000;
+        const sh = new Date(utc + 8 * 3600_000);
+        return sh.toISOString().slice(0, 10);
+    }
+};
+
 const toUtcTradingTimestamp = (isoDate: string): string => `${isoDate}T00:00:00Z`;
+
+const toFiniteNumber = (value: unknown): number => {
+    const n = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(n) ? n : Number.NaN;
+};
+
+/** 模拟盘：按相邻快照总资产算日收益率（%）；首日无昨收时回退 today_pnl/日初口径。 */
+const buildSimulationDailyReturnPoints = (rows: unknown[]): ChartDataPoint[] => {
+    const parsed = rows
+        .map((item) => {
+            const row = asRecord(item);
+            if (!row) return null;
+            const rawDate = row.snapshot_date ?? row.timestamp;
+            const isoDate = parseIsoDateFromTimestamp(String(rawDate ?? ''));
+            if (!isoDate) return null;
+            const totalAsset = toFiniteNumber(row.total_asset ?? row.total_value);
+            const todayPnl = toFiniteNumber(row.today_pnl ?? row.daily_pnl);
+            const initial = toFiniteNumber(row.initial_capital);
+            return {
+                isoDate,
+                totalAsset: Number.isFinite(totalAsset) ? totalAsset : null,
+                todayPnl: Number.isFinite(todayPnl) ? todayPnl : null,
+                initial: Number.isFinite(initial) && initial > 0 ? initial : null,
+            };
+        })
+        .filter((item): item is NonNullable<typeof item> => item !== null)
+        .sort((a, b) => a.isoDate.localeCompare(b.isoDate));
+
+    const deduped: typeof parsed = [];
+    for (const row of parsed) {
+        const last = deduped[deduped.length - 1];
+        if (last && last.isoDate === row.isoDate) {
+            deduped[deduped.length - 1] = row;
+        } else {
+            deduped.push(row);
+        }
+    }
+
+    return deduped.map((row, idx) => {
+        const prev = idx > 0 ? deduped[idx - 1] : null;
+        let returnPct = Number.NaN;
+        if (
+            prev &&
+            prev.totalAsset != null &&
+            prev.totalAsset > 0 &&
+            row.totalAsset != null
+        ) {
+            returnPct = ((row.totalAsset - prev.totalAsset) / prev.totalAsset) * 100;
+        } else if (row.todayPnl != null) {
+            const base =
+                row.totalAsset != null && row.todayPnl != null
+                    ? row.totalAsset - row.todayPnl
+                    : row.initial;
+            if (base != null && base > 0) {
+                returnPct = (row.todayPnl / base) * 100;
+            }
+        }
+        if (!Number.isFinite(returnPct)) returnPct = 0;
+        return {
+            timestamp: toUtcTradingTimestamp(row.isoDate),
+            value: returnPct,
+            label: '模拟收益率',
+        } as ChartDataPoint;
+    });
+};
+
+const buildNaturalDayWindow = (anchorDate: string, count: number): string[] => {
+    const dates: string[] = [];
+    const cursor = new Date(`${anchorDate}T00:00:00Z`);
+    if (Number.isNaN(cursor.getTime())) return [anchorDate];
+    for (let i = count - 1; i >= 0; i -= 1) {
+        const d = new Date(cursor);
+        d.setUTCDate(cursor.getUTCDate() - i);
+        dates.push(d.toISOString().slice(0, 10));
+    }
+    return dates;
+};
 
 const resolveAccountDailyReturnPct = (account: unknown): number | null => {
     const row = asRecord(account);
@@ -333,15 +427,20 @@ const getTradingDayWindow = async (anchorDate: string, count: number, calendar: 
     if (cached) return cached;
 
     const promise = (async () => {
-        const dates = [anchorDate];
-        let cursor = anchorDate;
-        while (dates.length < count) {
-            const prev = await modelTrainingService.prevTradingDay(calendar, cursor);
-            if (!prev || prev === cursor) break;
-            dates.push(prev);
-            cursor = prev;
+        try {
+            const dates = [anchorDate];
+            let cursor = anchorDate;
+            while (dates.length < count) {
+                const prev = await modelTrainingService.prevTradingDay(calendar, cursor);
+                if (!prev || prev === cursor) break;
+                dates.push(prev);
+                cursor = prev;
+            }
+            return dates.reverse();
+        } catch {
+            // 日历接口失败时仍用自然日窗口，保证快照点能画出来
+            return buildNaturalDayWindow(anchorDate, count);
         }
-        return dates.reverse();
     })();
 
     tradingDayWindowCache.set(cacheKey, promise);
@@ -431,57 +530,48 @@ export const useIntelligenceCharts = (userId: string = 'current', options?: { au
             }
 
             const ledgerPoints = Array.isArray(ledgerDaily)
-                ? ledgerDaily
-                    .map((row: any) => {
-                        if (!row || (!row.snapshot_date && !row.timestamp)) return null;
-                        const date = row.snapshot_date || row.timestamp;
-                        
-                        let returnValue = Number.NaN;
-                        if (isLive) {
-                            // 模拟逻辑：使用百分比字段
+                ? (isLive
+                    ? ledgerDaily
+                        .map((row: any) => {
+                            if (!row || (!row.snapshot_date && !row.timestamp)) return null;
+                            const date = row.snapshot_date || row.timestamp;
                             const pctValue = Number(row.daily_return_pct);
                             const ratioValue = Number(row.daily_return_ratio);
                             const legacyPctValue = Number(row.daily_return);
-                            returnValue = Number.isFinite(pctValue)
+                            const returnValue = Number.isFinite(pctValue)
                                 ? pctValue
                                 : Number.isFinite(ratioValue)
                                     ? ratioValue * 100
                                     : Number.isFinite(legacyPctValue)
                                         ? legacyPctValue
                                         : Number.NaN;
-                        } else {
-                            // 模拟盘逻辑：计算 盈亏 / 初始权益
-                            const pnl = Number(row.today_pnl || row.daily_pnl || 0);
-                            const initial = Number(row.initial_capital || 1000000);
-                            returnValue = initial > 0 ? (pnl / initial) * 100 : 0;
-                        }
-
-                        if (!Number.isFinite(returnValue)) return null;
-                        return {
-                            timestamp: `${date.split('T')[0]}T00:00:00Z`,
-                            value: returnValue,
-                            label: isLive ? '模拟收益率' : '模拟收益率',
-                        } as ChartDataPoint;
-                    })
-                    .filter((item): item is ChartDataPoint => item !== null)
+                            if (!Number.isFinite(returnValue)) return null;
+                            return {
+                                timestamp: `${String(date).split('T')[0]}T00:00:00Z`,
+                                value: returnValue,
+                                label: '实盘收益率',
+                            } as ChartDataPoint;
+                        })
+                        .filter((item): item is ChartDataPoint => item !== null)
+                    : buildSimulationDailyReturnPoints(ledgerDaily))
                 : [];
 
             const normalizedReturnPoints = ledgerPoints.length > 0 ? ledgerPoints : normalizeChartPoints(dailyReturn);
             
-            // 修正日期锚点逻辑：始终以“今天”的交易日作为主轴，而不是以账本最后日期
-            const now = new Date();
-            const todayIso = now.toISOString().slice(0, 10);
+            // 锚点用上海日历日，避免凌晨 UTC 错日把当日快照挤出窗口
+            const todayIso = shanghaiTodayIso();
             const fallbackAnchorDate = parseIsoDateFromTimestamp(todayIso) || todayIso;
             
-            // 只有当今天确实没有成交，且账本有更近的数据时（理论上不成立，因为账本通常落后于实时数据），才考虑使用账本日期
-            const ledgerAnchorDate = parseIsoDateFromTimestamp(ledgerPoints[ledgerPoints.length - 1]?.timestamp || '');
-            
-            const resolvedAnchor = await modelTrainingService.resolveInferenceDateByCalendar(
-                calendar,
-                fallbackAnchorDate,
-            );
-            
-            const anchorTradingDate = resolvedAnchor.date || fallbackAnchorDate;
+            let anchorTradingDate = fallbackAnchorDate;
+            try {
+                const resolvedAnchor = await modelTrainingService.resolveInferenceDateByCalendar(
+                    calendar,
+                    fallbackAnchorDate,
+                );
+                anchorTradingDate = resolvedAnchor.date || fallbackAnchorDate;
+            } catch {
+                anchorTradingDate = fallbackAnchorDate;
+            }
 
             // 交易次数窗口：以今日为锚的近 7 交易日；若最近成交落在窗口外（如周末成交），
             // 以最近成交日为额外锚点扩展窗口，避免这部分成交被静默丢弃。
@@ -502,7 +592,14 @@ export const useIntelligenceCharts = (userId: string = 'current', options?: { au
             }
             const tradeWindows = await Promise.all(tradeWindowTasks);
             const recentTradeTradingDates = Array.from(new Set(tradeWindows.flat())).sort();
-            const recentDailyTradingDates = await getTradingDayWindow(anchorTradingDate, 30, calendar);
+            let recentDailyTradingDates = await getTradingDayWindow(anchorTradingDate, 30, calendar);
+            // 日历窗口为空或失败时，至少用快照自身日期轴，避免「有数据但不显示」
+            if (recentDailyTradingDates.length === 0 && normalizedReturnPoints.length > 0) {
+                recentDailyTradingDates = normalizedReturnPoints
+                    .map((p) => parseIsoDateFromTimestamp(p.timestamp))
+                    .filter((d): d is string => Boolean(d))
+                    .sort();
+            }
 
             const todayReturnPct = resolveAccountDailyReturnPct(account);
             const returnSourcePoints = normalizedReturnPoints.slice();
@@ -514,15 +611,19 @@ export const useIntelligenceCharts = (userId: string = 'current', options?: { au
                 });
             }
 
-            const returnPoints = buildTradingCalendarSeries(
-                recentDailyTradingDates,
-                returnSourcePoints,
-                (existing, isoDate) => (isoDate === anchorTradingDate ? (existing?.label || '今日实时') : existing?.label),
-            );
-            const tradeCountPoints = buildTradingCalendarSeries(
-                recentTradeTradingDates,
-                rawTradePoints,
-            );
+            const returnPoints = recentDailyTradingDates.length > 0
+                ? buildTradingCalendarSeries(
+                    recentDailyTradingDates,
+                    returnSourcePoints,
+                    (existing, isoDate) => (isoDate === anchorTradingDate ? (existing?.label || '今日实时') : existing?.label),
+                )
+                : returnSourcePoints;
+            const tradeCountPoints = recentTradeTradingDates.length > 0
+                ? buildTradingCalendarSeries(
+                    recentTradeTradingDates,
+                    rawTradePoints,
+                )
+                : rawTradePoints;
 
             const nextData = {
                 dailyReturn: returnPoints,
@@ -550,7 +651,7 @@ export const useIntelligenceCharts = (userId: string = 'current', options?: { au
             initializedRef.current = true;
             setLoading(false);
         }
-    }, [autoFetchEnabled, resolvedUserId, mode, isLive]);
+    }, [autoFetchEnabled, resolvedUserId, mode, isLive, calendar]);
 
     useEffect(() => {
         if (!autoFetchEnabled) {

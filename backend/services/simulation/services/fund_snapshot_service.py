@@ -209,7 +209,9 @@ class SimulationFundSnapshotService:
                 account.get("cash") or account.get("available_balance")
             )
             bucket["frozen_balance"] += _to_decimal(account.get("frozen_balance"))
-            bucket["market_value"] += _to_decimal(account.get("market_value"))
+            bucket["market_value"] += _to_decimal(
+                account.get("market_value") or account.get("long_market_value")
+            )
 
         rows: list[dict[str, object]] = []
         for (tenant_id, user_id), bucket in grouped.items():
@@ -271,8 +273,118 @@ class SimulationFundSnapshotService:
                     )
                 )
                 await session.execute(stmt)
+                # 同步轻量日台账行：EOD 未跑时智能图表/审计仍有 account_daily 可读
+                await cls._upsert_account_daily_summary(session, row)
+            # 把存量 fund_snapshots 中缺失的 account_daily 补齐（只插缺的，不覆盖当日已写行以外的历史）
+            seen_users = {(str(r["tenant_id"]), str(r["user_id"])) for r in rows}
+            for tenant_id, user_id in seen_users:
+                await cls._backfill_missing_account_daily(session, tenant_id, user_id)
 
         return SnapshotUpsertResult(upserted_rows=len(rows), scanned_accounts=len(keys))
+
+    @staticmethod
+    async def _backfill_missing_account_daily(
+        session, tenant_id: str, user_id: str
+    ) -> None:
+        """为尚未有 account_daily 的 fund_snapshot 日期补写汇总行。"""
+        from sqlalchemy import select
+
+        from backend.services.simulation.models.account_daily import (
+            SimulationAccountDaily,
+        )
+
+        existing_dates = set(
+            (
+                await session.execute(
+                    select(SimulationAccountDaily.snapshot_date).where(
+                        SimulationAccountDaily.tenant_id == tenant_id,
+                        SimulationAccountDaily.user_id == user_id,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        fund_rows = list(
+            (
+                await session.execute(
+                    select(SimulationFundSnapshot).where(
+                        SimulationFundSnapshot.tenant_id == tenant_id,
+                        SimulationFundSnapshot.user_id == user_id,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for snap in fund_rows:
+            if snap.snapshot_date in existing_dates:
+                continue
+            await SimulationFundSnapshotService._upsert_account_daily_summary(
+                session,
+                {
+                    "tenant_id": tenant_id,
+                    "user_id": user_id,
+                    "snapshot_date": snap.snapshot_date,
+                    "total_asset": snap.total_asset,
+                    "available_balance": snap.available_balance,
+                    "frozen_balance": snap.frozen_balance,
+                    "market_value": snap.market_value,
+                    "today_pnl": snap.today_pnl,
+                    "total_pnl": snap.total_pnl,
+                },
+            )
+
+    @staticmethod
+    async def _upsert_account_daily_summary(session, row: dict[str, object]) -> None:
+        """由资金快照写/更新 simulation_account_daily 汇总行（不含持仓明细）。"""
+        from sqlalchemy import delete
+
+        from backend.services.simulation.models.account_daily import (
+            SimulationAccountDaily,
+        )
+        from backend.services.simulation.services.ledger_service import (
+            SimulationLedgerService,
+        )
+
+        tenant_id = str(row["tenant_id"])
+        user_id = str(row["user_id"])
+        snapshot_date = row["snapshot_date"]
+        account_id = SimulationLedgerService.build_account_id(tenant_id, user_id)
+        total_asset = float(row["total_asset"] or 0)
+        available = float(row["available_balance"] or 0)
+        frozen = float(row["frozen_balance"] or 0)
+        market_value = float(row["market_value"] or 0)
+        today_pnl = float(row["today_pnl"] or 0)
+        total_pnl = float(row["total_pnl"] or 0)
+        cash = available + frozen
+
+        await session.execute(
+            delete(SimulationAccountDaily).where(
+                SimulationAccountDaily.tenant_id == tenant_id,
+                SimulationAccountDaily.user_id == user_id,
+                SimulationAccountDaily.snapshot_date == snapshot_date,
+            )
+        )
+        session.add(
+            SimulationAccountDaily(
+                account_id=account_id,
+                tenant_id=tenant_id,
+                user_id=user_id,
+                snapshot_date=snapshot_date,
+                snapshot_at=datetime.combine(snapshot_date, datetime.min.time()),
+                cash=cash,
+                available_cash=available,
+                frozen_cash=frozen,
+                long_market_value=max(0.0, market_value),
+                short_market_value=0.0,
+                total_asset=total_asset,
+                liabilities=0.0,
+                equity=total_asset,
+                daily_pnl=today_pnl,
+                total_pnl=total_pnl,
+            )
+        )
 
     @staticmethod
     async def list_user_daily(

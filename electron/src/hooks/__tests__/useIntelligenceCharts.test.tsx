@@ -20,15 +20,18 @@ vi.mock('../../services/portfolioService', async (importOriginal) => {
         }
     };
 });
-vi.mock('../../services/tradingService', () => ({
-    tradingService: {
-        getTradeStats: vi.fn()
-    }
-}));
 vi.mock('../../services/realTradingService', () => ({
     realTradingService: {
         getAccount: vi.fn(),
         getAccountLedgerDaily: vi.fn(),
+        getRuntimeAccount: vi.fn(),
+        getSimulationDailySnapshots: vi.fn(),
+    }
+}));
+vi.mock('../../services/tradingService', () => ({
+    tradingService: {
+        getTradeStats: vi.fn(),
+        getSimulationTradeStatsOverview: vi.fn(),
     }
 }));
 vi.mock('../../services/modelTrainingService', () => ({
@@ -41,6 +44,11 @@ vi.mock('../../features/auth/services/authService', () => ({
     authService: {
         getStoredUser: vi.fn(() => null),
     }
+}));
+vi.mock('../../store', () => ({
+    useAppSelector: vi.fn((selector: (state: any) => unknown) =>
+        selector({ ui: { currentMarket: 'CN', tradingMode: 'real' } }),
+    ),
 }));
 
 // Mock WebSocket context
@@ -69,6 +77,9 @@ describe('useIntelligenceCharts', () => {
                 } while (cursor.getUTCDay() === 0 || cursor.getUTCDay() === 6);
                 return cursor.toISOString().slice(0, 10);
             });
+        vi.mocked(realTradingService.getRuntimeAccount).mockResolvedValue(null as any);
+        vi.mocked(realTradingService.getSimulationDailySnapshots).mockResolvedValue([] as any);
+        vi.mocked(tradingService.getSimulationTradeStatsOverview).mockResolvedValue(null as any);
         // Setup default mock implementation for onMessage to return unsubscribe function
         mockOnMessage.mockReturnValue(() => { });
     });
@@ -94,13 +105,14 @@ describe('useIntelligenceCharts', () => {
             value: 0,
             label: '今日实时',
         });
-        expect(result.current.data.tradeCount).toHaveLength(7);
+        // 近 7 交易日窗口；若有落在窗口外的成交日会再并入一段窗口
+        expect(result.current.data.tradeCount.length).toBeGreaterThanOrEqual(7);
         expect(result.current.data.tradeCount.at(-1)).toEqual({
             timestamp: '2023-01-03T00:00:00Z',
             value: 0,
             label: undefined,
         });
-        expect(vi.mocked(tradingService.getTradeStats)).toHaveBeenCalledWith('current', '1w');
+        expect(vi.mocked(tradingService.getTradeStats)).toHaveBeenCalledWith('current', '1w', 'real');
         expect(result.current.data.positionRatio).toEqual([
             { name: '持仓市值', code: 'HOLDING', value: 50, ratio: 1 },
             { name: '可用资金', code: 'CASH', value: 0, ratio: 0 },
@@ -139,7 +151,7 @@ describe('useIntelligenceCharts', () => {
             expect(result.current.loading).toBe(false);
         });
 
-        expect(vi.mocked(tradingService.getTradeStats)).toHaveBeenCalledWith('user-001', '1w');
+        expect(vi.mocked(tradingService.getTradeStats)).toHaveBeenCalledWith('user-001', '1w', 'real');
     });
 
     it('should handle WebSocket chart updates for dailyReturn', async () => {

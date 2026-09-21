@@ -98,12 +98,47 @@ def test_cycle_timeout_and_heartbeat_defaults(monkeypatch):
     assert settle_heartbeat_cycles() == 1
 
 
-def test_trade_service_starts_simulation_eod_worker():
+def test_daily_close_fallback_allowed_shanghai_window(monkeypatch):
+    """日线兜底仅 06:00–15:00（上海）；盘后/凌晨禁止，避免收益打回 T-1。"""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from backend.services.simulation.services.equity_settlement_worker import (
+        daily_close_fallback_allowed,
+        overnight_series_max_age_sec,
+    )
+
+    sh = ZoneInfo("Asia/Shanghai")
+    monkeypatch.delenv("SIM_DAILY_CLOSE_FALLBACK_AFTER_HOUR", raising=False)
+    monkeypatch.delenv("SIM_DAILY_CLOSE_FALLBACK_SESSION_END_HOUR", raising=False)
+
+    assert daily_close_fallback_allowed(datetime(2026, 9, 22, 0, 30, tzinfo=sh)) is False
+    assert daily_close_fallback_allowed(datetime(2026, 9, 22, 5, 59, tzinfo=sh)) is False
+    assert daily_close_fallback_allowed(datetime(2026, 9, 22, 6, 0, tzinfo=sh)) is True
+    assert daily_close_fallback_allowed(datetime(2026, 9, 22, 10, 0, tzinfo=sh)) is True
+    assert daily_close_fallback_allowed(datetime(2026, 9, 22, 14, 59, tzinfo=sh)) is True
+    assert daily_close_fallback_allowed(datetime(2026, 9, 22, 15, 0, tzinfo=sh)) is False
+    assert daily_close_fallback_allowed(datetime(2026, 9, 22, 20, 0, tzinfo=sh)) is False
+
+    monkeypatch.setenv("SIM_DAILY_CLOSE_FALLBACK_AFTER_HOUR", "7")
+    assert daily_close_fallback_allowed(datetime(2026, 9, 22, 6, 30, tzinfo=sh)) is False
+    assert daily_close_fallback_allowed(datetime(2026, 9, 22, 7, 0, tzinfo=sh)) is True
+
+    monkeypatch.delenv("SIM_OVERNIGHT_SERIES_MAX_AGE_SEC", raising=False)
+    assert overnight_series_max_age_sec() == 20 * 3600
+
+
+def test_eod_default_trigger_after_six():
     from pathlib import Path
 
-    source = Path("backend/services/trade/main.py").read_text(encoding="utf-8")
-    assert "run_simulation_eod_worker" in source
-    assert "simulation-eod-worker" in source
+    source = Path("backend/services/simulation/services/eod_service.py").read_text(
+        encoding="utf-8"
+    )
+    assert 'SIM_EOD_TRIGGER_TIME", "06:05"' in source
+    recon = Path(
+        "backend/services/simulation/services/reconcile_service.py"
+    ).read_text(encoding="utf-8")
+    assert "(6, 20)" in recon
 
 
 def test_ensure_table_runs_once_per_process(monkeypatch):

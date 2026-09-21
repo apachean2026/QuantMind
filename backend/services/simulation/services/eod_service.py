@@ -1,7 +1,7 @@
 """
 Simulation end-of-day settlement service.
 
-Runs after overnight daily-data refresh (default 03:05 Asia/Shanghai) and performs:
+Runs after overnight daily-data refresh (default 06:05 Asia/Shanghai) and performs:
 1. Re-mark all accounts to latest close prices via projection service
 2. Write daily account/position snapshots
 3. Capture fund snapshots
@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 
 _TZ = ZoneInfo("Asia/Shanghai")
 _TRIGGER_TIME = time(
-    *map(int, (os.getenv("SIM_EOD_TRIGGER_TIME", "03:05") or "03:05").split(":"))
+    *map(int, (os.getenv("SIM_EOD_TRIGGER_TIME", "06:05") or "06:05").split(":"))
 )
 _INTERVAL_SEC = 60
 
@@ -60,11 +60,12 @@ def _resolve_target_trade_date(now: datetime | None = None) -> date:
 
 async def _should_run_eod(trade_date: date) -> bool:
     try:
+        # 使用通配 user_id=* 读全局交易日历，避免 user_id=0 鉴权/作用域落空
         return await calendar_service.is_trading_day(
             market="SSE",
             trade_date=trade_date,
             tenant_id="default",
-            user_id="0",
+            user_id="*",
         )
     except Exception:
         return trade_date.weekday() < 5

@@ -19,8 +19,9 @@
    simulation_accounts 的市值/权益字段与 last_projected_at（台账投影
    新鲜度）。
 
-取价链：远端 Redis series tick（新鲜）→ 本地日线最近交易日收盘价兜底。
-盘外/重启后 total_asset 同样回到最新收盘口径而非冻结旧值。
+取价链：远端 Redis series tick（新鲜）→ 盘后保留 series 末笔 →
+次日 06:00 后才允许本地日线收盘兜底（日线往往凌晨才发布，过早用会
+把权益打回 T-1）。
 
 simulation_account_daily 仍由 EOD 日终链路负责（历史日曲线口径），
 本 worker 不做盘中 delete+insert 维护，避免 2880 次/天的写放大。
@@ -41,6 +42,9 @@ from backend.services.trade_shared.redis_client import RedisClient
 logger = logging.getLogger(__name__)
 
 _SH_TZ = ZoneInfo("Asia/Shanghai")
+
+# series 末笔盘后保留窗口（秒）：覆盖「收盘→次日 06:00」约 15h，默认 20h
+_DEFAULT_OVERNIGHT_SERIES_MAX_AGE_SEC = 20 * 3600
 
 
 def settle_enabled() -> bool:
@@ -73,6 +77,53 @@ def settle_heartbeat_cycles() -> int:
         return max(1, int(os.getenv("SIM_EQUITY_SETTLE_HEARTBEAT_CYCLES", "20")))
     except (TypeError, ValueError):
         return 20
+
+
+def daily_close_fallback_allowed(now: datetime | None = None) -> bool:
+    """是否允许用本地日线收盘做权益重估兜底。
+
+    日线数据往往凌晨才发布；盘后～次日 06:00 前若用日线会把市值打回 T-1。
+    允许窗口（上海时区，可配）：
+      SIM_DAILY_CLOSE_FALLBACK_AFTER_HOUR（默认 6）≤ hour <
+      SIM_DAILY_CLOSE_FALLBACK_SESSION_END_HOUR（默认 15）
+    """
+    try:
+        after_hour = int(os.getenv("SIM_DAILY_CLOSE_FALLBACK_AFTER_HOUR", "6") or 6)
+    except (TypeError, ValueError):
+        after_hour = 6
+    try:
+        session_end = int(
+            os.getenv("SIM_DAILY_CLOSE_FALLBACK_SESSION_END_HOUR", "15") or 15
+        )
+    except (TypeError, ValueError):
+        session_end = 15
+    after_hour = max(0, min(23, after_hour))
+    session_end = max(after_hour + 1, min(24, session_end))
+
+    if now is None:
+        current = datetime.now(_SH_TZ)
+    elif now.tzinfo is None:
+        current = now.replace(tzinfo=_SH_TZ)
+    else:
+        current = now.astimezone(_SH_TZ)
+    return after_hour <= current.hour < session_end
+
+
+def overnight_series_max_age_sec() -> int:
+    """盘后 series 末笔可用的最大年龄（秒）。"""
+    try:
+        return max(
+            3600,
+            int(
+                os.getenv(
+                    "SIM_OVERNIGHT_SERIES_MAX_AGE_SEC",
+                    str(_DEFAULT_OVERNIGHT_SERIES_MAX_AGE_SEC),
+                )
+                or _DEFAULT_OVERNIGHT_SERIES_MAX_AGE_SEC
+            ),
+        )
+    except (TypeError, ValueError):
+        return _DEFAULT_OVERNIGHT_SERIES_MAX_AGE_SEC
 
 
 # 持仓键 → (代码, 方向)。兼容三种历史键形：
@@ -126,6 +177,7 @@ end
 
 account.positions = positions
 account.market_value = long_mv
+account.long_market_value = long_mv
 account.short_market_value = short_mv
 account.total_asset = tonumber(account.cash or 0) + long_mv - short_mv
 
@@ -379,7 +431,7 @@ class SimulationEquitySettlementWorker:
         return out
 
     async def _resolve_prices(self, accounts: list[dict[str, Any]]) -> dict[str, float]:
-        """批量解析最新价：series tick（新鲜）→ 本地日线收盘兜底。跨账户去重。"""
+        """批量解析最新价：新鲜 series → 盘后 series 末笔 →（次日 06:00 后）日线。"""
         market_by_code: dict[str, str] = {}
         for item in accounts:
             positions = item["account"].get("positions")
@@ -401,7 +453,7 @@ class SimulationEquitySettlementWorker:
         ticks = await fetch_series_ticks(codes)
 
         prices: dict[str, float] = {}
-        fallback_codes: list[str] = []
+        missing_codes: list[str] = []
         for code in codes:
             tick = ticks.get(code)
             px = 0.0
@@ -413,13 +465,39 @@ class SimulationEquitySettlementWorker:
             if px > 0:
                 prices[code] = px
             else:
-                fallback_codes.append(code)
+                missing_codes.append(code)
 
-        # 日线收盘兜底：仅补「当前 Redis 尚无有效市价」的标的。
-        # 已有 mark 时保留原值，避免盘中 tick 短暂缺失时被过期收盘（≈成本）覆盖，
-        # 造成总资产在初始价与权益价之间跳动。
+        if not missing_codes:
+            return prices
+
+        # 盘后/凌晨：新鲜 tick 已过期，改用 series 末笔保住尾盘价，避免过早日线打回 T-1
+        allow_daily = daily_close_fallback_allowed()
+        if not allow_daily:
+            stale_ticks = await fetch_series_ticks(
+                missing_codes, max_age_sec=overnight_series_max_age_sec()
+            )
+            still_missing: list[str] = []
+            for code in missing_codes:
+                tick = stale_ticks.get(code)
+                px = 0.0
+                if isinstance(tick, dict):
+                    try:
+                        px = float(tick.get("price") or 0)
+                    except (TypeError, ValueError):
+                        px = 0.0
+                if px > 0:
+                    prices[code] = px
+                else:
+                    still_missing.append(code)
+            missing_codes = still_missing
+
+        if not missing_codes or not allow_daily:
+            return prices
+
+        # 日线收盘兜底：仅次日 06:00 后、且仅补「尚无有效市价」的标的。
+        # 已有 mark 时保留原值，避免盘中 tick 短暂缺失时被过期收盘覆盖。
         marked_codes = _codes_with_positive_mark(accounts)
-        for code in fallback_codes:
+        for code in missing_codes:
             if code in marked_codes:
                 continue
             px = await self._fallback_close(code, market_by_code[code])

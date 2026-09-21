@@ -228,7 +228,7 @@ def autofix_enabled() -> bool:
 
 
 async def run_simulation_reconcile_worker() -> None:
-    """每天 03:20 跑一次对账（EOD 03:05 之后）。"""
+    """每天 06:20 跑一次对账（EOD 06:05 之后，日线就绪窗口）。"""
     last_run_date = ""
     while True:
         try:
@@ -236,7 +236,7 @@ async def run_simulation_reconcile_worker() -> None:
             today = now.strftime("%Y%m%d")
             if (
                 today != last_run_date
-                and (now.hour, now.minute) >= (3, 20)
+                and (now.hour, now.minute) >= (6, 20)
                 and now.weekday() < 5
             ):
                 last_run_date = today

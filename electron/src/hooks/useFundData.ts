@@ -105,15 +105,10 @@ export const useFundData = (options: UseFundDataOptions = {}): UseFundDataReturn
   }, [fetchData]);
 
   useEffect(() => {
-    fetchData({ silent: false });
-  }, [fetchData]);
-
-  useEffect(() => {
-    setLoading(true);
-    setData(null);
-    dataRef.current = null;
+    // 切模式时作废指纹强制刷新，但保留上一帧数据作占位，避免总资产骨架空等。
     fingerprintRef.current = null;
-  }, [tradingMode]);
+    fetchData({ silent: Boolean(dataRef.current) });
+  }, [fetchData]);
 
   useEffect(() => {
     if (!autoRefresh) {
