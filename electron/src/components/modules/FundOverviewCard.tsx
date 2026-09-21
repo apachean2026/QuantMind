@@ -93,7 +93,7 @@ export const FundOverviewCard: React.FC = () => {
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ type: 'spring', stiffness: 200, damping: 15 }}
-            key={fundInfo.totalAsset}
+            key={`nav-${Math.round(fundInfo.totalAsset)}`}
             style={{ fontFamily: 'Outfit, sans-serif' }}
           >
             ￥{formatMoney(fundInfo.totalAsset)}

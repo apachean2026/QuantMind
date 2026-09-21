@@ -38,7 +38,7 @@ export const useFundData = (options: UseFundDataOptions = {}): UseFundDataReturn
   const [lastUpdate, setLastUpdate] = useState<string | null>(null);
   const [isSimulated, setIsSimulated] = useState<boolean>(tradingMode === 'simulation');
   const fingerprintRef = useRef<string | null>(null);
-  const initializedRef = useRef<boolean>(false);
+  const dataRef = useRef<FundData | null>(null);
 
   const storedUser = authService.getStoredUser() as { id?: string; user_id?: string; tenant_id?: string } | null;
   const resolvedUserId = String(
@@ -55,12 +55,14 @@ export const useFundData = (options: UseFundDataOptions = {}): UseFundDataReturn
     'default'
   ).trim() || 'default';
 
-  // 获取资金数据
   const fetchData = useCallback(async (params?: { silent?: boolean }) => {
     const silent = params?.silent ?? true;
 
     try {
-      setLoading(true);
+      // 静默刷新不打断已有展示，避免大盘「加载慢 / 闪回 100 万」
+      if (!silent || !dataRef.current) {
+        setLoading(true);
+      }
       setError(null);
 
       const result = await portfolioService.getFundOverview(resolvedUserId, tradingMode, resolvedTenantId);
@@ -77,6 +79,7 @@ export const useFundData = (options: UseFundDataOptions = {}): UseFundDataReturn
         return;
       }
 
+      dataRef.current = result.data;
       setData(result.data);
       setIsSimulated(result.isSimulated);
       setLastUpdate(result.data.lastUpdate);
@@ -86,44 +89,32 @@ export const useFundData = (options: UseFundDataOptions = {}): UseFundDataReturn
       setError(errorMessage);
       console.error('获取资金数据失败:', errorMessage);
 
-      // 降级：使用默认数据
-      const defaultData = portfolioService.getDefaultFundData();
-      const nextSnapshot = {
-        data: defaultData,
-        isSimulated: true,
-      };
-
-      const { changed, fingerprint } = shouldUpdateByFingerprint(fingerprintRef.current, nextSnapshot);
-      if (changed) {
-        setData(defaultData);
-        setIsSimulated(true);
-        setLastUpdate(defaultData.lastUpdate);
-        fingerprintRef.current = fingerprint;
+      // 已有成功数据时保留，绝不降级成假 100 万
+      if (!dataRef.current) {
+        setData(null);
+        setLastUpdate(null);
+        fingerprintRef.current = null;
       }
     } finally {
-      initializedRef.current = true;
       setLoading(false);
     }
   }, [resolvedUserId, resolvedTenantId, tradingMode]);
 
-  // 手动刷新
   const refresh = useCallback(async () => {
     await fetchData({ silent: true });
   }, [fetchData]);
 
-  // 初始化
   useEffect(() => {
     fetchData({ silent: false });
   }, [fetchData]);
 
-  // 监听模式切换，立即进入加载状态并重置数据
   useEffect(() => {
     setLoading(true);
     setData(null);
+    dataRef.current = null;
     fingerprintRef.current = null;
   }, [tradingMode]);
 
-  // 统一由协调器触发刷新，避免模块自轮询造成闪烁
   useEffect(() => {
     if (!autoRefresh) {
       return;

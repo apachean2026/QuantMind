@@ -802,12 +802,19 @@ export const realTradingService = {
     },
 
     // Get Simulation Account Info
-    getSimulationAccount: async (_userId: string, _tenantId: string = getTenantId(), market?: string): Promise<AccountInfo | null> => {
+    getSimulationAccount: async (
+        _userId: string,
+        _tenantId: string = getTenantId(),
+        market?: string,
+        options?: { timeoutMs?: number },
+    ): Promise<AccountInfo | null> => {
         const token = authService.getAccessToken();
+        const timeoutMs = Number(options?.timeoutMs);
         const response = await axios.get(`${SERVICE_ENDPOINTS.API_GATEWAY}/simulation/account`, {
             params: market ? { market } : undefined,
             headers: token ? new AxiosHeaders({ Authorization: `Bearer ${token}` }) : undefined,
-            timeout: 30000,
+            // 资金概览等仪表盘入口用更短超时，避免 30s 挂起后被前端兜成「假 100 万」
+            timeout: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 30000,
         });
         return response.data?.data || null;
     },

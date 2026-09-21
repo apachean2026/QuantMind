@@ -356,11 +356,21 @@ class PortfolioService {
                     account = realAccount;
                     useSimulation = false;
                 } else {
-                    account = await realTradingService.getSimulationAccount(userId, tenantId);
+                    account = await realTradingService.getSimulationAccount(
+                        userId,
+                        tenantId,
+                        undefined,
+                        { timeoutMs: 8_000 },
+                    );
                     useSimulation = true;
                 }
             } else {
-                account = await realTradingService.getSimulationAccount(userId, tenantId);
+                account = await realTradingService.getSimulationAccount(
+                    userId,
+                    tenantId,
+                    undefined,
+                    { timeoutMs: 8_000 },
+                );
                 useSimulation = true;
             }
 
@@ -368,12 +378,14 @@ class PortfolioService {
                 throw new Error('No account data received');
             }
 
+            // 未初始化账户：后端返回 total_asset=0 + account_not_initialized。
+            // 切勿用默认 100 万顶替总资产，否则资金概览会与模拟交易页来回跳。
             let totalAsset = this.pickFirstNumber(
                 [account.total_asset],
                 0,
             );
 
-            // 增强逻辑：如果模拟资产为 0 且非模拟盘，尝试从账本历史中拉取最后一次有效资产
+            // 增强逻辑：如果实盘资产为 0，尝试从账本历史中拉取最后一次有效资产
             if (!useSimulation && totalAsset <= 0) {
                 try {
                     const history = await realTradingService.getAccountLedgerDaily(1, userId, tenantId);
@@ -384,10 +396,6 @@ class PortfolioService {
                 } catch (ledgerErr) {
                     console.warn('Failed to fetch fallback asset from ledger:', ledgerErr);
                 }
-            }
-
-            if (totalAsset <= 0 && useSimulation) {
-                totalAsset = DEFAULT_INITIAL_CAPITAL;
             }
 
             const metrics = (account && typeof account.metrics === 'object' && account.metrics)
@@ -408,7 +416,9 @@ class PortfolioService {
                 initialCapital = dbInitialEquity;
             }
 
-            if (useSimulation) {
+            // /simulation/account 已写入 initial_equity（来自 settings）；
+            // 仅在缺失时再打 settings，避免资金概览多一次串行 RTT。
+            if (useSimulation && initialCapital <= 0) {
                 try {
                     const settings = await realTradingService.getSimulationSettings();
                     const configuredInitialCash = this.pickFirstNumber(
@@ -426,7 +436,7 @@ class PortfolioService {
                 if (useSimulation) {
                     initialCapital = DEFAULT_INITIAL_CAPITAL;
                 } else {
-                    // 模拟未知初始权益时，不再用当前总资产硬回退，避免总收益率长期假 0。
+                    // 实盘未知初始权益时，不再用当前总资产硬回退，避免总收益率长期假 0。
                     initialCapital = totalAsset;
                     initialCapitalEstimated = true;
                 }
@@ -550,14 +560,9 @@ class PortfolioService {
                 isSimulated: useSimulation,
             };
         } catch (error) {
-            console.warn(`获取${mode === 'real' ? '模拟' : '模拟'}账户数据失败:`, error);
-            // 降级：如果是模拟盘失败，返回默认数据；如果是模拟失败，抛出错误由上层处理或返回空数据
-            if (mode === 'simulation') {
-                return {
-                    data: this.getDefaultFundData(),
-                    isSimulated: true,
-                };
-            }
+            console.warn(`获取${mode === 'simulation' ? '模拟' : '实盘'}账户数据失败:`, error);
+            // 不再把失败伪装成「初始 100 万」——资金概览会与模拟交易页来回跳。
+            // 由 useFundData 保留上一次成功数据并展示错误态。
             throw error;
         }
     }

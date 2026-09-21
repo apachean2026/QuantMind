@@ -50,23 +50,15 @@ vi.mock('axios', () => {
                 response: { use: vi.fn() },
             },
         }),
+        AxiosHeaders: class AxiosHeaders {
+            set() { return this; }
+        },
         isAxiosError: () => false,
         __esModule: true,
     };
 });
 
 import { portfolioService } from '../portfolioService';
-
-const mockBindingStatus = (overrides?: Record<string, unknown>) => ({
-    data: {
-        online: false,
-        user_id: 'test_user',
-        tenant_id: 'default',
-        account_id: '8886664999',
-        account_reported_at: '2026-04-11T10:00:00+00:00',
-        ...overrides,
-    },
-});
 
 describe('PortfolioService', () => {
     beforeEach(() => {
@@ -99,13 +91,29 @@ describe('PortfolioService', () => {
     });
 
     describe('getFundOverview', () => {
-        it('后端不可用时应该降级到默认数据并标记 isSimulated', async () => {
+        it('后端不可用时应抛出错误，由上层保留上次成功数据', async () => {
             mocks.get.mockRejectedValue(new Error('Network Error'));
 
-            const result = await portfolioService.getFundOverview('test_user');
+            await expect(portfolioService.getFundOverview('test_user')).rejects.toThrow('Network Error');
+        });
+
+        it('模拟盘 total_asset=0 时不应伪装成默认 100 万', async () => {
+            const mockSimulationAccount = {
+                total_asset: 0,
+                cash: 0,
+                account_not_initialized: true,
+                initial_equity: 1_000_000,
+                positions: {},
+            };
+
+            mocks.get.mockResolvedValueOnce({
+                data: { success: true, data: mockSimulationAccount },
+            });
+
+            const result = await portfolioService.getFundOverview('test_user', 'simulation');
 
             expect(result.isSimulated).toBe(true);
-            expect(result.data.totalAsset).toBe(1_000_000);
+            expect(result.data.totalAsset).toBe(0);
             expect(result.data.initialCapital).toBe(1_000_000);
         });
 
@@ -127,9 +135,8 @@ describe('PortfolioService', () => {
                 positions: [],
             };
 
-            mocks.get
-                .mockResolvedValueOnce(mockBindingStatus())
-                .mockResolvedValueOnce({ data: mockAccount });
+            // getAccount 走 createHttpClient().request
+            mocks.request.mockResolvedValueOnce({ data: mockAccount });
 
             const result = await portfolioService.getFundOverview('test_user', 'real');
 
@@ -153,9 +160,7 @@ describe('PortfolioService', () => {
                 positions: [],
             };
 
-            mocks.get
-                .mockResolvedValueOnce(mockBindingStatus())
-                .mockResolvedValueOnce({ data: mockAccount });
+            mocks.request.mockResolvedValueOnce({ data: mockAccount });
 
             const result = await portfolioService.getFundOverview('test_user', 'real');
 
@@ -164,9 +169,15 @@ describe('PortfolioService', () => {
         });
 
         it('实盘未上报时应保留实盘口径并显示 0', async () => {
-            mocks.get.mockResolvedValueOnce(mockBindingStatus({
-                account_reported_at: null,
-            }));
+            mocks.request.mockResolvedValueOnce({
+                data: {
+                    total_asset: 0,
+                    cash: 0,
+                    available_cash: 0,
+                    is_online: false,
+                    positions: [],
+                },
+            });
 
             const result = await portfolioService.getFundOverview('test_user', 'real');
 
@@ -177,10 +188,9 @@ describe('PortfolioService', () => {
         });
 
         it('实盘未绑定时应直接返回空实盘口径并避免请求 /account', async () => {
-            mocks.get.mockResolvedValueOnce(mockBindingStatus({
-                account_id: null,
-                account_reported_at: null,
-            }));
+            const err: any = new Error('Not Found');
+            err.response = { status: 404 };
+            mocks.request.mockRejectedValueOnce(err);
 
             const result = await portfolioService.getFundOverview('test_user', 'real');
 
@@ -234,9 +244,7 @@ describe('PortfolioService', () => {
                 positions: [],
             };
 
-            mocks.get
-                .mockResolvedValueOnce(mockBindingStatus())
-                .mockResolvedValueOnce({ data: mockAccount });
+            mocks.request.mockResolvedValueOnce({ data: mockAccount });
 
             const result = await portfolioService.getFundOverview('test_user', 'real');
 
@@ -264,9 +272,7 @@ describe('PortfolioService', () => {
                 positions: [],
             };
 
-            mocks.get
-                .mockResolvedValueOnce(mockBindingStatus())
-                .mockResolvedValueOnce({ data: mockAccount });
+            mocks.request.mockResolvedValueOnce({ data: mockAccount });
 
             const result = await portfolioService.getFundOverview('test_user', 'real');
 
@@ -290,9 +296,7 @@ describe('PortfolioService', () => {
                 positions: [],
             };
 
-            mocks.get
-                .mockResolvedValueOnce(mockBindingStatus())
-                .mockResolvedValueOnce({ data: mockAccount });
+            mocks.request.mockResolvedValueOnce({ data: mockAccount });
 
             const result = await portfolioService.getFundOverview('test_user', 'real');
 
