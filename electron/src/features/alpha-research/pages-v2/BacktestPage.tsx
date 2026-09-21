@@ -233,8 +233,14 @@ export const BacktestPage: React.FC = () => {
     </div>
   );
 
-  // Extract metrics from task
-  const metrics = task?.metrics || {};
+  // Extract metrics from task（后端给的是 camelCase：ic/icir/rankIc/rankIcir/annualReturn/maxDrawdown）
+  const metrics = (task?.metrics ?? {}) as Record<string, any>;
+  const annualReturn = metrics.annualReturn ?? metrics.annualized_return;
+  const maxDrawdown = metrics.maxDrawdown ?? metrics.max_drawdown;
+  // Calmar = 年化收益 / |最大回撤|；后端未单独提供时按标准定义推导
+  const calmar =
+    metrics.calmar_ratio ?? metrics.calmarRatio ??
+    (annualReturn != null && maxDrawdown ? annualReturn / Math.abs(maxDrawdown) : undefined);
 
   return (
     <div className="space-y-6 animate-fade-in-up">
@@ -573,22 +579,22 @@ export const BacktestPage: React.FC = () => {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <MetricCard label="IC" value={metrics.IC || metrics.ic} />
-              <MetricCard label="ICIR" value={metrics.ICIR || metrics.icir} />
-              <MetricCard label="Rank IC" value={metrics['Rank IC'] || metrics.RankIC || metrics.rankIc} />
-              <MetricCard label="Rank ICIR" value={metrics['Rank ICIR'] || metrics.RankICIR || metrics.rankIcir} />
+              <MetricCard label="IC" value={metrics.ic ?? metrics.IC} />
+              <MetricCard label="ICIR" value={metrics.icir ?? metrics.ICIR} />
+              <MetricCard label="Rank IC" value={metrics.rankIc ?? metrics.RankIC ?? metrics['Rank IC']} />
+              <MetricCard label="Rank ICIR" value={metrics.rankIcir ?? metrics.RankICIR ?? metrics['Rank ICIR']} />
               <MetricCard
                 label="年化扣费收益"
-                value={metrics.annualized_return != null ? (metrics.annualized_return * 100) : undefined}
+                value={annualReturn != null ? annualReturn * 100 : undefined}
                 unit="%"
               />
               <MetricCard
                 label="最大回撤"
-                value={metrics.max_drawdown != null ? (metrics.max_drawdown * 100) : undefined}
+                value={maxDrawdown != null ? maxDrawdown * 100 : undefined}
                 unit="%"
               />
-              <MetricCard label="信息比率" value={metrics.information_ratio} />
-              <MetricCard label="Calmar" value={metrics.calmar_ratio} />
+              <MetricCard label="信息比率" value={metrics.information_ratio ?? metrics.informationRatio} />
+              <MetricCard label="Calmar" value={calmar} />
             </div>
 
             {/* Cumulative Excess Return Chart */}

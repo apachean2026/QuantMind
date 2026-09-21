@@ -135,7 +135,12 @@ function normalizeAgentTask(raw: any, configHint?: any): Task {
           : raw?.error_message || (status === 'completed' ? '完成' : '运行中'),
       timestamp: raw?.updated_at ?? new Date().toISOString(),
     },
-    metrics: emptyMetrics(),
+    // 回测任务由 getBacktestStatus 把后端 factor 详情里的指标放进 raw.metrics；
+    // 此前这里无条件用 emptyMetrics() 覆盖，导致「回测结果」面板永远显示 0.0000 / --。
+    // 保留后端给的字段（缺失的键保持 undefined，前端据此显示 "--" 而不是伪造 0）。
+    metrics: (raw?.metrics && Object.keys(raw.metrics).length > 0
+      ? raw.metrics
+      : emptyMetrics()) as RealtimeMetrics,
     logs: [],
     createdAt: raw?.created_at ?? new Date().toISOString(),
     updatedAt: raw?.updated_at ?? new Date().toISOString(),
@@ -548,6 +553,17 @@ export async function getBacktestStatus(
     if (raw.annual_return != null) metrics.annualReturn = raw.annual_return;
     if (raw.max_drawdown != null) metrics.maxDrawdown = raw.max_drawdown;
     if (raw.rank_ic != null) metrics.rankIc = raw.rank_ic;
+    // ICIR / Rank ICIR 不是表字段，落在 metadata_json（挖掘阶段写入 icir / rank_icir）
+    const meta = raw.metadata ?? {};
+    const asNum = (v: any): number | null => {
+      if (typeof v === 'number') return v;
+      if (typeof v === 'string' && v.trim() !== '' && !Number.isNaN(Number(v))) return Number(v);
+      return null;
+    };
+    const icir = asNum(meta.icir);
+    const rankIcir = asNum(meta.rank_icir);
+    if (icir != null) metrics.icir = icir;
+    if (rankIcir != null) metrics.rankIcir = rankIcir;
     return makeOk({
       task: normalizeAgentTask({
         task_id: taskId,
