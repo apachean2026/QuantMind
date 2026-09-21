@@ -55,6 +55,11 @@ npm run dashboard:build  # 生产环境构建
 - **策略存储**：`backend/shared/strategy_storage.py` 是所有策略增删改查的唯一入口
 - **Celery worker 必须唯一**：`SERVICE_MODE=all` 下 `main_oss.py` 默认**不启动**内嵌 worker（需 `EMBEDDED_CELERY_WORKER=true`），消费队列的只有 `celery-worker` 容器。重复 worker 会瓜分 `qlib_backtest_srv` 队列消息，表现为定时任务随机「不执行」；排查看 `redis-cli client list | grep cmd=brpop` 应只有 1 个。
 - **市场数据同步不内置默认调度**：是否开启、何时触发一律以用户在前端「同步调度」保存的 Redis 配置为准（`quantmind:sync_schedule:{market}`），未配置时 5 个市场全部 `enabled=false`；`MARKET_SUGGESTED_TIMES` 只是前端时间预填建议值（次日 00:00 以后错峰），不参与触发。详见 `backend/services/engine/README.md` →「定时调度与市场数据同步」。
+- **代码版本落后提示（硬性规则）**：管理后台右上角「落后 N 个提交」只允许走下面这条链路。禁止改回 Gitee/GitHub compare 接口，禁止用两边 `git rev-list --count` 相减，禁止把计数文件提交进 `master`（会每记一次就多一个提交，而且文件内容永远比 HEAD 少 1）。
+  - 上游真相是客户会拉到的 Gitea `master`（绝对地址 `https://quantmindai.cn/gitea/qusong0627/QuantMind.git`）。GitHub、Gitee 只是镜像，不能单独当计数源。
+  - 维护端在推送 `master` 之后执行 `python scripts/publish_release_index.py --push`。脚本用 `git rev-list` 生成 `release-index.json`（`commits` 从新到旧，`head` 为第一项），并强制更新远端分支 `release-index`（只动这一支）。客户服务器禁止运行该脚本。
+  - 客户后端只读 raw 绝对地址，默认 `https://quantmindai.cn/gitea/qusong0627/QuantMind/raw/branch/release-index/release-index.json`，可用 `QUANTMIND_RELEASE_INDEX_URL` 覆盖。本机部署提交来自 `deploy/update.sh` 写入的 `backend/shared/version.json`（完整 `commit` 与 `rev_count`，已 gitignore）。落后数等于本机 SHA 在 `commits` 里的下标；SHA 不在列表中时 `status=diverged`，前端不显示个数。
+  - 容器内没有 `.git`。禁止在运行中的后端里 `git fetch` / `git rev-list`。对比逻辑只在 `backend/shared/version.py`。
 
 ## 股票代码标准化（重要，分层口径）
 

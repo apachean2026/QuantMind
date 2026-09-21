@@ -15,11 +15,12 @@ export interface SystemCapabilities {
 }
 
 export interface SystemUpdateInfo {
-  /** 本部署落后上游的提交数 */
-  behind: number;
-  /** 上游 commits 超过单次 API 上限，behind 为下限（前端可显示 N+） */
-  behind_capped: boolean;
+  /** 本部署落后上游的提交数；分叉时为 null */
+  behind: number | null;
+  /** ok：SHA 在上游历史中；diverged：对不上，不展示个数 */
+  status: 'ok' | 'diverged';
   upstream_branch: string;
+  upstream_head?: string;
   checked_at: number;
   is_up_to_date: boolean;
 }
@@ -43,8 +44,8 @@ export const systemService = {
   },
 
   /**
-   * 获取当前运行代码版本，并附带上游更新检查（deploy/update.sh 更新后写入 version.json）
-   * @param force true 时绕过磁盘缓存，强制实时请求上游平台
+   * 获取当前运行代码版本，并附带 Gitea 发布索引对比（deploy/update.sh 写入 version.json）
+   * @param force true 时绕过磁盘缓存，强制重新拉取 release-index.json
    */
   getVersion: async (force = false): Promise<SystemVersion> => {
     return apiClient.get<SystemVersion>('/api/v1/system/version', { params: { force } });

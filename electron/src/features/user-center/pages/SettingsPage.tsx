@@ -95,18 +95,20 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ userId }) => {
             <span className="text-slate-400 font-medium">版本类型</span>
             <span className="font-bold text-slate-700">{versionInfo ? versionInfo.edition.toUpperCase() : '—'}</span>
           </div>
-          {versionInfo?.update ? (
-            versionInfo.update.behind > 0 ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1 font-medium">
-                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                {`落后上游 ${versionInfo.update.behind}${versionInfo.update.behind_capped ? '+' : ''} 个提交`}
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1 font-medium">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                已是最新
-              </span>
-            )
+          {versionInfo?.update?.status === 'diverged' ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-50 text-slate-500 border border-slate-200 px-3 py-1 font-medium">
+              无法与上游对齐
+            </span>
+          ) : versionInfo?.update && (versionInfo.update.behind ?? 0) > 0 ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1 font-medium">
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+              {`落后上游 ${versionInfo.update.behind} 个提交`}
+            </span>
+          ) : versionInfo?.update?.is_up_to_date ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1 font-medium">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              已是最新
+            </span>
           ) : null}
           <button
             type="button"

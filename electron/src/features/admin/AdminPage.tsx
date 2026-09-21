@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Layout, Menu, Button, Badge, Avatar, Typography, Divider, Tag, Tooltip } from 'antd';
 import { 
     DashboardOutlined, 
@@ -13,6 +13,7 @@ import {
 } from '@ant-design/icons';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { AdminSystemLoadWidget } from './components/AdminSystemLoadWidget';
+import { systemService, type SystemUpdateInfo } from '../../services/systemService';
 
 const { Title, Text } = Typography;
 

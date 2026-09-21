@@ -593,7 +593,7 @@ export const BacktestPage: React.FC = () => {
                 value={maxDrawdown != null ? maxDrawdown * 100 : undefined}
                 unit="%"
               />
-              <MetricCard label="信息比率" value={metrics.information_ratio ?? metrics.informationRatio} />
+              <MetricCard label="夏普比率" value={metrics.sharpeRatio ?? metrics.sharpe_ratio} />
               <MetricCard label="Calmar" value={calmar} />
             </div>
 

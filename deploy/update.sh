@@ -139,15 +139,18 @@ sync_code() {
         > "$PROJECT_DIR/backend/shared/version.txt" 2>/dev/null \
         || rm -f "$PROJECT_DIR/backend/shared/version.txt"
 
-    local head_sha head_describe
+    local head_sha head_describe head_count
     head_sha="$(git -C "$PROJECT_DIR" rev-parse HEAD 2>/dev/null || true)"
     head_describe="$(git -C "$PROJECT_DIR" describe --tags --always 2>/dev/null || echo dev)"
+    head_count="$(git -C "$PROJECT_DIR" rev-list --count HEAD 2>/dev/null || true)"
+    head_count="${head_count:-0}"
     if [[ -n "$head_sha" ]]; then
         cat > "$PROJECT_DIR/backend/shared/version.json" <<EOF
 {
   "version": "$head_describe",
   "commit": "$head_sha",
   "branch": "$REF",
+  "rev_count": ${head_count},
   "generated_at": "$(TZ=Asia/Shanghai date +%Y-%m-%dT%H:%M:%S+08:00)"
 }
 EOF
