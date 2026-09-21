@@ -35,12 +35,12 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --ref) REF="${2:-}"; shift 2 ;;
         --remote) REMOTE="${2:-}"; shift 2 ;;
-        --force) FORCE=true; shift ;;
+        --force|-force) FORCE=true; shift ;;
         --no-build) BUILD=false; shift ;;
         --skip-backup) SKIP_BACKUP=true; shift ;;
         --skip-skills) SKIP_SKILLS=true; shift ;;
         -h|--help) usage; exit 0 ;;
-        *) die "未知参数: $1" ;;
+        *) die "未知参数: $1（force 请用 --force）" ;;
     esac
 done
 
@@ -158,6 +158,10 @@ EOF
         rm -f "$PROJECT_DIR/backend/shared/version.json"
     fi
 
+    # 部署提交已变：清掉旧版 Gitee compare / 错误 commit 的落后数缓存，避免顶栏继续显示过期「落后 N」。
+    rm -f "${STORAGE_ROOT:-$PROJECT_DIR/data}/version_check.json" \
+        /data/version_check.json 2>/dev/null || true
+
     # 归属回正：本脚本通常经 sudo 运行，上面所有 git 操作都以 root 执行，会留下
     # root 归属的受控文件与 .git 对象，导致 ubuntu 侧后续 git 操作报
     # "unable to unlink ... Permission denied"（实测踩过：564 个受控文件变 root）。
@@ -235,49 +239,20 @@ build_core() {
         "$PROJECT_DIR/docker-compose.yml" 2>/dev/null || true)"
     torch_val="${TORCH_DEVICE:-$(grep -E '^[[:space:]]*TORCH_DEVICE=' "$PROJECT_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d "\"' " || true)}"
     if [[ -z "$torch_val" ]]; then
+        # 唯一推断实现：deploy/req-fingerprint.sh --infer-torch
+        # （含「旧指纹对不上当前代码」时的 torch 探测回落，禁止在此 die）
         torch_val="$(bash "$PROJECT_DIR/deploy/req-fingerprint.sh" --infer-torch \
             "$PROJECT_DIR" quantmind-oss:latest 2>/dev/null || true)"
-        if [[ -z "$torch_val" ]]; then
-            local img_sha want d
-            img_sha="$(docker image inspect quantmind-oss:latest \
-                --format '{{ index .Config.Labels "qm.req.sha" }}' 2>/dev/null || true)"
-            case "$img_sha" in
-                ""|none|"<no value>"|notloaded) ;;
-                *)
-                    for d in auto cpu gpu skip; do
-                        want="$(TORCH_DEVICE="$d" bash "$PROJECT_DIR/deploy/req-fingerprint.sh" \
-                            "$PROJECT_DIR" 2>/dev/null || true)"
-                        if [[ -n "$want" && "$want" == "$img_sha" ]]; then
-                            torch_val="$d"
-                            break
-                        fi
-                    done
-                    ;;
-            esac
-        fi
-        if [[ -n "$torch_val" ]]; then
-            log "2/5 未指定 TORCH_DEVICE，已从镜像推断为 $torch_val"
-            export TORCH_DEVICE="$torch_val"
-            if [[ -f "$PROJECT_DIR/.env" ]]; then
-                if grep -qE '^[[:space:]]*TORCH_DEVICE=' "$PROJECT_DIR/.env"; then
-                    sed -i "s|^[[:space:]]*TORCH_DEVICE=.*|TORCH_DEVICE=${torch_val}|" "$PROJECT_DIR/.env"
-                else
-                    printf '\n# torch 形态（update.sh 写入，用于依赖指纹对齐）\nTORCH_DEVICE=%s\n' \
-                        "$torch_val" >> "$PROJECT_DIR/.env"
-                fi
+        torch_val="${torch_val:-auto}"
+        log "2/5 未指定 TORCH_DEVICE，推断/回落为 $torch_val（已写入 .env，避免下次再拦）"
+        export TORCH_DEVICE="$torch_val"
+        if [[ -f "$PROJECT_DIR/.env" ]]; then
+            if grep -qE '^[[:space:]]*TORCH_DEVICE=' "$PROJECT_DIR/.env"; then
+                sed -i "s|^[[:space:]]*TORCH_DEVICE=.*|TORCH_DEVICE=${torch_val}|" "$PROJECT_DIR/.env"
+            else
+                printf '\n# torch 形态（update.sh 写入，用于依赖指纹对齐）\nTORCH_DEVICE=%s\n' \
+                    "$torch_val" >> "$PROJECT_DIR/.env"
             fi
-        elif docker image inspect quantmind-oss:latest >/dev/null 2>&1; then
-            local img_sha
-            img_sha="$(docker image inspect quantmind-oss:latest \
-                --format '{{ index .Config.Labels "qm.req.sha" }}' 2>/dev/null || true)"
-            case "$img_sha" in
-                ""|none|"<no value>")
-                    log '2/5 镜像无依赖指纹且无法推断 TORCH_DEVICE，构建签名按 auto'
-                    ;;
-                *)
-                    die "未指定 TORCH_DEVICE，且无法从镜像推断（镜像指纹=${img_sha}）。请显式设置 TORCH_DEVICE=auto|cpu|gpu|skip 后重试，以免把已含 torch 的镜像按 skip 重建。"
-                    ;;
-            esac
         fi
     fi
     build_blk="$(printf '%s' "$svc_blk" \
@@ -448,54 +423,15 @@ EOSQL
     fi
 }
 
-# QwenPaw 技能 + 人格同步：skills/ → 技能池 → default 工作区（含 _shared/），重启 qwenpaw 生效。
-# 人格（SOUL/PROFILE/AGENTS）一并刷新 —— 此前只传 --skills-only，人格长期滞后于仓库。
-# 失败仅告警不阻断升级，但会经 notify-event.sh 落盘 data/update.log 并写 system_events，
-# 避免「升级显示成功、实际没刷」事后无从追溯。
-# --skip-skills 或 QUANTMIND_SKIP_SKILLS=true 跳过。
+# QwenPaw 技能 + 人格同步：唯一实现见 deploy/sync-qwenpaw-skills.sh。
+# Web updater 在 bridge 网络内，禁止再 curl 宿主 127.0.0.1:8088。
 sync_qwenpaw_skills() {
     if $SKIP_SKILLS || [[ "${QUANTMIND_SKIP_SKILLS:-false}" == "true" ]]; then
         log '5/5 跳过 QwenPaw 技能与人格同步（--skip-skills）'
         return 0
     fi
-    log '5/5 同步 QwenPaw 技能与人格（skills/ → 技能池 → default 工作区）'
-    if ! docker ps --format '{{.Names}}' | grep -qx qwenpaw; then
-        log '  qwenpaw 未运行，跳过（启动后手动执行 bash scripts/quantbot_init.sh）'
-        record_system_event "warning" "QwenPaw 技能/人格未同步" "qwenpaw 容器未运行"
-        return 0
-    fi
-    local port
-    port="$(grep -E '^[[:space:]]*QWENPAW_PORT=' "$PROJECT_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d "\"' " || true)"
-    port="${port:-8088}"
-    local attempt
-    for attempt in $(seq 1 30); do
-        if curl --fail --silent --max-time 3 "http://127.0.0.1:${port}/health" >/dev/null 2>&1; then
-            break
-        fi
-        if (( attempt == 30 )); then
-            log "  qwenpaw ${port} 端口 60s 内未就绪，跳过（稍后手动执行 bash scripts/quantbot_init.sh）"
-            record_system_event "warning" "QwenPaw 技能/人格未同步" "qwenpaw /health 60s 内未就绪（port=${port}）"
-            return 0
-        fi
-        sleep 2
-    done
-    local sync_out
-    if ! sync_out="$(QWENPAW_BASE_URL="${QWENPAW_BASE_URL:-http://127.0.0.1:${port}}" \
-         QWENPAW_AGENT_ID="${QWENPAW_AGENT_ID:-default}" \
-         bash "$PROJECT_DIR/scripts/quantbot_init.sh" 2>&1)"; then
-        printf '%s\n' "$sync_out" | tail -20
-        log '  QwenPaw 技能/人格同步失败（不阻断升级，稍后手动执行 bash scripts/quantbot_init.sh）'
-        record_system_event "warning" "QwenPaw 技能/人格同步失败" \
-            "$(printf '%s' "$sync_out" | tail -5 | tr '\n' ' ')"
-        return 0
-    fi
-    printf '%s\n' "$sync_out" | tail -5
-    docker restart qwenpaw >/dev/null
-    sleep 5
-    local stat
-    stat="$(docker exec qwenpaw qwenpaw skills list 2>/dev/null | tail -1 || true)"
-    log "  技能与人格同步完成：${stat:-状态未知，请手动确认（docker exec qwenpaw qwenpaw skills list）}"
-    record_system_event "info" "QwenPaw 技能/人格同步完成" "${stat:-状态未知}"
+    QUANTMIND_PROJECT_DIR="$PROJECT_DIR" \
+        bash "$PROJECT_DIR/deploy/sync-qwenpaw-skills.sh" --step-label '5/5' || true
 }
 
 main() {

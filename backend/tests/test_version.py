@@ -143,6 +143,48 @@ def test_check_updates_remote_failure_returns_none(tmp_path: Path, monkeypatch):
     assert not (tmp_path / "cache.json").exists()
 
 
+def test_check_updates_ignores_legacy_cache(tmp_path: Path, monkeypatch):
+    vjson = tmp_path / "version.json"
+    vjson.write_text(
+        json.dumps({"version": "v1", "commit": "bbb", "branch": "master"}),
+        encoding="utf-8",
+    )
+    cache = tmp_path / "cache.json"
+    cache.write_text(
+        json.dumps(
+            {
+                "behind": 10,
+                "behind_capped": False,
+                "upstream_branch": "master",
+                "checked_at": int(__import__("time").time()),
+                "is_up_to_date": False,
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(vmod, "_VERSION_JSON", vjson)
+    monkeypatch.setattr(vmod, "_VERSION_TXT", tmp_path / "missing.txt")
+    monkeypatch.setattr(vmod, "_CACHE_FILE", cache)
+
+    class _Resp:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "head": "bbb",
+                "branch": "master",
+                "commits": ["bbb", "aaa"],
+            }
+
+    monkeypatch.setattr(vmod._httpx, "get", lambda url: _Resp())
+    result = asyncio.run(vmod.check_updates(force=False))
+    assert result is not None
+    assert result["behind"] == 0
+    assert result["status"] == "ok"
+    assert result["local_commit"] == "bbb"
+
+
 def test_check_updates_skips_without_commit(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(vmod, "_VERSION_JSON", tmp_path / "missing.json")
     monkeypatch.setattr(vmod, "_VERSION_TXT", tmp_path / "missing.txt")

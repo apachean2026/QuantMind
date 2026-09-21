@@ -32,7 +32,7 @@ _VERSION_JSON = _BASE_DIR / "version.json"
 _UPSTREAM_BRANCH = os.getenv("QUANTMIND_UPSTREAM_BRANCH", "master")
 _RELEASE_INDEX_URL = os.getenv(
     "QUANTMIND_RELEASE_INDEX_URL",
-    "https://quantmindai.cn/gitea/qusong0627/QuantMind/raw/branch/"
+    "https://quantmindai.cn/gitea/qusong0627/QuantMInd/raw/branch/"
     "release-index/release-index.json",
 )
 
@@ -176,11 +176,23 @@ def _fetch_release_index() -> dict:
     return body
 
 
+def _cache_usable(cache: dict | None, local_commit: str) -> bool:
+    """旧版 Gitee compare 缓存（无 status / 无 local_commit）一律作废。"""
+    if not cache or not isinstance(cache, dict):
+        return False
+    if "status" not in cache:
+        return False
+    cached_commit = _norm_sha(cache.get("local_commit"))
+    if not cached_commit or cached_commit != _norm_sha(local_commit):
+        return False
+    return time.time() - cache.get("checked_at", 0) < _CACHE_TTL
+
+
 async def check_updates(force: bool = False) -> dict | None:
     """读取 Gitea 发布索引，返回本部署落后的提交数。失败时返回 None。
 
     返回字段：behind、status、upstream_branch、upstream_head、
-    checked_at、is_up_to_date。
+    local_commit、checked_at、is_up_to_date。
     status=ok 时 behind 为下标；status=diverged 时 behind 为 null。
     """
     info = get_version_info()
@@ -189,16 +201,12 @@ async def check_updates(force: bool = False) -> dict | None:
         return None
 
     cache = _load_cache()
-    if not force and cache and time.time() - cache.get("checked_at", 0) < _CACHE_TTL:
+    if not force and _cache_usable(cache, commit):
         return cache
 
     async with _lock:
         cache = _load_cache()
-        if (
-            not force
-            and cache
-            and time.time() - cache.get("checked_at", 0) < _CACHE_TTL
-        ):
+        if not force and _cache_usable(cache, commit):
             return cache
 
         try:
@@ -209,6 +217,7 @@ async def check_updates(force: bool = False) -> dict | None:
         result = compute_behind(commit, index)
         if result is None:
             return None
+        result["local_commit"] = _norm_sha(commit)
         result["checked_at"] = int(time.time())
         _save_cache(result)
         return result

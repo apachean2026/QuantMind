@@ -422,10 +422,8 @@ configure_qwenpaw_runtime() {
     fi
 }
 
-# QwenPaw 技能 + 人格同步：skills/ → 技能池 → default 工作区（含 _shared/），重启 qwenpaw 生效。
-# 人格（SOUL/PROFILE/AGENTS）一并刷新 —— 此前只传 --skills-only，人格长期滞后于仓库。
-# 失败仅告警不阻断部署，但会经 notify-event.sh 落盘 data/update.log 并写 system_events。
-# QUANTMIND_SKIP_SKILLS=true 跳过（离线包场景按需设置）。
+# QwenPaw 技能 + 人格同步：唯一实现见 deploy/sync-qwenpaw-skills.sh。
+# 禁止 curl 宿主 127.0.0.1:8088（Web updater / 部分环境端口不可达）。
 notify_event() {
     # 留痕统一实现见 deploy/notify-event.sh；helper 尚未就位（极端情况）时退回仅打日志
     local _helper="$PROJECT_DIR/deploy/notify-event.sh"
@@ -441,44 +439,8 @@ sync_qwenpaw_skills() {
         log '跳过 QwenPaw 技能与人格同步（QUANTMIND_SKIP_SKILLS=true）'
         return 0
     fi
-    log '同步 QwenPaw 技能与人格（skills/ → 技能池 → default 工作区）'
-    if ! docker ps --format '{{.Names}}' | grep -qx qwenpaw; then
-        log '  qwenpaw 未运行，跳过（启动后手动执行 bash scripts/quantbot_init.sh）'
-        notify_event warning 'QwenPaw 技能/人格未同步' 'qwenpaw 容器未运行'
-        return 0
-    fi
-    local port
-    port="$(grep -E '^[[:space:]]*QWENPAW_PORT=' "$PROJECT_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d "\"' " || true)"
-    port="${port:-8088}"
-    local attempt
-    for attempt in $(seq 1 30); do
-        if curl --fail --silent --max-time 3 "http://127.0.0.1:${port}/health" >/dev/null 2>&1; then
-            break
-        fi
-        if (( attempt == 30 )); then
-            log "  qwenpaw ${port} 端口 60s 内未就绪，跳过（稍后手动执行 bash scripts/quantbot_init.sh）"
-            notify_event warning 'QwenPaw 技能/人格未同步' "qwenpaw /health 60s 内未就绪（port=${port}）"
-            return 0
-        fi
-        sleep 2
-    done
-    local sync_out
-    if ! sync_out="$(QWENPAW_BASE_URL="${QWENPAW_BASE_URL:-http://127.0.0.1:${port}}" \
-         QWENPAW_AGENT_ID="${QWENPAW_AGENT_ID:-default}" \
-         bash "$PROJECT_DIR/scripts/quantbot_init.sh" 2>&1)"; then
-        printf '%s\n' "$sync_out" | tail -20
-        log '  QwenPaw 技能/人格同步失败（不阻断部署，稍后手动执行 bash scripts/quantbot_init.sh）'
-        notify_event warning 'QwenPaw 技能/人格同步失败' \
-            "$(printf '%s' "$sync_out" | tail -5 | tr '\n' ' ')"
-        return 0
-    fi
-    printf '%s\n' "$sync_out" | tail -5
-    docker restart qwenpaw >/dev/null
-    sleep 5
-    local stat
-    stat="$(docker exec qwenpaw qwenpaw skills list 2>/dev/null | tail -1 || true)"
-    log "  技能与人格同步完成：${stat:-状态未知，请手动确认（docker exec qwenpaw qwenpaw skills list）}"
-    notify_event info 'QwenPaw 技能/人格同步完成' "${stat:-状态未知}"
+    QUANTMIND_PROJECT_DIR="$PROJECT_DIR" \
+        bash "$PROJECT_DIR/deploy/sync-qwenpaw-skills.sh" || true
 }
 
 # 统一 torch 形态，避免依赖指纹漂移：
@@ -507,7 +469,7 @@ persist_torch_device() {
 ensure_torch_device() {
     local device="${TORCH_DEVICE:-${QUANTMIND_TORCH_DEVICE:-}}"
     local env_file="$PROJECT_DIR/.env"
-    local inferred have helper d want
+    local inferred helper
     if [[ -z "$device" && -f "$env_file" ]]; then
         device="$(grep -E '^[[:space:]]*TORCH_DEVICE=' "$env_file" 2>/dev/null | tail -1 \
             | cut -d= -f2- | tr -d "\"' " || true)"
@@ -515,42 +477,22 @@ ensure_torch_device() {
     if [[ -z "$device" ]]; then
         helper="$PROJECT_DIR/deploy/req-fingerprint.sh"
         if [[ -f "$helper" ]]; then
+            # --infer-torch 已覆盖：Label / 指纹对拍 / 旧指纹探测回落 / 无镜像→空
             inferred="$(bash "$helper" --infer-torch "$PROJECT_DIR" quantmind-oss:latest 2>/dev/null || true)"
-            # 兼容尚未包含 --infer-torch 的旧 helper：按 auto/cpu/gpu/skip 对拍镜像指纹。
-            if [[ -z "$inferred" ]]; then
-                have="$(image_req_sha quantmind-oss:latest)"
-                if [[ "$have" != notloaded && "$have" != none ]]; then
-                    for d in auto cpu gpu skip; do
-                        want="$(TORCH_DEVICE="$d" bash "$helper" "$PROJECT_DIR" 2>/dev/null || true)"
-                        if [[ -n "$want" && "$want" == "$have" ]]; then
-                            inferred="$d"
-                            break
-                        fi
-                    done
-                fi
-            fi
         fi
-        if [[ -n "$inferred" ]]; then
-            log "未指定 TORCH_DEVICE，已从镜像推断为 $inferred"
-            persist_torch_device "$inferred"
-            return 0
-        fi
-        have="$(image_req_sha quantmind-oss:latest)"
-        case "$have" in
-            notloaded)
+        if [[ -z "$inferred" ]]; then
+            if docker image inspect quantmind-oss:latest >/dev/null 2>&1; then
+                inferred=auto
+                log '未指定 TORCH_DEVICE，镜像无法推断，按 auto 处理'
+            else
+                inferred=auto
                 log '未指定 TORCH_DEVICE 且无 quantmind-oss 镜像，按 auto 处理（全新安装）'
-                persist_torch_device auto
-                return 0
-                ;;
-            none)
-                log '未指定 TORCH_DEVICE，镜像无依赖指纹，按 auto 处理'
-                persist_torch_device auto
-                return 0
-                ;;
-            *)
-                die "未指定 TORCH_DEVICE，且无法从镜像推断（镜像指纹=${have}）。请显式设置 TORCH_DEVICE=auto|cpu|gpu|skip 后重试，以免把已含 torch 的镜像按 skip 重建。"
-                ;;
-        esac
+            fi
+        else
+            log "未指定 TORCH_DEVICE，已从镜像推断/回落为 $inferred"
+        fi
+        persist_torch_device "$inferred"
+        return 0
     fi
     persist_torch_device "$device"
 }

@@ -32,15 +32,16 @@ _FILE = "release-index.json"
 
 
 def _git(*args: str, input_text: str | None = None) -> str:
+    # Windows 文本模式会把 stdin 的 \n 变成 \r\n，mktree 会把文件名写成
+    # "release-index.json\r"。stdin 一律按 UTF-8 字节写入，强制 LF。
     completed = subprocess.run(
         ["git", *args],
         cwd=ROOT,
         check=True,
-        text=True,
-        input=input_text,
+        input=None if input_text is None else input_text.encode("utf-8"),
         capture_output=True,
     )
-    return completed.stdout.strip()
+    return completed.stdout.decode("utf-8").strip()
 
 
 def _remote_url(remote: str, fallback: str) -> str:
@@ -74,6 +75,7 @@ def push_index(remote: str, payload: dict) -> str:
     tmp.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
+        newline="\n",
     )
     try:
         blob = _git("hash-object", "-w", "--path", _FILE, str(tmp))
@@ -102,7 +104,7 @@ def main() -> int:
     args = parser.parse_args()
     repo_url = args.repo_url or _remote_url(
         args.remote,
-        "https://quantmindai.cn/gitea/qusong0627/QuantMind.git",
+        "https://quantmindai.cn/gitea/qusong0627/QuantMInd.git",
     )
     payload = build_from_remote(args.remote, args.ref, repo_url)
     text = json.dumps(payload, ensure_ascii=False, indent=2)

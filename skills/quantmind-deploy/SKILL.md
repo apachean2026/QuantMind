@@ -292,11 +292,11 @@ docker compose up -d
 
 > ⚠️ update.sh 只重建后端 `quantmind` 镜像，**不** `build web`/data-gateway/dashboard。前端或可选服务代码有改动时，需走离线包成品镜像或手动 `docker compose build` 对应服务。
 
-### 7.2 版本展示（升级后客户能看到当前版本）
+### 7.2 版本展示与落后提交提示
 
-- 后端 `/api/v1/system/version` 返回 `{"version": "...", "edition": "oss"}`；前端「用户中心 → 设置」页顶部「系统信息」卡片展示版本号。
-
-- 版本号由 update.sh 在同步代码后经 `git describe --tags --always` 写入 `backend/shared/version.txt`（`.gitignore` 内，不入仓库）；本地未走 update.sh 时接口回落 `dev`。
+- 后端 `/api/v1/system/version` 返回 `version` / `commit` / `branch` / `update`；管理后台右上角与「用户中心 → 设置」共用该接口。
+- `deploy/update.sh` 写入 `backend/shared/version.json`（完整 HEAD SHA + `rev_count`，`.gitignore` 内）；本地未走 update.sh 时接口回落 `dev`。
+- 落后数来自 Gitea 分支 `release-index` 上的 `release-index.json`（维护端 `python scripts/publish_release_index.py --push` 生成）。禁止改回 Gitee/GitHub compare，禁止把计数文件提交进 `master`。
 
 ### 7.3 升级后验证
 
