@@ -154,6 +154,22 @@ EOF
     else
         rm -f "$PROJECT_DIR/backend/shared/version.json"
     fi
+
+    # 归属回正：本脚本通常经 sudo 运行，上面所有 git 操作都以 root 执行，会留下
+    # root 归属的受控文件与 .git 对象，导致 ubuntu 侧后续 git 操作报
+    # "unable to unlink ... Permission denied"（实测踩过：564 个受控文件变 root）。
+    # 这里把 git 管辖的路径归还项目目录属主；只动 .git 与受控文件/目录，
+    # 不碰 .env / data / logs / models 等运行时资产（避免影响容器内非 root 用户的写入）。
+    local _owner
+    _owner="$(stat -c '%U:%G' "$PROJECT_DIR" 2>/dev/null || true)"
+    if [[ -n "$_owner" ]]; then
+        chown -R "$_owner" "$PROJECT_DIR/.git" 2>/dev/null || true
+        git -C "$PROJECT_DIR" ls-files -z 2>/dev/null \
+            | xargs -0 -r -n1 dirname | sort -u \
+            | xargs -r chown "$_owner" 2>/dev/null || true
+        git -C "$PROJECT_DIR" ls-files -z 2>/dev/null \
+            | xargs -0 -r chown "$_owner" 2>/dev/null || true
+    fi
 }
 
 build_core() {
