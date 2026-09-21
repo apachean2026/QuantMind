@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Layout, Menu, Button, Badge, Avatar, Typography, Divider, Tag, Tooltip } from 'antd';
+import { Menu, Avatar, Typography, Divider, Tag, Tooltip } from 'antd';
 import { 
     DashboardOutlined, 
     UserOutlined, 
@@ -9,7 +9,6 @@ import {
     ApiOutlined,
     SwapOutlined,
     GlobalOutlined,
-    BellOutlined
 } from '@ant-design/icons';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { AdminSystemLoadWidget } from './components/AdminSystemLoadWidget';
@@ -20,30 +19,34 @@ const { Title, Text } = Typography;
 const FRONTEND_VERSION =
   typeof __APP_VERSION__ !== 'undefined' && __APP_VERSION__ ? __APP_VERSION__ : 'dev';
 
+/** 管理后台版本落后提示：进入页面立即检查，之后每 10 分钟自动检查一次。 */
+const UPDATE_CHECK_INTERVAL_MS = 10 * 60 * 1000;
+
 const AdminUpdateBadge: React.FC = () => {
     const [versionInfo, setVersionInfo] = useState<SystemVersion | null>(null);
-    const [checkingUpdate, setCheckingUpdate] = useState(false);
-
-    const loadVersion = (force = false) => {
-        setCheckingUpdate(true);
-        systemService
-            .getVersion(force)
-            .then((info) => setVersionInfo(info))
-            .catch(() => setVersionInfo(null))
-            .finally(() => setCheckingUpdate(false));
-    };
 
     useEffect(() => {
-        loadVersion();
+        let cancelled = false;
+        const run = () => {
+            systemService
+                .getVersion(true)
+                .then((info) => {
+                    if (!cancelled) setVersionInfo(info);
+                })
+                .catch(() => {
+                    if (!cancelled) setVersionInfo(null);
+                });
+        };
+        run();
+        const timer = window.setInterval(run, UPDATE_CHECK_INTERVAL_MS);
+        return () => {
+            cancelled = true;
+            window.clearInterval(timer);
+        };
     }, []);
 
     const update = versionInfo?.update;
-    if (checkingUpdate && !update) {
-        return <span className="text-[10px] text-slate-400">检查更新…</span>;
-    }
-    if (!update) {
-        return null;
-    }
+    if (!update) return null;
     if (update.status === 'diverged') {
         return (
             <Tooltip title="本地提交不在上游 master 历史中，无法计算落后个数">
@@ -53,28 +56,12 @@ const AdminUpdateBadge: React.FC = () => {
     }
     if (update.behind != null && update.behind > 0) {
         return (
-            <Tooltip title="在服务器项目目录执行：sudo bash deploy/update.sh">
-                <button
-                    type="button"
-                    onClick={() => loadVersion(true)}
-                    disabled={checkingUpdate}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1 text-xs font-medium disabled:opacity-60"
-                >
+            <Tooltip title="概览页可执行「更新系统」，或在服务器执行：sudo bash deploy/update.sh">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1 text-xs font-medium">
                     <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
                     {`落后 ${update.behind} 个提交`}
-                </button>
+                </span>
             </Tooltip>
-        );
-    }
-    if (update.is_up_to_date) {
-        return (
-            <button
-                type="button"
-                onClick={() => loadVersion(true)}
-                className="text-[10px] font-medium text-slate-400 hover:text-emerald-600"
-            >
-                已最新
-            </button>
         );
     }
     return null;
@@ -201,9 +188,6 @@ const AdminPage: React.FC = () => {
                     
                     <div className="flex items-center gap-5">
                         <AdminUpdateBadge />
-                        <Badge dot color="#10b981" offset={[-2, 2]}>
-                            <Button type="text" icon={<BellOutlined />} className="text-slate-400 hover:text-slate-800" />
-                        </Badge>
                         <Divider type="vertical" className="h-4 border-slate-200" />
                         <div className="flex items-center gap-3 pl-2">
                             <div className="text-right hidden sm:block">

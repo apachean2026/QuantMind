@@ -48,6 +48,7 @@ export const systemService = {
    * @param force true 时绕过磁盘缓存，强制实时请求上游发布索引
    */
   getVersion: async (force = false): Promise<SystemVersion> => {
-    return apiClient.get<SystemVersion>('/api/v1/system/version', { params: { force } });
+    // apiClient.get 第二参就是 query params，不要再包一层 { params: ... }
+    return apiClient.get<SystemVersion>('/api/v1/system/version', { force });
   }
 };
