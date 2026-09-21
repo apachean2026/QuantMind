@@ -56,7 +56,7 @@ services:
       context: .
       dockerfile: docker/Dockerfile.oss
       args:
-        TORCH_DEVICE: ${TORCH_DEVICE:-skip}
+        TORCH_DEVICE: ${TORCH_DEVICE:-auto}
         TORCH_CPU_INDEX_URL: ${TORCH_CPU_INDEX_URL:-https://download.pytorch.org/whl/cpu}
         QM_REQ_SHA: ${QM_REQ_SHA:-unknown}
         APT_MIRROR: ${APT_MIRROR:-mirrors.tuna.tsinghua.edu.cn}

@@ -549,7 +549,7 @@ docker exec quantmind-db pg_isready -U quantmind
 | **用户表不存在 / 登录失败**       | db\_init.sql 未执行 | 手动执行 db\_init.sql（见第 5 节）；确认 `\dt users`                 |
 | **Docker Compose 版本过低** | 需 v2.19+         | `docker compose version`，装 docker-compose-plugin         |
 | **镜像拉取慢/失败**            | 网络源              | 脚本自动选 Docker/PyPI/APT 镜像源，可手动 `--build-arg` 指定           |
-| **torch 安装失败**          | GPU/CPU 兼容       | Dockerfile 支持 `TORCH_DEVICE=cpu/gpu/skip`（skip 适合纯行情/交易） |
+| **torch 安装失败**          | GPU/CPU 兼容       | Dockerfile 默认 `TORCH_DEVICE=auto`（构建期动态探测），可强制 `cpu/gpu/skip`；实际形态见镜像 `/etc/quantmind/torch-device` |
 | **容器起不来**               | 端口冲突 / 配置        | `docker compose logs quantmind` 看日志                      |
 | **数据库连接失败**             | PG 未就绪           | `docker exec quantmind-db pg_isready -U quantmind`       |
 | **前端 502**              | Nginx/PM2        | `nginx -t` + `pm2 status` + `pm2 restart quantmind-web`  |

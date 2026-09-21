@@ -16,11 +16,25 @@ QuantMind 对 RSS 新闻进行情绪识别（看涨/看跌/中性）时，优先
 
 ```yaml
 args:
-  TORCH_DEVICE: ${TORCH_DEVICE:-cpu}          # 默认 cpu，构建时安装 PyTorch CPU 版
+  TORCH_DEVICE: ${TORCH_DEVICE:-auto}         # 默认 auto：构建期动态探测
   TORCH_CPU_INDEX_URL: ${TORCH_CPU_INDEX_URL:-https://download.pytorch.org/whl/cpu}
 ```
 
-因此**在线一键部署默认就会安装 PyTorch（CPU 版）**，无需额外操作。
+`auto` 的探测优先级：
+
+1. `docker/torch_wheels/` 本地 wheel（离线/定制）
+2. 基础镜像已能 `import torch` → 跳过安装（避免重复下载、磁盘膨胀）
+3. 构建机能列出 GPU（`nvidia-smi -L`）→ 安装完整 CUDA 版
+4. 否则 → 安装 CPU 版
+
+因此**在线一键部署默认就会装上 PyTorch（绝大多数机器是 CPU 版）**，无需额外操作。构建日志会打印
+`[torch] 形态探测：TORCH_DEVICE=auto -> 实际=cpu`，镜像内实际形态记录在 `/etc/quantmind/torch-device`：
+
+```bash
+docker exec quantmind cat /etc/quantmind/torch-device   # cpu / gpu / local / skip
+```
+
+需要强制指定时用 `TORCH_DEVICE=cpu|gpu|skip` 覆盖 `auto`。
 
 ### 若默认构建报错（找不到 torch）
 
@@ -76,9 +90,9 @@ sudo docker run --rm quantmind-oss:latest python3 -c "import torch; print(torch.
 
 ```bash
 cd /opt/quantmind
-# 确认代码最新（构建参数默认已含 TORCH_DEVICE=cpu）
+# 确认代码最新（compose 默认 TORCH_DEVICE=auto，会自动探测并安装）
 sudo git pull origin master
-sudo TORCH_DEVICE=cpu docker compose build --pull=false quantmind
+sudo docker compose build --pull=false quantmind
 # 重启服务用新镜像
 sudo docker compose up -d
 ```
@@ -137,7 +151,7 @@ print(p('公司发布重大利好公告，净利润大幅增长，看好未来')
 
 ## 关联文件
 
-* `docker/Dockerfile.oss` — 镜像构建，`TORCH_DEVICE` 决定是否/如何安装 PyTorch
+* `docker/Dockerfile.oss` — 镜像构建，`TORCH_DEVICE`（默认 `auto`，构建期动态探测）决定是否/如何安装 PyTorch；实际形态记录在镜像内 `/etc/quantmind/torch-device`
 
 * `docker-compose.yml` — 默认构建参数（`TORCH_DEVICE`、`TORCH_CPU_INDEX_URL`）
 

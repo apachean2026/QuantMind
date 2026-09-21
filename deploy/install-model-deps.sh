@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # QuantMind 模型依赖补齐脚本
 #
-# 离线部署镜像默认 TORCH_DEVICE=skip（不含 PyTorch，省构建时间/体积）。
+# 镜像默认 TORCH_DEVICE=auto（构建期动态探测，通常装 CPU 版；离线镜像若已含 torch 则跳过）。
 # 本脚本为已部署环境按需补装 PyTorch(torch)，供 FinBERT 新闻情感、模型推理与训练使用。
 # 默认采用「重建镜像」持久方案：重装 torch 后生成的镜像重启不丢。
 #
@@ -69,7 +69,7 @@ prepare_env() {
     elif [[ "$TORCH_DEVICE" == skip ]]; then
         die "TORCH_DEVICE=skip 表示不安装 torch，本脚本无意义；请用 cpu 或 gpu"
     fi
-    # 持久化到 .env：避免后续 update/full-deploy 按默认(skip)判定依赖指纹漂移，
+    # 持久化到 .env：避免后续 update/full-deploy 按默认(auto)判定依赖指纹漂移，
     # 把已含 torch 的镜像回退重建（指纹把 TORCH_DEVICE 纳入）。
     local env_file="$PROJECT_DIR/.env"
     if [[ -f "$env_file" ]]; then

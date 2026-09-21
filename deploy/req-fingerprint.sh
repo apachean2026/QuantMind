@@ -7,12 +7,17 @@
 #   - docker-compose.yml 中 quantmind 服务的构建参数（TORCH_DEVICE 等）
 # 业务代码走 bind mount，不改变指纹、不触发重建 —— 这正是「速度」的来源。
 #
+# TORCH_DEVICE 取值语义（compose 默认 auto）：
+#   auto -> 构建期动态探测（本地 wheel > 基础镜像已含 torch > GPU > CPU）
+#   cpu / gpu / skip -> 显式指定，不做探测
+# 同一台机器上 auto 的探测结果是稳定的，故指纹按字面值 auto 参与哈希即可保持幂等。
+#
 # 用法：
 #   构建/打包侧（把指纹烙进镜像 Label，供部署侧比对）：
 #     QM_REQ_SHA=$(bash deploy/req-fingerprint.sh) docker compose build quantmind
 #   部署侧（deploy/full-deploy.sh 内部使用）：
 #     比对「当前代码指纹」与「镜像 LABEL qm.req.sha」，一致→复用，不一致→重建。
-#   从未写明 TORCH_DEVICE 时，按镜像 Label 反推形态（避免默认 skip 误重建）：
+#   从未写明 TORCH_DEVICE 时，按镜像 Label 反推形态（避免默认 auto/skip 误重建）：
 #     bash deploy/req-fingerprint.sh --infer-torch [ROOT] [IMAGE]
 set -euo pipefail
 
@@ -38,7 +43,7 @@ compute_req_sha() {
     build_args="$(grep -E '^\s*(TORCH_DEVICE|TORCH_CPU_INDEX_URL|QM_REQ_SHA):' \
         "$ROOT/docker-compose.yml" 2>/dev/null || true)"
     parts="${parts}build-args=${build_args}"
-    parts="${parts}torch=${torch_device:-skip}"
+    parts="${parts}torch=${torch_device:-auto}"
     printf '%s' "$parts" | sha256sum | awk '{print substr($1,1,16)}'
 }
 
@@ -49,7 +54,7 @@ read_torch_from_env() {
         torch_device="$(grep -E '^\s*TORCH_DEVICE=' "$ROOT/.env" 2>/dev/null | tail -1 \
             | cut -d= -f2- | tr -d "\"' " || true)"
     fi
-    printf '%s' "${torch_device:-skip}"
+    printf '%s' "${torch_device:-auto}"
 }
 
 image_label() {
@@ -58,7 +63,7 @@ image_label() {
         --format "{{ index .Config.Labels \"$key\" }}" 2>/dev/null || true
 }
 
-# 优先读 qm.torch.device；旧镜像没有该 Label 时，用当前代码分别按 cpu/gpu/skip
+# 优先读 qm.torch.device；旧镜像没有该 Label 时，用当前代码分别按 auto/cpu/gpu/skip
 # 重算指纹，与 qm.req.sha 对得上的即为打包时的 torch 形态。
 infer_torch_from_image() {
     local ROOT="$1"
@@ -67,7 +72,7 @@ infer_torch_from_image() {
     docker image inspect "$IMAGE" >/dev/null 2>&1 || return 0
     labeled="$(image_label "$IMAGE" "qm.torch.device")"
     case "$labeled" in
-        cpu|gpu|skip)
+        auto|cpu|gpu|skip)
             printf '%s' "$labeled"
             return 0
             ;;
@@ -83,7 +88,7 @@ infer_torch_from_image() {
             return 0
             ;;
     esac
-    for d in cpu gpu skip; do
+    for d in auto cpu gpu skip; do
         want="$(compute_req_sha "$ROOT" "$d")"
         if [[ -n "$want" && "$want" == "$have" ]]; then
             printf '%s' "$d"

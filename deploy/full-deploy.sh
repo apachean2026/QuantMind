@@ -462,11 +462,11 @@ sync_qwenpaw_skills() {
 }
 
 # 统一 torch 形态，避免依赖指纹漂移：
-# 镜像的 qm.req.sha 把 TORCH_DEVICE 纳入（skip/cpu/gpu 是不同镜像）。解析顺序：
+# 镜像的 qm.req.sha 把 TORCH_DEVICE 纳入（auto/skip/cpu/gpu 是不同镜像）。解析顺序：
 #   TORCH_DEVICE / QUANTMIND_TORCH_DEVICE > .env > 镜像 Label（qm.torch.device 或
-#   用 cpu/gpu/skip 重算指纹与 qm.req.sha 对拍）。
+#   用 auto/cpu/gpu/skip 重算指纹与 qm.req.sha 对拍）。
 # 有现成镜像却推断不出时直接失败，禁止默认 skip——否则会把 cpu/gpu 离线包盖成无 torch。
-# 仅「镜像不存在」（全新安装）才回落 skip，并写入 .env 供后续对齐。
+# 仅「镜像不存在」（全新安装）才回落 auto，并写入 .env 供后续对齐。
 persist_torch_device() {
     local device="$1"
     local env_file="$PROJECT_DIR/.env"
@@ -496,11 +496,11 @@ ensure_torch_device() {
         helper="$PROJECT_DIR/deploy/req-fingerprint.sh"
         if [[ -f "$helper" ]]; then
             inferred="$(bash "$helper" --infer-torch "$PROJECT_DIR" quantmind-oss:latest 2>/dev/null || true)"
-            # 兼容尚未包含 --infer-torch 的旧 helper：按 cpu/gpu/skip 对拍镜像指纹。
+            # 兼容尚未包含 --infer-torch 的旧 helper：按 auto/cpu/gpu/skip 对拍镜像指纹。
             if [[ -z "$inferred" ]]; then
                 have="$(image_req_sha quantmind-oss:latest)"
                 if [[ "$have" != notloaded && "$have" != none ]]; then
-                    for d in cpu gpu skip; do
+                    for d in auto cpu gpu skip; do
                         want="$(TORCH_DEVICE="$d" bash "$helper" "$PROJECT_DIR" 2>/dev/null || true)"
                         if [[ -n "$want" && "$want" == "$have" ]]; then
                             inferred="$d"
@@ -518,17 +518,17 @@ ensure_torch_device() {
         have="$(image_req_sha quantmind-oss:latest)"
         case "$have" in
             notloaded)
-                log '未指定 TORCH_DEVICE 且无 quantmind-oss 镜像，按 skip 处理（全新安装）'
-                persist_torch_device skip
+                log '未指定 TORCH_DEVICE 且无 quantmind-oss 镜像，按 auto 处理（全新安装）'
+                persist_torch_device auto
                 return 0
                 ;;
             none)
-                log '未指定 TORCH_DEVICE，镜像无依赖指纹，按 skip 处理'
-                persist_torch_device skip
+                log '未指定 TORCH_DEVICE，镜像无依赖指纹，按 auto 处理'
+                persist_torch_device auto
                 return 0
                 ;;
             *)
-                die "未指定 TORCH_DEVICE，且无法从镜像推断（镜像指纹=${have}）。请显式设置 TORCH_DEVICE=cpu|gpu|skip 后重试，以免把已含 torch 的镜像按 skip 重建。"
+                die "未指定 TORCH_DEVICE，且无法从镜像推断（镜像指纹=${have}）。请显式设置 TORCH_DEVICE=auto|cpu|gpu|skip 后重试，以免把已含 torch 的镜像按 skip 重建。"
                 ;;
         esac
     fi

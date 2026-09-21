@@ -8,10 +8,13 @@ ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple/
 ARG PIP_TRUSTED_HOST=pypi.tuna.tsinghua.edu.cn
 ARG APT_MIRROR=mirrors.aliyun.com
 
-# torch 版本选择：skip（默认，跳过 torch 安装，适合镜像已含训练组件/纯指标行情服务）、
-# cpu（安装 PyTorch CPU 版，构建快、镜像小）、gpu（含 CUDA，需 GPU 且构建慢、镜像 ~24GB）
+# torch 形态选择：
+#   auto（默认，构建期动态探测，见下方 torch 层）
+#   skip -> 不安装 torch（适合镜像已含训练组件 / 纯指标行情服务）
+#   cpu  -> 强制安装 PyTorch CPU 版（构建快、镜像小）
+#   gpu  -> 强制安装完整 CUDA 版（构建慢、镜像 ~24GB，需 NVIDIA GPU）
 # 用法: docker build --build-arg TORCH_DEVICE=cpu ...
-ARG TORCH_DEVICE=skip
+ARG TORCH_DEVICE=auto
 # CPU 版 torch 下载源（国内 pytorch 镜像暂缺 2.9.1+cpu，使用官方源）
 ARG TORCH_CPU_INDEX_URL=https://download.pytorch.org/whl/cpu
 
@@ -51,33 +54,55 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       sshpass \
     && rm -rf /var/lib/apt/lists/*
 
-# 本地 torch wheel 目录（docker/torch_wheels/）被 .gitignore 忽略、不随代码分发。
-# 默认按 TORCH_DEVICE 从 PyPI 安装 torch：
-#   cpu -> torch==2.9.1+cpu（仅 CPU 轮子，构建快、镜像小，无需 GPU）
-#   gpu -> torch==2.9.1（完整 CUDA 轮子，构建慢、镜像大，需 NVIDIA GPU）
-# 需要离线/定制 wheel 时自行 COPY docker/torch_wheels/ 后放开下方本地分支。
-# torch 单独成层且在 requirements 之前：requirements 变更时本层直接命中缓存，
-# 不会重装 torch。
+# torch 安装层（在 requirements 之前单独成层：requirements 变更时本层命中缓存，不重装 torch）。
+#
+# TORCH_DEVICE=auto（默认）时在构建期动态探测，优先级：
+#   1. docker/torch_wheels/ 本地 wheel（离线/定制；该目录被 .gitignore 忽略、不随代码分发）
+#   2. 基础镜像已能 import torch -> 跳过（避免离线镜像重复下载、磁盘膨胀）
+#   3. 构建机能列出 GPU（nvidia-smi -L）-> 安装完整 CUDA 版
+#   4. 否则 -> 安装 CPU 版
+# 探测结论写入 /etc/quantmind/torch-device，构建日志与运行时都可复核实际形态。
+# CPU 版安装失败（如当前 pip 源缺 torch==2.9.1+cpu）时不中断构建，回落为不含 torch 并告警。
 RUN --mount=type=cache,target=/root/.cache/pip,id=quantmind-pip \
     python -m pip install --upgrade pip setuptools wheel cython \
     && if [ "$TORCH_DEVICE" = "skip" ] || [ "$TORCH_DEVICE" = "none" ]; then \
-         echo "跳过 torch 安装（TORCH_DEVICE=${TORCH_DEVICE}，不包含 CUDA/PyTorch）"; \
+         resolved=skip; \
+       elif [ "$TORCH_DEVICE" = "cpu" ] || [ "$TORCH_DEVICE" = "gpu" ]; then \
+         resolved="$TORCH_DEVICE"; \
        elif ls /tmp/torch_wheels/*.whl >/dev/null 2>&1; then \
-         echo "安装本地 torch wheel"; \
+         resolved=local; \
+       elif python -c "import torch" >/dev/null 2>&1; then \
+         resolved=skip; \
+       elif command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L >/dev/null 2>&1; then \
+         resolved=gpu; \
+       else \
+         resolved=cpu; \
+       fi \
+    && echo "[torch] 形态探测：TORCH_DEVICE=${TORCH_DEVICE} -> 实际=${resolved}" \
+    && if [ "$resolved" = "skip" ]; then \
+         echo "[torch] 不安装 torch，镜像不含 PyTorch/CUDA"; \
+       elif [ "$resolved" = "local" ]; then \
+         echo "[torch] 安装本地 wheel"; \
          python -m pip install --root-user-action=ignore /tmp/torch_wheels/*.whl; \
          rm -rf /tmp/torch_wheels; \
-       elif [ "$TORCH_DEVICE" = "gpu" ]; then \
-         echo "构建 GPU 版 torch（完整 CUDA，构建慢）"; \
+       elif [ "$resolved" = "gpu" ]; then \
+         echo "[torch] 安装 GPU 版 torch（完整 CUDA，构建慢）"; \
          python -m pip install --root-user-action=ignore "torch==2.9.1"; \
        else \
-         echo "构建 CPU 版 torch（快速、无需 GPU）"; \
+         echo "[torch] 安装 CPU 版 torch（快速、无需 GPU）"; \
          # torch 本体走官方 CPU 源；但其传递依赖（networkx/sympy/mpmath 等）必须走
          # 默认国内源（清华）。若用单 --index-url 会把默认源覆盖为官方源，
          # 导致这些依赖从 download.pytorch.org 拖慢构建。
          python -m pip install --root-user-action=ignore "torch==2.9.1+cpu" \
            --index-url ${PIP_INDEX_URL} \
-           --extra-index-url ${TORCH_CPU_INDEX_URL}; \
-       fi
+           --extra-index-url ${TORCH_CPU_INDEX_URL} \
+         || { echo "[torch] WARN: CPU 版 torch 安装失败（常见原因：当前 pip 源没有 torch==2.9.1+cpu）"; \
+              echo "[torch] WARN: 已回落为不含 torch 的镜像；需要 torch 请设置 TORCH_CPU_INDEX_URL=https://download.pytorch.org/whl/cpu 后重建"; \
+              resolved=skip; }; \
+       fi \
+    && mkdir -p /etc/quantmind \
+    && printf '%s\n' "$resolved" > /etc/quantmind/torch-device \
+    && echo "[torch] 镜像实际形态已记录：/etc/quantmind/torch-device = $(cat /etc/quantmind/torch-device)"
 
 # 安装 Python 依赖
 COPY requirements.txt /tmp/requirements.txt
@@ -143,6 +168,10 @@ RUN mkdir -p /data/models /data/qlib_data /data/uploads /data/strategies /tmp \
 #（真正由依赖引起的变化，本就会从对应 COPY/ARG 层开始正常失效重建）。
 ARG QM_REQ_SHA=unknown
 LABEL qm.req.sha=${QM_REQ_SHA}
+
+# 记录请求的 torch 形态（auto/cpu/gpu/skip），供 deploy/req-fingerprint.sh 的
+# --infer-torch 直接复用，无需按指纹反推；镜像内实际装了什么见 /etc/quantmind/torch-device。
+LABEL qm.torch.device=${TORCH_DEVICE}
 
 # 暴露端口
 EXPOSE 8000 8001 8002 8003

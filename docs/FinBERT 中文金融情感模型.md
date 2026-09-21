@@ -60,7 +60,7 @@ Huntly SQLite ┘                                       ├─ matcher.match()  
 
 | 项                  | 默认        | 说明                                                     |
 | ------------------ | --------- | ------------------------------------------------------ |
-| `TORCH_DEVICE`     | `cpu`     | 镜像内安装 torch CPU 版，避免 24GB 完整包                          |
+| `TORCH_DEVICE`     | `auto`    | 构建期动态探测：本地 wheel > 基础镜像已含 torch > 构建机有 GPU > CPU 版（避免 24GB 完整包） |
 | `NEWS_USE_FINBERT` | `""`（未设置） | 当 `FINBERT_DEVICE<0`（CPU）时**自动关闭** FinBERT，避免 CPU 推理打满 |
 | `FINBERT_DEVICE`   | `-1`      | 推理设备，-1=CPU，0=GPU0                                     |
 | 词典法降级              | 始终可用      | FinBERT 不可用时情绪仍能产出，但精度偏低                               |
@@ -133,7 +133,7 @@ sudo docker exec quantmind pip install "torch==2.9.1+cpu" \
 | `FINBERT_RETRY_AFTER` | `300`                               | 加载失败后冷却重试间隔（秒）                      |
 | `FINBERT_BATCH`       | `96`                                | 全量重建时的批量推理窗口                        |
 | `MODELSCOPE_ENDPOINT` | `https://www.modelscope.cn`         | 国内下载主源，可走内网代理                       |
-| `TORCH_DEVICE`        | `cpu`                               | 镜像构建时是否装 torch / 装 CPU 还是完整版        |
+| `TORCH_DEVICE`        | `auto`                              | 镜像构建时是否装 torch / 装 CPU 还是完整版（auto=构建期动态探测） |
 
 ***
 

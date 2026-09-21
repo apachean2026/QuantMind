@@ -211,8 +211,8 @@ build_core() {
     #   1) 禁用 grep -n —— 行号会随文件任意位置的编辑而漂移，导致签名每次都变、
     #      每次部署白白全量重建。
     #   2) 用 awk 只截取 quantmind 服务块，其他服务的 build 段变更不误伤本镜像。
-    #   3) build args 在 compose 里是 ${TORCH_DEVICE:-skip} 这类静态插值文本，
-    #      .env 里切 cpu/gpu 不会改变该文本，故把 TORCH_DEVICE 生效值单独计入签名。
+    #   3) build args 在 compose 里是 ${TORCH_DEVICE:-auto} 这类静态插值文本，
+    #      .env 里切 cpu/gpu/skip 不会改变该文本，故把 TORCH_DEVICE 生效值单独计入签名。
     local svc_blk torch_val
     svc_blk="$(awk '/^  quantmind:/{f=1;next} f && /^  [A-Za-z0-9_-]+:/{exit} f' \
         "$PROJECT_DIR/docker-compose.yml" 2>/dev/null || true)"
@@ -227,7 +227,7 @@ build_core() {
             case "$img_sha" in
                 ""|none|"<no value>"|notloaded) ;;
                 *)
-                    for d in cpu gpu skip; do
+                    for d in auto cpu gpu skip; do
                         want="$(TORCH_DEVICE="$d" bash "$PROJECT_DIR/deploy/req-fingerprint.sh" \
                             "$PROJECT_DIR" 2>/dev/null || true)"
                         if [[ -n "$want" && "$want" == "$img_sha" ]]; then
@@ -255,17 +255,17 @@ build_core() {
                 --format '{{ index .Config.Labels "qm.req.sha" }}' 2>/dev/null || true)"
             case "$img_sha" in
                 ""|none|"<no value>")
-                    log '2/5 镜像无依赖指纹且无法推断 TORCH_DEVICE，构建签名按 skip'
+                    log '2/5 镜像无依赖指纹且无法推断 TORCH_DEVICE，构建签名按 auto'
                     ;;
                 *)
-                    die "未指定 TORCH_DEVICE，且无法从镜像推断（镜像指纹=${img_sha}）。请显式设置 TORCH_DEVICE=cpu|gpu|skip 后重试，以免把已含 torch 的镜像按 skip 重建。"
+                    die "未指定 TORCH_DEVICE，且无法从镜像推断（镜像指纹=${img_sha}）。请显式设置 TORCH_DEVICE=auto|cpu|gpu|skip 后重试，以免把已含 torch 的镜像按 skip 重建。"
                     ;;
             esac
         fi
     fi
     build_blk="$(printf '%s' "$svc_blk" \
         | grep -aE 'build:|context:|dockerfile:|args:|target:|platform:|cache_from:|TORCH_DEVICE|TORCH_CPU_INDEX_URL' \
-        | sha256sum | awk '{print $1}')${torch_val:-skip}"
+        | sha256sum | awk '{print $1}')${torch_val:-auto}"
     build_blk="$(printf '%s' "$build_blk" | sha256sum | awk '{print $1}' | head -c 64)"
     build_blk="${build_blk:-missing}"
     trigger="${trigger}docker-compose-build=${build_blk}\n"

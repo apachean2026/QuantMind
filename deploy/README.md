@@ -64,6 +64,10 @@ docker save quantmind-oss:latest <其余镜像...> | zstd -T0 -o images.tar.zst
 纯代码更新不需要重新制作镜像包**。requirements/Dockerfile 变更后才需重打
 images.tar.zst；来不及重打包时，联网部署机会自动重建补齐（保持服务可用）。
 
+`TORCH_DEVICE` 默认 `auto`：构建期动态探测（本地 wheel > 基础镜像已含 torch >
+构建机有 GPU > CPU），实际形态写入镜像 `/etc/quantmind/torch-device`。需要强制
+时用 `TORCH_DEVICE=cpu|gpu|skip` 覆盖；打包与部署两侧须取同一取值，指纹才对得上。
+
 ## 在线源码部署
 
 ```bash
