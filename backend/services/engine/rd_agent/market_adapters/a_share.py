@@ -323,18 +323,11 @@ class AShareAdapter(MarketAdapter):
         return "rdagent.app.qlib_rd_loop.conf.FactorBasePropSetting"
 
     def get_env_overrides(self) -> dict[str, str]:
-        # API key resolution: AI_IDE_LLM_API_KEY > AI_IDE_API_KEY > OPENAI_API_KEY
-        api_key = (
-            os.getenv("AI_IDE_LLM_API_KEY")
-            or os.getenv("AI_IDE_API_KEY")
-            or os.getenv("OPENAI_API_KEY", "")
-        )
+        # 注意：不要在这里下发 OPENAI_API_KEY / OPENAI_BASE_URL / CHAT_MODEL / REASONING_MODEL。
+        # LLM 凭证与模型由 launcher 统一注入（用户个人中心「AI 服务配置」优先于容器 env），
+        # adapter 只读 os.getenv 会把用户配置覆盖回容器占位符（曾导致挖掘 401 Invalid API Key）。
         return {
             "QLIB_PROVIDER_URI": self.get_qlib_provider_uri(),
-            "OPENAI_BASE_URL": os.getenv("OPENAI_BASE_URL", ""),
-            "OPENAI_API_KEY": api_key,
-            "CHAT_MODEL": os.getenv("CHAT_MODEL", ""),
-            "REASONING_MODEL": os.getenv("CHAT_MODEL", ""),
             "CHAT_STREAM": "false",
             "CHAT_MAX_TOKENS": os.getenv("CHAT_MAX_TOKENS", "8000"),
             "CHAT_TEMPERATURE": os.getenv("CHAT_TEMPERATURE", "0.3"),

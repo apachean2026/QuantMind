@@ -95,6 +95,7 @@ db.tar.gz
 !backend/tests/**/*.csv
 !data/examples/**/*.csv
 data/backtest_results/
+data/alpha_agent_logs/
 userdata/
 research/data/
 research/data_adapter/qlib_data/

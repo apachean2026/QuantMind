@@ -111,12 +111,9 @@ class HongKongAdapter(MarketAdapter):
         return "rdagent.app.qlib_rd_loop.conf.FactorBasePropSetting"
 
     def get_env_overrides(self) -> dict[str, str]:
+        # 注意：LLM 凭证/模型由 launcher 统一注入，adapter 不下发（见 a_share.py 同名注释）。
         return {
             "QLIB_PROVIDER_URI": self.get_qlib_provider_uri(),
-            "OPENAI_BASE_URL": os.getenv("OPENAI_BASE_URL", ""),
-            "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY", ""),
-            "CHAT_MODEL": os.getenv("CHAT_MODEL", ""),
-            "REASONING_MODEL": os.getenv("CHAT_MODEL", ""),
             "CHAT_STREAM": "false",
             "CHAT_MAX_TOKENS": os.getenv("CHAT_MAX_TOKENS", "8000"),
             "CHAT_TEMPERATURE": os.getenv("CHAT_TEMPERATURE", "0.3"),

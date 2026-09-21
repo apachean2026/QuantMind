@@ -63,9 +63,25 @@ class AlphaAgentLauncher:
 
     def __init__(self) -> None:
         self._tasks: dict[str, EvolutionTask] = {}
-        self._log_dir = Path(os.getenv("LOG_TRACE_PATH", "/tmp/alpha_agent_logs"))
+        self._log_dir = self._resolve_log_dir()
         self._log_dir.mkdir(parents=True, exist_ok=True)
         self._load_tasks()
+
+    @staticmethod
+    def _resolve_log_dir() -> Path:
+        """任务状态/日志目录：显式 LOG_TRACE_PATH > 容器内持久挂载 /data > /tmp。
+
+        此前固定默认 /tmp/alpha_agent_logs，而 /tmp 在容器可写层、未挂载卷，
+        容器一旦 --force-recreate 重建，全部挖掘历史记录随之丢失（前端「看不到记录」）。
+        """
+        env_dir = os.getenv("LOG_TRACE_PATH", "").strip()
+        if env_dir:
+            return Path(env_dir)
+        # 仅 POSIX 下判断 /data：Windows 上 Path("/data") 会解析成当前盘符根目录（D:\data），
+        # 会把本地开发的任务日志写到盘根去。
+        if os.name == "posix" and Path("/data").is_dir():
+            return Path("/data/alpha_agent_logs")
+        return Path("/tmp/alpha_agent_logs")
 
     # ------------------------------------------------------------------
     # Public API
@@ -307,26 +323,22 @@ class AlphaAgentLauncher:
         template = Path(project) / "alphaagent" / "scenarios" / "qlib" / "experiment" / "factor_data_template"
         return str(template)
 
-    async def _run_evolution(
-        self,
-        task: EvolutionTask,
+    @staticmethod
+    def _build_subprocess_env(
         *,
-        loop_n: int,
-        seed: str,
+        task: EvolutionTask,
+        task_log_dir: Path,
         provider_uri: str,
-        direction: str = "",
         llm_overrides: dict[str, str] | None = None,
-    ) -> None:
-        task.status = TaskStatus.RUNNING
-        task.phase = "starting"
-        task.progress_pct = 2
-        task.progress = "正在启动因子挖掘..."
-        self._persist_task(task)
+    ) -> dict[str, Any]:
+        """构建 RD-Agent 子进程环境变量。
 
-        task_log_dir = self._log_dir / task.task_id
-        task_log_dir.mkdir(parents=True, exist_ok=True)
+        优先级（后者覆盖前者）：
+          容器 env < 市场适配器 get_env_overrides() < 用户个人中心「AI 服务配置」< build_llm_env 归一
 
-        # Build environment
+        顺序不能调换：adapter 只读 os.getenv，若在用户配置之后 update，
+        会把 base/model/key 覆盖回容器占位符（曾导致挖掘 401 Invalid API Key）。
+        """
         openai_base = (
             os.getenv("OPENAI_BASE_URL")
             or os.getenv("OPENAI_API_BASE")
@@ -347,7 +359,7 @@ class AlphaAgentLauncher:
             openai_api_key = llm_overrides.get("OPENAI_API_KEY", openai_api_key)
             chat_model = llm_overrides.get("CHAT_MODEL", chat_model)
 
-        env = {
+        env: dict[str, Any] = {
             **os.environ,
             "PYTHONPATH": os.getenv("PYTHONPATH") or "/app",
             "LOG_TRACE_PATH": str(task_log_dir),
@@ -364,6 +376,17 @@ class AlphaAgentLauncher:
             # 因子处理并行数
             "MULTI_PROC_N": os.getenv("MULTI_PROC_N", "4"),
         }
+        # 市场适配器环境变量（QLIB_PROVIDER_URI / CHAT_STREAM / CHAT_MAX_TOKENS 等）。
+        # 必须在 LLM 覆盖之前应用，见上方优先级说明。
+        try:
+            from backend.services.engine.rd_agent.market_adapters import get_adapter
+            adapter = get_adapter(task.market)
+            adapter_env = adapter.get_env_overrides()
+            env.update(adapter_env)
+        except Exception as e:
+            logger.warning("Failed to get market adapter env: %s", e)
+
+        # 用户级 LLM 配置（个人中心「AI 服务配置」）覆盖容器全局 env
         if system_prompt:
             env["DEFAULT_SYSTEM_PROMPT"] = system_prompt
         if openai_base:
@@ -380,16 +403,35 @@ class AlphaAgentLauncher:
                 if llm_overrides.get(_k):
                     env[_k] = llm_overrides[_k]
         from backend.services.engine.rd_agent.llm_env import build_llm_env
+        # 最后执行：确保 LITELLM_* 与 OPENAI_* 的最终取值一致，不再被后续步骤改写
         build_llm_env(env)
+        return env
 
-        # Add market adapter env overrides (RD-Agent runner used for all markets)
-        try:
-            from backend.services.engine.rd_agent.market_adapters import get_adapter
-            adapter = get_adapter(task.market)
-            adapter_env = adapter.get_env_overrides()
-            env.update(adapter_env)
-        except Exception as e:
-            logger.warning("Failed to get market adapter env: %s", e)
+    async def _run_evolution(
+        self,
+        task: EvolutionTask,
+        *,
+        loop_n: int,
+        seed: str,
+        provider_uri: str,
+        direction: str = "",
+        llm_overrides: dict[str, str] | None = None,
+    ) -> None:
+        task.status = TaskStatus.RUNNING
+        task.phase = "starting"
+        task.progress_pct = 2
+        task.progress = "正在启动因子挖掘..."
+        self._persist_task(task)
+
+        task_log_dir = self._log_dir / task.task_id
+        task_log_dir.mkdir(parents=True, exist_ok=True)
+
+        env = self._build_subprocess_env(
+            task=task,
+            task_log_dir=task_log_dir,
+            provider_uri=provider_uri,
+            llm_overrides=llm_overrides,
+        )
 
         # RD-Agent runner for all markets
         runner_script = self._RD_AGENT_RUNNER_SCRIPT
@@ -795,11 +837,29 @@ class AlphaAgentLauncher:
 
     @staticmethod
     def _tail_error_log(log_dir: Path, max_chars: int = 2000) -> str:
+        """取失败原因：优先 rdagent 的 common_logs.log，缺失时回退子进程 stdout。
+
+        此前只找 common_logs.log，而实际运行目录里往往只有 subprocess_stdout.log，
+        于是 error_message 只剩 "Process exited with code 1: "（冒号后为空），
+        前端拿不到任何失败原因。
+        """
         try:
-            logs = sorted(log_dir.rglob("common_logs.log"), key=lambda p: p.stat().st_mtime, reverse=True)
-            if not logs:
-                return ""
-            with open(logs[0], errors="replace") as f:
+            logs = sorted(
+                log_dir.rglob("common_logs.log"), key=lambda p: p.stat().st_mtime, reverse=True
+            )
+        except Exception:
+            logs = []
+        if not logs:
+            for name in ("subprocess_stdout.log", "stderr.log"):
+                candidate = log_dir / name
+                if candidate.is_file():
+                    logs = [candidate]
+                    break
+        if not logs:
+            return ""
+        try:
+            # 日志是 UTF-8；显式指定避免平台默认编码（Windows cp936）读成乱码
+            with open(logs[0], encoding="utf-8", errors="replace") as f:
                 return f.read()[-max_chars:]
         except Exception:
             return ""
