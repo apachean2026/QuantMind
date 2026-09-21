@@ -381,6 +381,12 @@ class AdminService {
         return resp.data;
     }
 
+    /** 换一个随机建议触发时间（01:00-06:00，10 分钟整数倍；仅回显不落库） */
+    async getSyncScheduleSuggestedTime(market: string): Promise<any> {
+        const resp = await this.axiosInstance.get(`/admin/data-platform/sync-schedule/${market}/suggested-time`);
+        return resp.data;
+    }
+
     async saveSyncSchedule(market: string, cfg: {
         enabled: boolean;
         time: string;

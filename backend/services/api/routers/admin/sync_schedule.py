@@ -36,7 +36,7 @@ class SyncScheduleRequest(BaseModel):
         try:
             datetime.strptime(v.strip(), "%H:%M")
         except ValueError:
-            raise ValueError("time 必须是 HH:MM 格式（如 22:30）")
+            raise ValueError("time 必须是 HH:MM 格式（如 22:30）") from None
         return v.strip()
 
 
@@ -73,6 +73,24 @@ async def get_market_schedule(market: str, current_user: dict = Depends(require_
     if market not in MARKETS:
         raise HTTPException(status_code=404, detail=f"未知市场: {market}")
     return {"success": True, "data": {"market": market, "label": MARKETS[market], **get_schedule(market)}}
+
+
+@router.get("/sync-schedule/{market}/suggested-time")
+async def get_market_suggested_time(
+    market: str, current_user: dict = Depends(require_admin)
+):
+    """随机建议触发时间（01:00-06:00，10 分钟整数倍），仅回显不落库。
+
+    前端「换一个时间」用；建议规则唯一实现在 market_sync_scheduler.suggested_time()。
+    """
+    MARKETS, *_ = _scheduler()
+    market = market.upper()
+    if market not in MARKETS:
+        raise HTTPException(status_code=404, detail=f"未知市场: {market}")
+
+    from backend.services.engine.tasks.market_sync_scheduler import suggested_time
+
+    return {"success": True, "data": {"market": market, "time": suggested_time()}}
 
 
 @router.post("/sync-schedule/{market}")

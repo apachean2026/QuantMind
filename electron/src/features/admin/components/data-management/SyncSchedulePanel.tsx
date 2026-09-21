@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Button, message, Space, Switch, TimePicker } from 'antd';
+import { Button, message, Space, Switch } from 'antd';
 import dayjs, { Dayjs } from 'dayjs';
 import { ClockCircleOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { adminService } from '../../services/adminService';
@@ -21,7 +21,7 @@ interface SyncSchedulePanelProps {
     defaultDays?: number;
 }
 
-/** 每市场定时同步配置面板 — 每天 HH:MM 定时同步上游数据（精确到分钟，建议次日 00:00 以后按需错峰）。 */
+/** 每市场定时同步配置面板 — 每天自动同步上游数据；触发时间为 01:00-06:00 随机错峰值（只读，可「换一个时间」）。 */
 export const SyncSchedulePanel: React.FC<SyncSchedulePanelProps> = ({
     market,
     selectedDatasets = [],
@@ -30,6 +30,7 @@ export const SyncSchedulePanel: React.FC<SyncSchedulePanelProps> = ({
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [running, setRunning] = useState(false);
+    const [rerolling, setRerolling] = useState(false);
     const [enabled, setEnabled] = useState(false);
     const [time, setTime] = useState<Dayjs>(dayjs('01:00', 'HH:mm'));
     // days 不再暴露输入框（用户要求移除「同步最近 N 天」），但后端 US/HK/BC/FUTURES
@@ -79,6 +80,23 @@ export const SyncSchedulePanel: React.FC<SyncSchedulePanelProps> = ({
         }
     };
 
+    /** 换一个随机建议时间（01:00-06:00 每 10 分钟）；仅改本地展示，点保存才落库。 */
+    const handleRerollTime = async () => {
+        setRerolling(true);
+        try {
+            const resp = await adminService.getSyncScheduleSuggestedTime(market);
+            const next = resp?.data?.time;
+            if (typeof next === 'string' && dayjs(next, 'HH:mm').isValid()) {
+                setTime(dayjs(next, 'HH:mm'));
+            }
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : '未知错误';
+            message.error(`获取建议时间失败: ${msg}`);
+        } finally {
+            setRerolling(false);
+        }
+    };
+
     const handleRunNow = async () => {
         setRunning(true);
         try {
@@ -112,14 +130,22 @@ export const SyncSchedulePanel: React.FC<SyncSchedulePanelProps> = ({
                 <div className="space-y-3">
                     <div className="flex flex-wrap items-center gap-2 bg-white rounded-xl border border-slate-100 px-3 py-2.5">
                         <span className="text-xs text-slate-500 font-medium">每天</span>
-                        <TimePicker
+                        {/* 时间只读：随机错峰的意义就是不让各部署撞同一分钟，
+                            开放手改会把这个目的抵消掉；需要换时间点「换一个时间」。 */}
+                        <span className="text-sm font-black font-mono text-slate-800">
+                            {time.format('HH:mm')}
+                        </span>
+                        <span className="text-[11px] text-slate-400">次日自动错峰</span>
+                        <div className="flex-1" />
+                        <Button
                             size="small"
-                            format="HH:mm"
-                            minuteStep={10}
-                            value={time}
-                            onChange={(v) => v && setTime(v)}
-                            style={{ width: 96 }}
-                        />
+                            type="link"
+                            className="!px-1 text-xs font-bold"
+                            loading={rerolling}
+                            onClick={handleRerollTime}
+                        >
+                            换一个时间
+                        </Button>
                     </div>
                     <div className="text-[11px] text-slate-400 px-1">
                         {datasets.length > 0
@@ -127,7 +153,7 @@ export const SyncSchedulePanel: React.FC<SyncSchedulePanelProps> = ({
                             : '未指定时按该市场默认全量同步'}
                     </div>
                     <div className="text-[11px] text-slate-400 bg-white rounded-lg border border-slate-100 px-3 py-2">
-                        后台 Celery 到点自动触发，时区 Asia/Shanghai，请按需错峰避免集中请求。
+                        后台 Celery 到点自动触发，时区 Asia/Shanghai；触发时间在 01:00-06:00 内随机错峰，保存后固定。
                     </div>
                 </div>
             )}
