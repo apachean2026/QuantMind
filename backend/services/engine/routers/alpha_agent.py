@@ -1069,13 +1069,33 @@ async def _run_factor_backtest(
                 )
                 data_source = "qlib_bin"
 
+        # 字段口径对齐：挖掘/IC 阶段用的是 39 字段的 daily_pv.h5，而 Qlib 二进制只有
+        # OHLCV+amount+factor。因子若引用了扩展字段（rsi_14/turn_5/netflow_* 等），
+        # 走 Qlib 必然 KeyError —— 这里自动切到 H5 数据源；没有 H5 就明确报错。
+        if data_source == "qlib_bin":
+            h5_only = _h5_only_fields_in(factor_code)
+            if h5_only:
+                h5_path = _resolve_factor_h5_path_for_market(market)
+                if h5_path:
+                    logger.info(
+                        "[alpha-backtest] %s 引用了 Qlib 二进制没有的字段 %s，"
+                        "自动切换到 H5 数据源（%s）",
+                        factor_id, h5_only, h5_path,
+                    )
+                    data_source = "h5"
+                else:
+                    raise RuntimeError(
+                        f"该因子引用了 Qlib 二进制数据源没有的字段 {h5_only}，"
+                        f"且市场 {market} 无可用 H5 数据文件；请改用含这些字段的数据源。"
+                    )
+
         if data_source == "qlib_bin":
             await _backtest_via_qlib(
                 factor_id, factor_code, kind, market, market_upper, universe, start, end
             )
         else:
             await _backtest_via_h5(
-                factor_id, factor_code, kind, universe, start, end
+                factor_id, factor_code, kind, universe, start, end, market=market
             )
     except FactorBacktestCancelled:
         logger.info("[alpha-backtest] %s cancelled by user", factor_id)
@@ -1233,7 +1253,9 @@ async def _run_functional_factor_subprocess(
     import tempfile
     from pathlib import Path
 
-    h5_path = "/tmp/daily_pv.h5"
+    # 每次回测独立工作目录：并发回测互不覆盖（此前固定 /tmp/*.h5 会互相踩）
+    workdir = _new_backtest_workspace(factor_id)
+    h5_path = str(workdir / "daily_pv.h5")
     try:
         # 把 Qlib 拉的 df 写成 H5 给 subprocess 读。
         # Qlib D.features() 的列名带 "$" 前缀 (如 $close, $volume)，
@@ -1247,22 +1269,21 @@ async def _run_functional_factor_subprocess(
                     df_out[plain] = df_out[col]
         df_out.to_hdf(h5_path, key="data", mode="w")
     except Exception as e:
+        shutil.rmtree(workdir, ignore_errors=True)
         raise RuntimeError(f"准备 daily_pv.h5 失败: {e}") from e
 
-    tb_path = "/tmp/_bt_tb.txt"
-    Path(tb_path).unlink(missing_ok=True)
-    out_path = "/tmp/_bt_result.h5"
-    Path(out_path).unlink(missing_ok=True)
-    Path("/tmp/result.h5").unlink(missing_ok=True)
+    tb_path = workdir / "_bt_tb.txt"
+    out_path = workdir / "_bt_result.h5"
 
     script = f"""
 import pandas as pd
 import numpy as np
 import sys, os, tempfile, traceback, shutil
 
-os.chdir(tempfile.gettempdir())
-TB = "/tmp/_bt_tb.txt"
-OUT = "/tmp/_bt_result.h5"
+WORKDIR = {str(workdir)!r}
+os.chdir(WORKDIR)  # 因子代码用相对路径读 daily_pv.h5 / 写 result.h5
+TB = os.path.join(WORKDIR, "_bt_tb.txt")
+OUT = os.path.join(WORKDIR, "_bt_result.h5")
 try:
     _factor_ns = {{}}
     exec({repr(factor_code)}, _factor_ns)
@@ -1273,13 +1294,13 @@ try:
     # 优先用返回值（DataFrame），否则看 result.h5
     if _result is not None and hasattr(_result, 'to_hdf'):
         _result.to_hdf(OUT, key='data', mode='w')
-    elif os.path.exists('result.h5'):
-        shutil.move('result.h5', OUT)
+    elif os.path.exists(os.path.join(WORKDIR, 'result.h5')):
+        shutil.move(os.path.join(WORKDIR, 'result.h5'), OUT)
     else:
-        # 兜底: 找 cwd 下所有 .h5（排除 daily_pv）
-        for f in os.listdir('.'):
+        # 兜底: 只在本工作目录内找 .h5（排除输入 daily_pv.h5），不再扫描整个 /tmp
+        for f in os.listdir(WORKDIR):
             if f.endswith('.h5') and f != 'daily_pv.h5' and not f.startswith('_bt'):
-                shutil.move(f, OUT)
+                shutil.move(os.path.join(WORKDIR, f), OUT)
                 break
         else:
             print("NO_RESULT_FILE"); sys.exit(1)
@@ -1290,30 +1311,33 @@ except Exception as e:
     print(f"ERROR: {{e}}")
     sys.exit(1)
 """
-    returncode, stdout, stderr = await _run_subprocess_tracked(
-        factor_id, [_sys.executable, "-c", script], timeout=600
-    )
-    if returncode != 0:
-        tb = Path(tb_path).read_text() if Path(tb_path).exists() else ""
-        out = stdout + "\n" + stderr
-        raise RuntimeError(
-            f"因子执行失败 (exit={returncode}): {out[-300:]}\n{tb[-1000:]}"
-        )
-
-    # 读 result.h5
     try:
-        import pandas as _pd
-        result_df = _pd.read_hdf(out_path)
-    except Exception as e:
-        raise RuntimeError(f"读取 result.h5 失败: {e}") from e
+        returncode, stdout, stderr = await _run_subprocess_tracked(
+            factor_id, [_sys.executable, "-c", script], timeout=600
+        )
+        if returncode != 0:
+            tb = tb_path.read_text() if tb_path.exists() else ""
+            out = stdout + "\n" + stderr
+            raise RuntimeError(
+                f"因子执行失败 (exit={returncode}): {out[-300:]}\n{tb[-1000:]}"
+            )
 
-    # 转成 MultiIndex(datetime, instrument) 的 Series
-    if isinstance(result_df.index, _pd.MultiIndex) and result_df.index.nlevels >= 2:
-        s = result_df.iloc[:, 0]
-    else:
-        s = result_df.stack()
-    s.index.names = ["instrument", "datetime"]
-    return s
+        # 读 result.h5
+        try:
+            import pandas as _pd
+            result_df = _pd.read_hdf(out_path)
+        except Exception as e:
+            raise RuntimeError(f"读取 result.h5 失败: {e}") from e
+
+        # 转成 MultiIndex(datetime, instrument) 的 Series
+        if isinstance(result_df.index, _pd.MultiIndex) and result_df.index.nlevels >= 2:
+            s = result_df.iloc[:, 0]
+        else:
+            s = result_df.stack()
+        s.index.names = ["instrument", "datetime"]
+        return s
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
 
 
 async def _run_factor_class_subprocess(
@@ -1408,32 +1432,36 @@ async def _backtest_via_h5(
     universe: str,
     start: str,
     end: str,
+    market: str = "a_share",
 ) -> None:
-    """H5 路径（仅 A 股 / 美股 / 港股支持；其他市场回退）。"""
-    h5_path = _resolve_factor_h5_path(universe)
+    """H5 路径（含挖掘同源的扩展字段；仅 A 股 / 美股 / 港股有预生成数据）。"""
+    h5_path = _resolve_factor_h5_path(universe, market)
     if not Path(h5_path).exists():
         raise RuntimeError(f"H5 数据文件不存在: {h5_path}，请改用 data_source=qlib_bin")
-    # 复制到 /tmp 让因子代码能相对路径读
-    import shutil
-    tmp_h5 = "/tmp/daily_pv.h5"
-    if not Path(tmp_h5).exists() or Path(tmp_h5).stat().st_mtime < Path(h5_path).stat().st_mtime:
-        shutil.copy2(h5_path, tmp_h5)
-    await _backtest_functional_factor(factor_id, factor_code, start, end, universe)
+    # 数据复制到隔离工作目录的动作在 _backtest_functional_factor 内完成
+    await _backtest_functional_factor(
+        factor_id, factor_code, start, end, universe, market=market
+    )
+
+
+# 各市场的 H5 数据文件候选（按优先级）。A 股首个候选必须与因子挖掘/IC 阶段同源，
+# 否则回测会因字段缺失（rsi_14/turn_5/netflow_* 等）而失败。
+_H5_PATH_CANDIDATES: dict[str, list[str]] = {
+    "a_share": [
+        "/data/quantdb/.h5_cache/daily_pv_all.h5",
+        "/app/alphaagent/scenarios/qlib/experiment/factor_data_template/daily_pv_all.h5",
+        "/app/db/cn_data/daily_pv.h5",
+    ],
+    "us_stock": ["/app/db/us_data/daily_pv.h5"],
+    "hong_kong": ["/app/db/hk_data/daily_pv.h5"],
+    "crypto": ["/app/db/crypto_data/5min_pv.h5"],
+    "futures": [],  # H5 未生成
+}
 
 
 def _resolve_factor_h5_path_for_market(market: str) -> str | None:
     """按市场找 H5 文件；不存在返回 None。"""
-    candidates = {
-        "a_share": [
-            "/app/alphaagent/scenarios/qlib/experiment/factor_data_template/daily_pv_all.h5",
-            "/app/db/cn_data/daily_pv.h5",
-        ],
-        "us_stock": ["/app/db/us_data/daily_pv.h5"],
-        "hong_kong": ["/app/db/hk_data/daily_pv.h5"],
-        "crypto": ["/app/db/crypto_data/5min_pv.h5"],
-        "futures": [],  # H5 未生成
-    }
-    for p in candidates.get(market, []):
+    for p in _H5_PATH_CANDIDATES.get(market, []):
         if Path(p).exists():
             return p
     return None
@@ -1613,14 +1641,16 @@ async def _backtest_functional_factor(
     start_date: str | None,
     end_date: str | None,
     universe: str | None = "csi300",
+    market: str = "a_share",
 ) -> None:
     """回测 RD-Agent 函数式因子（calculate_* 返回 DataFrame，读 daily_pv.h5）。
 
     与 run_rd_agent.py.compute_factor_ic 同一套逻辑：subprocess 执行因子代码
     写 result.h5，再与价格数据对齐算 IC/RankIC/ICIR。
+    数据文件必须与挖掘/IC 阶段同源（含 rsi_14/turn_5 等扩展字段）。
     """
+    workdir = None
     try:
-        import tempfile
         import sys as _sys
         from pathlib import Path
 
@@ -1628,26 +1658,25 @@ async def _backtest_functional_factor(
         start = start_date or _default_start
         end = end_date or _default_end
 
-        # 市场 → H5 数据文件（因子代码读 daily_pv.h5，subprocess chdir 到 /tmp）
-        data_path = _resolve_factor_h5_path(universe)
-        # 复制到 /tmp/daily_pv.h5，因子代码用相对路径 daily_pv.h5 能读到
+        # 市场 → H5 数据文件（须与挖掘同源；见 _resolve_factor_h5_path_for_market）
+        data_path = _resolve_factor_h5_path(universe, market)
+        # 每次回测独立工作目录：因子代码用相对路径 daily_pv.h5 读、写 result.h5，
+        # 并发回测互不覆盖（此前固定 /tmp 会互相踩，导致状态横跳）
         import shutil
-        tmp_h5 = "/tmp/daily_pv.h5"
+        workdir = _new_backtest_workspace(factor_id)
         try:
-            if Path(data_path).exists() and (
-                not Path(tmp_h5).exists()
-                or Path(tmp_h5).stat().st_mtime < Path(data_path).stat().st_mtime
-            ):
-                shutil.copy2(data_path, tmp_h5)
-        except Exception:
-            pass
+            if Path(data_path).exists():
+                shutil.copy2(data_path, workdir / "daily_pv.h5")
+        except Exception as e:
+            raise RuntimeError(f"准备回测数据 {data_path} 失败: {e}") from e
 
         script = f"""
 import pandas as pd
 import numpy as np
 import sys, os, tempfile, traceback
 
-os.chdir(tempfile.gettempdir())
+WORKDIR = {str(workdir)!r}
+os.chdir(WORKDIR)  # 因子代码用相对路径读 daily_pv.h5 / 写 result.h5
 try:
     # 用 exec 定义因子函数（__name__ != __main__，不触发 main 块），再调用 calculate_* 执行
     _factor_ns = {{}}
@@ -1656,15 +1685,16 @@ try:
     if not _calc_fns:
         print("NO_CALC_FN"); sys.exit(1)
     _calc_fns[0]()
-    result_files = [f for f in os.listdir('.') if f.endswith('.h5') and 'result' in f.lower()]
+    # 只在本工作目录内找结果文件（不再扫描 /tmp，避免并发时读到别人的结果）
+    result_files = [f for f in os.listdir(WORKDIR) if f.endswith('.h5') and 'result' in f.lower()]
     if not result_files:
-        result_files = [f for f in os.listdir('.') if f.endswith('.h5') and f != 'daily_pv.h5']
+        result_files = [f for f in os.listdir(WORKDIR) if f.endswith('.h5') and f != 'daily_pv.h5']
     if not result_files:
         print("NO_RESULT_FILE"); sys.exit(1)
-    factor_df = pd.read_hdf(result_files[0])
+    factor_df = pd.read_hdf(os.path.join(WORKDIR, result_files[0]))
     if factor_df.empty:
         print("EMPTY_FACTOR"); sys.exit(1)
-    price_df = pd.read_hdf({repr(str(data_path))})
+    price_df = pd.read_hdf(os.path.join(WORKDIR, 'daily_pv.h5'))
     # 切片到回测窗口（默认近一年，由调用方解析）
     _start = {start!r}
     _end = {end!r}
@@ -1783,12 +1813,72 @@ except Exception as e:
         except Exception:
             pass
     finally:
+        if workdir is not None:
+            import shutil as _shutil
+
+            _shutil.rmtree(workdir, ignore_errors=True)
         _running_backtests.discard(factor_id)
         _backtest_cancelled.discard(factor_id)
 
 
-def _resolve_factor_h5_path(universe: str = "csi300") -> str:
-    """解析因子回测用 H5 数据文件路径（RD-Agent daily_pv.h5）。"""
+# Qlib 二进制数据集（db/qlib_data/features/<symbol>/*.day.bin）实际可提供的字段。
+# 只有这 7 个，超出范围的字段在 Qlib 路径下取不到。
+_QLIB_BINARY_FIELDS = frozenset(
+    {"open", "high", "low", "close", "volume", "amount", "factor"}
+)
+
+# 仅存在于 daily_pv.h5（与因子挖掘/IC 阶段同源的富数据，共 39 字段）的扩展字段。
+# 因子若引用其中任意字段，走 Qlib 二进制回测必然 KeyError，必须改用 H5 数据源。
+_H5_ONLY_FIELDS = frozenset(
+    {
+        "rsi_14", "macd_hist", "atr_14", "beta_20", "pe_ttm", "pb", "ps_ttm",
+        "div_yield", "total_mv", "float_mv", "np_ttm", "turn_5", "turn_20",
+        "turn_z_20", "netflow_5", "netflow_20", "mfi_14", "obv_slope",
+        "parkinson_20", "bb_width", "bb_pos", "adx_14", "maxdd_20", "bp", "ep",
+        "roe", "peg", "np_growth", "chip_profit_20", "idio_vol_20",
+        "ind_strength", "concept_hot",
+    }
+)
+
+
+def _new_backtest_workspace(factor_id: str) -> Path:
+    """为单次回测创建隔离工作目录。
+
+    此前回测固定使用 /tmp/daily_pv.h5、/tmp/_bt_result.h5，且 subprocess chdir 到 /tmp、
+    再用 os.listdir('.') 扫描 result 文件；并发回测会互相覆盖输入、并读到**别人**的结果文件，
+    表现为同一因子状态在 completed/failed/backtesting 之间反复横跳。
+    改为每次回测一个独立目录（参考 _run_factor_class_subprocess 的 run_id 做法）。
+    """
+    import tempfile
+
+    safe = "".join(c for c in factor_id if c.isalnum() or c in "-_")[:32] or "factor"
+    return Path(tempfile.mkdtemp(prefix=f"bt_{safe}_"))
+
+
+def _h5_only_fields_in(factor_code: str) -> list[str]:
+    """找出因子代码引用的、Qlib 二进制数据集没有的字段。
+
+    用于两件事：① 回测时自动选择能提供这些字段的数据源；② 都不可用时给出明确报错，
+    而不是抛裸 KeyError: None of [Index(['rsi_14'])] are in the [columns]。
+    """
+    import re
+
+    return sorted(
+        name
+        for name in _H5_ONLY_FIELDS
+        if re.search(rf"(?<![A-Za-z0-9_$])\$?{name}(?![A-Za-z0-9_])", factor_code)
+    )
+
+
+def _resolve_factor_h5_path(universe: str = "csi300", market: str = "a_share") -> str:
+    """解析因子回测用的 H5 数据文件路径。
+
+    必须与因子挖掘/IC 阶段同一份（含 rsi_14/turn_5/netflow_* 等扩展字段），
+    否则因子代码读不到字段，回测必然失败。
+    """
+    resolved = _resolve_factor_h5_path_for_market(market)
+    if resolved:
+        return resolved
     base = "/app/alphaagent/scenarios/qlib/experiment/factor_data_template/daily_pv_all.h5"
     if Path(base).exists():
         return base
