@@ -1737,7 +1737,7 @@ try:
         print("INSUFFICIENT_CLEAN_DATA"); sys.exit(1)
     from scipy import stats
     # 向量化逐日 IC（groupby 避免逐日 loc 全表扫描，显著提速）
-    df_ic = pd.DataFrame({'f': f, 'r': r})
+    df_ic = pd.DataFrame({{'f': f, 'r': r}})
     df_ic['dt'] = df_ic.index.get_level_values(0)
     ic_values = []
     for dt, g in df_ic.groupby('dt'):
