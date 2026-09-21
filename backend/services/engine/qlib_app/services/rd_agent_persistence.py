@@ -234,7 +234,7 @@ class RDAgentFactorPersistence:
             fields["universe"] = universe
         if date_range is not None:
             fields["date_range"] = date_range
-        if metadata is not None:
+        if metadata is not None or status == "completed":
             # Merge with existing metadata to preserve task_id, market, etc.
             async with get_session(read_only=True) as session:
                 row = await session.execute(
@@ -248,7 +248,10 @@ class RDAgentFactorPersistence:
                     merged = json.loads(existing) if isinstance(existing, str) else (existing or {})
                 except Exception:
                     merged = {}
-            merged.update(metadata)
+            merged.update(metadata or {})
+            if status == "completed":
+                # 回测成功时清掉历史失败原因，否则前端会把上一次的报错当成当前状态
+                merged["backtest_error"] = None
             fields["metadata_json"] = json.dumps(merged, ensure_ascii=False)
 
         set_clause = ", ".join(f"{k} = :{k}" for k in fields)
