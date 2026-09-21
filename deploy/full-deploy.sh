@@ -422,16 +422,29 @@ configure_qwenpaw_runtime() {
     fi
 }
 
-# QwenPaw 技能同步：skills/ → 技能池 → default 工作区，重启 qwenpaw 生效。
-# 失败仅告警不阻断部署；QUANTMIND_SKIP_SKILLS=true 跳过（离线包场景按需设置）。
+# QwenPaw 技能 + 人格同步：skills/ → 技能池 → default 工作区（含 _shared/），重启 qwenpaw 生效。
+# 人格（SOUL/PROFILE/AGENTS）一并刷新 —— 此前只传 --skills-only，人格长期滞后于仓库。
+# 失败仅告警不阻断部署，但会经 notify-event.sh 落盘 data/update.log 并写 system_events。
+# QUANTMIND_SKIP_SKILLS=true 跳过（离线包场景按需设置）。
+notify_event() {
+    # 留痕统一实现见 deploy/notify-event.sh；helper 尚未就位（极端情况）时退回仅打日志
+    local _helper="$PROJECT_DIR/deploy/notify-event.sh"
+    if [[ -f "$_helper" ]]; then
+        bash "$_helper" "${1:-info}" "${2:-}" "${3:-}" >/dev/null 2>&1 || true
+    else
+        log "事件留痕跳过（缺 $_helper）：[${1:-info}] ${2:-}"
+    fi
+}
+
 sync_qwenpaw_skills() {
     if [[ "${QUANTMIND_SKIP_SKILLS:-false}" == "true" ]]; then
-        log '跳过 QwenPaw 技能同步（QUANTMIND_SKIP_SKILLS=true）'
+        log '跳过 QwenPaw 技能与人格同步（QUANTMIND_SKIP_SKILLS=true）'
         return 0
     fi
-    log '同步 QwenPaw 技能（skills/ → 技能池 → default 工作区）'
+    log '同步 QwenPaw 技能与人格（skills/ → 技能池 → default 工作区）'
     if ! docker ps --format '{{.Names}}' | grep -qx qwenpaw; then
-        log '  qwenpaw 未运行，跳过（启动后手动执行 bash scripts/quantbot_init.sh --skills-only）'
+        log '  qwenpaw 未运行，跳过（启动后手动执行 bash scripts/quantbot_init.sh）'
+        notify_event warning 'QwenPaw 技能/人格未同步' 'qwenpaw 容器未运行'
         return 0
     fi
     local port
@@ -443,22 +456,29 @@ sync_qwenpaw_skills() {
             break
         fi
         if (( attempt == 30 )); then
-            log '  qwenpaw 60s 内未就绪，跳过（稍后手动执行）'
+            log "  qwenpaw ${port} 端口 60s 内未就绪，跳过（稍后手动执行 bash scripts/quantbot_init.sh）"
+            notify_event warning 'QwenPaw 技能/人格未同步' "qwenpaw /health 60s 内未就绪（port=${port}）"
             return 0
         fi
         sleep 2
     done
-    if ! QWENPAW_BASE_URL="${QWENPAW_BASE_URL:-http://127.0.0.1:${port}}" \
+    local sync_out
+    if ! sync_out="$(QWENPAW_BASE_URL="${QWENPAW_BASE_URL:-http://127.0.0.1:${port}}" \
          QWENPAW_AGENT_ID="${QWENPAW_AGENT_ID:-default}" \
-         bash "$PROJECT_DIR/scripts/quantbot_init.sh" --skills-only; then
-        log '  技能同步失败（不阻断部署，稍后手动执行 bash scripts/quantbot_init.sh --skills-only）'
+         bash "$PROJECT_DIR/scripts/quantbot_init.sh" 2>&1)"; then
+        printf '%s\n' "$sync_out" | tail -20
+        log '  QwenPaw 技能/人格同步失败（不阻断部署，稍后手动执行 bash scripts/quantbot_init.sh）'
+        notify_event warning 'QwenPaw 技能/人格同步失败' \
+            "$(printf '%s' "$sync_out" | tail -5 | tr '\n' ' ')"
         return 0
     fi
+    printf '%s\n' "$sync_out" | tail -5
     docker restart qwenpaw >/dev/null
     sleep 5
     local stat
     stat="$(docker exec qwenpaw qwenpaw skills list 2>/dev/null | tail -1 || true)"
-    log "  技能同步完成：${stat:-状态未知，请手动确认（docker exec qwenpaw qwenpaw skills list）}"
+    log "  技能与人格同步完成：${stat:-状态未知，请手动确认（docker exec qwenpaw qwenpaw skills list）}"
+    notify_event info 'QwenPaw 技能/人格同步完成' "${stat:-状态未知}"
 }
 
 # 统一 torch 形态，避免依赖指纹漂移：

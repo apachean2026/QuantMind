@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # QuantMind 一键更新脚本
-# 核心流程：拉代码 → 重建/重启后端容器 → 跑 data/upgrade_*.sql → 同步 QwenPaw 技能 → 健康检查。
+# 核心流程：拉代码 → 重建/重启后端容器 → 跑 data/upgrade_*.sql → 同步 QwenPaw 技能与人格 → 健康检查。
 # db/redis/qwenpaw 等基础设施容器不强制重启（仅 compose 配置漂移时按需重建；qwenpaw 在技能同步后重启一次使新技能生效）。
 # 用法：sudo bash deploy/update.sh [--ref master] [--remote gitee|github|origin] [--force] [--no-build] [--skip-backup] [--skip-skills]
 
@@ -26,7 +26,7 @@ usage() {
   --force               覆盖服务器上的未提交代码改动，不删除业务数据
   --no-build            跳过核心镜像构建（仅代码改动时用，bind mount 已生效）
   --skip-backup         跳过升级前数据库备份
-  --skip-skills         跳过 QwenPaw 技能同步
+  --skip-skills         跳过 QwenPaw 技能与人格同步
   -h, --help            显示帮助
 EOF
 }
@@ -54,17 +54,15 @@ require_root() {
     log "提示: 未使用 sudo 且 docker 权限不足，尝试继续（失败请改用 sudo 或将用户加入 docker 组）"
 }
 record_system_event() {
-    # 写入 system_events，供管理后台“最近事件”展示；失败不阻断主流程
-    local _level="$1" _title="$2" _msg="${3:-}"
-    local _pg_user
-    _pg_user="$(grep -E '^DB_USER=' "$PROJECT_DIR/.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d \"\' || echo quantmind)"
-    _pg_user="${_pg_user:-quantmind}"
-    # 转义单引号
-    local _t_esc _m_esc
-    _t_esc="$(printf '%s' "$_title" | sed "s/'/''/g")"
-    _m_esc="$(printf '%s' "$_msg" | sed "s/'/''/g" | head -c 4000)"
-    docker exec -e PGUSER="$_pg_user" quantmind-db psql -U "$_pg_user" -v ON_ERROR_STOP=0 \
-        -c "INSERT INTO system_events (event_type, level, source, title, message) VALUES ('system_update', '$_level', 'updater', '$_t_esc', '$_m_esc')" >/dev/null 2>&1 || true
+    # 统一实现见 deploy/notify-event.sh（同时写 system_events 与 data/update.log）。
+    # 保留本函数名以兼容既有调用点；失败不阻断主流程。
+    local _level="${1:-info}" _title="${2:-}" _msg="${3:-}"
+    local _helper="$PROJECT_DIR/deploy/notify-event.sh"
+    if [[ -f "$_helper" ]]; then
+        bash "$_helper" "$_level" "$_title" "$_msg" >/dev/null 2>&1 || true
+    else
+        log "事件留痕跳过（缺 $_helper）：[$_level] $_title $_msg"
+    fi
 }
 
 require_project() {
@@ -431,16 +429,20 @@ EOSQL
     fi
 }
 
-# QwenPaw 技能同步：skills/ → 技能池 → default 工作区，重启 qwenpaw 生效。
-# 失败仅告警不阻断升级；--skip-skills 或 QUANTMIND_SKIP_SKILLS=true 跳过。
+# QwenPaw 技能 + 人格同步：skills/ → 技能池 → default 工作区（含 _shared/），重启 qwenpaw 生效。
+# 人格（SOUL/PROFILE/AGENTS）一并刷新 —— 此前只传 --skills-only，人格长期滞后于仓库。
+# 失败仅告警不阻断升级，但会经 notify-event.sh 落盘 data/update.log 并写 system_events，
+# 避免「升级显示成功、实际没刷」事后无从追溯。
+# --skip-skills 或 QUANTMIND_SKIP_SKILLS=true 跳过。
 sync_qwenpaw_skills() {
     if $SKIP_SKILLS || [[ "${QUANTMIND_SKIP_SKILLS:-false}" == "true" ]]; then
-        log '5/5 跳过 QwenPaw 技能同步（--skip-skills）'
+        log '5/5 跳过 QwenPaw 技能与人格同步（--skip-skills）'
         return 0
     fi
-    log '5/5 同步 QwenPaw 技能（skills/ → 技能池 → default 工作区）'
+    log '5/5 同步 QwenPaw 技能与人格（skills/ → 技能池 → default 工作区）'
     if ! docker ps --format '{{.Names}}' | grep -qx qwenpaw; then
-        log '  qwenpaw 未运行，跳过（启动后手动执行 bash scripts/quantbot_init.sh --skills-only）'
+        log '  qwenpaw 未运行，跳过（启动后手动执行 bash scripts/quantbot_init.sh）'
+        record_system_event "warning" "QwenPaw 技能/人格未同步" "qwenpaw 容器未运行"
         return 0
     fi
     local port
@@ -452,22 +454,29 @@ sync_qwenpaw_skills() {
             break
         fi
         if (( attempt == 30 )); then
-            log '  qwenpaw 60s 内未就绪，跳过（稍后手动执行）'
+            log "  qwenpaw ${port} 端口 60s 内未就绪，跳过（稍后手动执行 bash scripts/quantbot_init.sh）"
+            record_system_event "warning" "QwenPaw 技能/人格未同步" "qwenpaw /health 60s 内未就绪（port=${port}）"
             return 0
         fi
         sleep 2
     done
-    if ! QWENPAW_BASE_URL="${QWENPAW_BASE_URL:-http://127.0.0.1:${port}}" \
+    local sync_out
+    if ! sync_out="$(QWENPAW_BASE_URL="${QWENPAW_BASE_URL:-http://127.0.0.1:${port}}" \
          QWENPAW_AGENT_ID="${QWENPAW_AGENT_ID:-default}" \
-         bash "$PROJECT_DIR/scripts/quantbot_init.sh" --skills-only; then
-        log '  技能同步失败（不阻断升级，稍后手动执行 bash scripts/quantbot_init.sh --skills-only）'
+         bash "$PROJECT_DIR/scripts/quantbot_init.sh" 2>&1)"; then
+        printf '%s\n' "$sync_out" | tail -20
+        log '  QwenPaw 技能/人格同步失败（不阻断升级，稍后手动执行 bash scripts/quantbot_init.sh）'
+        record_system_event "warning" "QwenPaw 技能/人格同步失败" \
+            "$(printf '%s' "$sync_out" | tail -5 | tr '\n' ' ')"
         return 0
     fi
+    printf '%s\n' "$sync_out" | tail -5
     docker restart qwenpaw >/dev/null
     sleep 5
     local stat
     stat="$(docker exec qwenpaw qwenpaw skills list 2>/dev/null | tail -1 || true)"
-    log "  技能同步完成：${stat:-状态未知，请手动确认（docker exec qwenpaw qwenpaw skills list）}"
+    log "  技能与人格同步完成：${stat:-状态未知，请手动确认（docker exec qwenpaw qwenpaw skills list）}"
+    record_system_event "info" "QwenPaw 技能/人格同步完成" "${stat:-状态未知}"
 }
 
 main() {
@@ -510,7 +519,7 @@ main() {
         fi
         sleep 2
     done
-    record_system_event "error" "系统更新失败" "API/celery 180s 内未就绪，请查看 data/update.log"
+    record_system_event "error" "系统更新失败" "API/celery 180s 内未就绪，详见 data/update.log 与下方日志"
     log '健康检查失败，尾部日志：' >&2
     docker logs --tail 100 quantmind >&2 || true
     for svc in quantmind-celery quantmind-celery-beat; do

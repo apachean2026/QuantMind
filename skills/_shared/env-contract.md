@@ -16,4 +16,6 @@
    ④ 全部失败则只交付 MD，并明确告知用户 PDF 未能生成及原因。
 5. 本文中的 `~/.claude`、`cp -r ... ~/.claude/skills` 等说明仅适用于本地 Claude Code 维护者，**QuantBot 不要执行**。
 
-> 维护说明：此文件是唯一事实源。各 `SKILL.md` 不得再粘贴全文，只保留一行引用（见 `SKILL_TEMPLATE.md`）。改契约只改这里，随 `quantbot_init.sh --skills-only` 同步（`_shared/` 会随 zip 进技能池）。
+> 维护说明：此文件是唯一事实源。各 `SKILL.md` 不得再粘贴全文，只保留一行引用（见 `SKILL_TEMPLATE.md`）。改契约只改这里，随 `quantbot_init.sh` 同步。
+>
+> 投递方式：技能池的 `upload-zip` 只认「含 `SKILL.md` 的目录」，`_shared/` 不会随 zip 进池，因此 `quantbot_init.sh` 的 `install_shared()` 会把本目录单独投递到 `WORKING_DIR/workspaces/<agent>/skills/_shared/`（与各技能同级，`../_shared/env-contract.md` 才解析得到）。若发现技能里的引用断链，先确认该目录是否就位。

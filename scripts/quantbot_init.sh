@@ -5,7 +5,8 @@
 # 用途：QwenPaw 容器装好后，一键完成：
 #   1. 将本地 skills/ 目录全部技能包安装到 QwenPaw 技能池
 #   2. 广播到目标工作区并启用
-#   3. 写入量化人格（SOUL.md / PROFILE.md / AGENTS.md）
+#   3. 投递共享契约目录 skills/_shared/（无 SKILL.md，走单独通道，见 install_shared）
+#   4. 写入量化人格（SOUL.md / PROFILE.md / AGENTS.md）
 #
 # 用法：
 #   bash scripts/quantbot_init.sh                          # 全量初始化（技能+人格）
@@ -106,6 +107,43 @@ PYEOF
     count=$((count + 1))
   done
   log "    已广播 $count 个量化技能到工作区 '$QWENPAW_AGENT_ID'"
+
+  # 1.5 投递共享契约目录（_shared/ 没有 SKILL.md，不在上面按技能枚举的广播范围内）
+  install_shared
+}
+
+# ---------------------------------------------------------------------------
+# 1.5 共享契约目录 skills/_shared/
+# ---------------------------------------------------------------------------
+# 技能池的 upload-zip 只认「含 SKILL.md 的目录」，_shared/ 不会随 zip 进池，
+# 而 21 个技能以 ../_shared/env-contract.md 的相对路径引用它 —— 不单独投递就会断链。
+# 目标路径必须与技能同级：WORKING_DIR/workspaces/<agent>/skills/_shared/。
+install_shared() {
+  local src="$SKILLS_DIR/_shared"
+  if [[ ! -d "$src" ]]; then
+    warn "缺少共享契约目录 $src，跳过投递"
+    return 0
+  fi
+
+  local ws="/app/working/workspaces/$QWENPAW_AGENT_ID/skills/_shared"
+  local n=0 f
+  for f in "$src"/*; do [[ -f "$f" ]] && n=$((n + 1)); done
+  (( n > 0 )) || { warn "$src 下没有文件，跳过投递"; return 0; }
+
+  if [[ -d "/app/working/workspaces/$QWENPAW_AGENT_ID" ]]; then
+    # 在 QwenPaw 容器内执行本脚本时直接写
+    mkdir -p "$ws"
+    for f in "$src"/*; do [[ -f "$f" ]] && install -m 644 "$f" "$ws/"; done
+    log "    已写入共享契约 $ws（$n 个文件）"
+  elif command -v docker >/dev/null 2>&1 && docker ps --format '{{.Names}}' | grep -qx qwenpaw; then
+    # 宿主机执行时经 docker cp 写入 qwenpaw 容器（先建目录，再拷贝内容）
+    docker exec qwenpaw mkdir -p "$ws"
+    docker cp "$src/." "qwenpaw:$ws/"
+    log "    已 docker cp 写入 qwenpaw:$ws（$n 个文件）"
+  else
+    warn "工作区不可达（无 /app/working/workspaces/$QWENPAW_AGENT_ID 也无 qwenpaw 容器），跳过共享契约投递"
+    warn "手动执行: docker exec qwenpaw mkdir -p $ws && docker cp skills/_shared/. qwenpaw:$ws/"
+  fi
 }
 
 # ---------------------------------------------------------------------------
