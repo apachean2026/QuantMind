@@ -710,6 +710,8 @@ export const ModelTrainingPage: React.FC = () => {
     // 配置中的时间切分优先级高于数据目录给出的首次打开建议值。
     catalogSuggestionAppliedRef.current = true;
     dispatch({ type: 'HYDRATE', payload: config.draft });
+    // factorFilter 是独立 useState，不经 formReducer，需单独同步；老配置无此节点则沿用当前值
+    if (config.factorFilter) setFactorFilter(config.factorFilter);
     if (config.market !== currentMarket) appDispatch(setMarket(config.market as AppMarket));
     if (isQuantDBMarket(config.market) && config.factorSource && config.factorSource !== factorSource) {
       setFactorSource(config.factorSource);
@@ -747,6 +749,7 @@ export const ModelTrainingPage: React.FC = () => {
       market: currentMarket,
       factor_source: isQuantDBMarket(currentMarket) ? factorSource : undefined,
       factor_catalog_version: isQuantDBMarket(currentMarket) ? factorCatalogVersion : undefined,
+      factor_filter: factorFilter,
     }));
     const safeName = (displayName || 'model-training').replace(/[\\/:*?"<>|]/g, '_');
     const filename = `模型训练配置_${safeName}_${dayjs().format('YYYYMMDD')}.yml`;
@@ -1034,7 +1037,7 @@ export const ModelTrainingPage: React.FC = () => {
               type="info"
               showIcon
               message={`将导入 ${importPreview.config.draft.selectedFeatures.length} 个特征、${importPreview.config.draft.params.model_types.length} 个模型`}
-              description="确认后会覆盖当前特征、时间切分、目标、超参数和训练上下文；训练结果与运行状态不会被导入。"
+              description="确认后会覆盖当前特征、时间切分、目标、超参数、因子筛选和训练上下文；训练结果与运行状态不会被导入。"
             />
             {importPreview.marketChanged && (
               <Alert

@@ -70,6 +70,11 @@ export const TrainingTargetConfig: React.FC<TrainingTargetConfigProps> = ({
 
   const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
+  // 缺省项回落默认值，控件与提交路径读同一份，避免显示值与实际提交值不一致
+  const activeFilter: TrainingFactorFilterConfig = { ...DEFAULT_FACTOR_FILTER, ...factorFilter };
+  const updateFilter = (patch: Partial<TrainingFactorFilterConfig>) =>
+    onFactorFilterChange?.({ ...activeFilter, ...patch });
+
   const handleRangeChange = (key: SplitKey, values: any) => {
     if (values && values[0] && values[1]) {
       onTimeChange(key, [values[0], values[1]]);
@@ -142,26 +147,66 @@ export const TrainingTargetConfig: React.FC<TrainingTargetConfigProps> = ({
               </Tooltip>
               <Switch
                 size="small"
-                checked={factorFilter?.enabled ?? DEFAULT_FACTOR_FILTER.enabled}
-                onChange={(v) => onFactorFilterChange?.({ ...DEFAULT_FACTOR_FILTER, ...factorFilter, enabled: v })}
+                checked={activeFilter.enabled}
+                onChange={(v) => updateFilter({ enabled: v })}
               />
             </div>
-            {factorFilter?.enabled ?? DEFAULT_FACTOR_FILTER.enabled ? (
-              <ol className="mt-3 space-y-1.5 text-[11px] text-slate-600 leading-relaxed list-decimal list-inside">
-                <li>
-                  日频 Rank IC 初筛：|IC| ≥ {factorFilter?.icThreshold ?? DEFAULT_FACTOR_FILTER.icThreshold} 且
-                  |ICIR| ≥ {factorFilter?.icirThreshold ?? DEFAULT_FACTOR_FILTER.icirThreshold} 者进入优选池
-                </li>
-                <li>
-                  优选不足时按综合评分（|IC| × |ICIR|）自动回填，保底约 {Math.min(factorFilter?.nTop ?? DEFAULT_FACTOR_FILTER.nTop, 20)} 个，
-                  弱行情窗口不再只剩一两个特征
-                </li>
-                <li>
-                  相关性 ≥ {factorFilter?.correlationThreshold ?? DEFAULT_FACTOR_FILTER.correlationThreshold} 去冗余，上限 top-{factorFilter?.nTop ?? DEFAULT_FACTOR_FILTER.nTop}，
-                  再过滚动 60 日稳定性检验
-                </li>
-                <li>每特征的去留原因写入训练日志与结果页，可逐个核查</li>
-              </ol>
+            {activeFilter.enabled ? (
+              <div className="mt-3 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="flex flex-col gap-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">入选上限 top-N</span>
+                    <InputNumber
+                      min={10}
+                      max={300}
+                      step={10}
+                      value={activeFilter.nTop}
+                      onChange={(v) => updateFilter({ nTop: clamp(Number(v ?? activeFilter.nTop), 10, 300) })}
+                      className="w-full"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">相关性去冗余阈值</span>
+                    <InputNumber
+                      min={0.1}
+                      max={1}
+                      step={0.05}
+                      value={activeFilter.correlationThreshold}
+                      onChange={(v) => updateFilter({ correlationThreshold: clamp(Number(v ?? activeFilter.correlationThreshold), 0.1, 1) })}
+                      className="w-full"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">|IC| 下限</span>
+                    <InputNumber
+                      min={0}
+                      max={1}
+                      step={0.005}
+                      value={activeFilter.icThreshold}
+                      onChange={(v) => updateFilter({ icThreshold: clamp(Number(v ?? activeFilter.icThreshold), 0, 1) })}
+                      className="w-full"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">|ICIR| 下限</span>
+                    <InputNumber
+                      min={0}
+                      max={5}
+                      step={0.05}
+                      value={activeFilter.icirThreshold}
+                      onChange={(v) => updateFilter({ icirThreshold: clamp(Number(v ?? activeFilter.icirThreshold), 0, 5) })}
+                      className="w-full"
+                    />
+                  </label>
+                </div>
+                <div className="text-[11px] text-slate-600 leading-relaxed">
+                  日频 Rank IC 初筛（|IC| ≥ {activeFilter.icThreshold} 且 |ICIR| ≥ {activeFilter.icirThreshold}）→
+                  优选不足时按综合评分（|IC| × |ICIR|）自动回填，保底约 {Math.min(activeFilter.nTop, 20)} 个，
+                  弱行情窗口不再只剩一两个特征 → 相关性 ≥ {activeFilter.correlationThreshold} 去冗余，
+                  上限 top-{activeFilter.nTop} → 再过滚动 60 日稳定性检验。
+                  每特征的去留原因写入训练日志与结果页，可逐个核查。
+                </div>
+              </div>
             ) : (
               <div className="mt-2 text-[10px] text-amber-600 leading-relaxed">已关闭：全部选中特征直接进入训练，不做筛选。</div>
             )}

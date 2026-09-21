@@ -302,6 +302,19 @@ export interface TrainingDraft {
 }
 
 /** 可分享的模型训练配置文件。运行记录、训练节点和模型产物均不写入文件。 */
+/**
+ * 配置文件里的因子筛选节点。用 snake_case，与同层的 factor_source /
+ * factor_catalog_version 及后端 factor_selection 载荷保持一致；
+ * 表单内部用的是 camelCase 的 TrainingFactorFilterConfig，两者需显式互转。
+ */
+export interface TrainingConfigFilterNode {
+  enabled: boolean;
+  n_top: number;
+  ic_threshold: number;
+  icir_threshold: number;
+  correlation_threshold: number;
+}
+
 export interface TrainingConfigFile {
   schema_version: 1;
   kind: 'quantmind-model-training-config';
@@ -309,6 +322,8 @@ export interface TrainingConfigFile {
   market: TrainingContext['market'];
   factor_source?: string;
   factor_catalog_version?: string | null;
+  /** 因子筛选配置。可选：老配置文件不含此节点，导入时沿用当前表单值。 */
+  factor_filter?: TrainingConfigFilterNode;
   configuration: Omit<TrainingDraft, 'lastSavedAt'>;
 }
 
@@ -317,6 +332,7 @@ export interface ImportedTrainingConfig {
   market: TrainingContext['market'];
   factorSource?: string;
   factorCatalogVersion?: string | null;
+  factorFilter?: TrainingFactorFilterConfig;
 }
 
 export interface FeatureOption {
@@ -732,6 +748,13 @@ const readStringArray = (value: unknown, label: string): string[] => {
   return Array.from(new Set(value.map((item) => item.trim())));
 };
 
+/** 读取数值并按 [min, max] 钳制；缺失或非法一律回落 fallback。 */
+const readClampedNumber = (value: unknown, min: number, max: number, fallback: number): number => {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return fallback;
+  return Math.min(max, Math.max(min, num));
+};
+
 const readDateRange = (value: unknown, label: string): [string, string] => {
   if (!Array.isArray(value) || value.length !== 2 || value.some((item) => typeof item !== 'string')) {
     throw new Error(`${label} 必须包含起止日期`);
@@ -743,10 +766,24 @@ const readDateRange = (value: unknown, label: string): [string, string] => {
   return [start, end];
 };
 
+/** 表单内部 camelCase → 配置文件 snake_case。 */
+const toConfigFilterNode = (filter: TrainingFactorFilterConfig): TrainingConfigFilterNode => ({
+  enabled: filter.enabled,
+  n_top: filter.nTop,
+  ic_threshold: filter.icThreshold,
+  icir_threshold: filter.icirThreshold,
+  correlation_threshold: filter.correlationThreshold,
+});
+
 /** 将当前前端草稿转换为可在其他设备导入的 YAML 配置。 */
 export const buildTrainingConfigFile = (
   draft: Omit<TrainingDraft, 'lastSavedAt'>,
-  options: Pick<TrainingConfigFile, 'market' | 'factor_source' | 'factor_catalog_version'>,
+  options: {
+    market: TrainingConfigFile['market'];
+    factor_source?: string;
+    factor_catalog_version?: string | null;
+    factor_filter?: TrainingFactorFilterConfig;
+  },
 ): TrainingConfigFile => ({
   schema_version: TRAINING_CONFIG_SCHEMA_VERSION,
   kind: TRAINING_CONFIG_KIND,
@@ -754,6 +791,7 @@ export const buildTrainingConfigFile = (
   market: options.market,
   ...(options.factor_source ? { factor_source: options.factor_source } : {}),
   ...(options.factor_catalog_version ? { factor_catalog_version: options.factor_catalog_version } : {}),
+  ...(options.factor_filter ? { factor_filter: toConfigFilterNode(options.factor_filter) } : {}),
   configuration: draft,
 });
 
@@ -830,6 +868,20 @@ export const parseTrainingConfig = (source: string): ImportedTrainingConfig => {
   const displayName = typeof config.displayName === 'string' ? config.displayName : '';
   const displayNameMode = config.displayNameMode === 'manual' ? 'manual' : 'auto';
 
+  // 因子筛选配置为可选节点：老配置文件不含它，导入后沿用表单当前值。
+  // 键名用 snake_case，与同层的 factor_source / factor_catalog_version 及
+  // 后端 factor_selection 载荷保持一致。
+  const rawFilter = isRecord(raw.factor_filter) ? raw.factor_filter : null;
+  const factorFilter: TrainingFactorFilterConfig | undefined = rawFilter
+    ? {
+        enabled: typeof rawFilter.enabled === 'boolean' ? rawFilter.enabled : DEFAULT_FACTOR_FILTER.enabled,
+        nTop: readClampedNumber(rawFilter.n_top, 10, 300, DEFAULT_FACTOR_FILTER.nTop),
+        icThreshold: readClampedNumber(rawFilter.ic_threshold, 0, 1, DEFAULT_FACTOR_FILTER.icThreshold),
+        icirThreshold: readClampedNumber(rawFilter.icir_threshold, 0, 5, DEFAULT_FACTOR_FILTER.icirThreshold),
+        correlationThreshold: readClampedNumber(rawFilter.correlation_threshold, 0.1, 1, DEFAULT_FACTOR_FILTER.correlationThreshold),
+      }
+    : undefined;
+
   return {
     draft: {
       displayName,
@@ -845,6 +897,7 @@ export const parseTrainingConfig = (source: string): ImportedTrainingConfig => {
     market: raw.market as TrainingContext['market'],
     factorSource: typeof raw.factor_source === 'string' ? raw.factor_source : undefined,
     factorCatalogVersion: typeof raw.factor_catalog_version === 'string' ? raw.factor_catalog_version : null,
+    factorFilter,
   };
 };
 
