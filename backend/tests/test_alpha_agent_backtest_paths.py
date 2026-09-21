@@ -29,6 +29,7 @@ from backend.services.engine.routers.alpha_agent import (  # noqa: E402
     _QLIB_BINARY_FIELDS,
     _h5_only_fields_in,
     _new_backtest_workspace,
+    _vectorized_daily_spearman_ic,
 )
 
 
@@ -78,6 +79,29 @@ def calculate_turn_ratio_5_20():
     return None
 """
     assert _h5_only_fields_in(code) == []
+
+
+def test_vectorized_ic_returns_rank_icir() -> None:
+    """回测要落库 ICIR / Rank ICIR（口径与挖掘阶段一致：同除日度 IC 标准差）。"""
+    import numpy as np
+    import pandas as pd
+
+    rng = np.random.default_rng(0)
+    n_stocks, n_days = 40, 60
+    index = pd.MultiIndex.from_product(
+        [range(n_stocks), pd.date_range("2024-01-01", periods=n_days)],
+        names=["instrument", "datetime"],
+    )
+    f = pd.Series(rng.normal(size=len(index)), index=index)
+    r = pd.Series(rng.normal(size=len(index)), index=index)
+
+    ic_mean, rank_ic_median, icir, rank_icir, n_obs = _vectorized_daily_spearman_ic(f, r)
+
+    assert n_obs > 0
+    assert np.isfinite(icir) and np.isfinite(rank_icir)
+    # icir 与 rank_icir 同分母（日度 IC 标准差），符号分别与 ic_mean / rank_ic_median 一致
+    assert (icir > 0) == (ic_mean > 0)
+    assert (rank_icir > 0) == (rank_ic_median > 0)
 
 
 def test_backtest_workspace_is_unique_per_run(tmp_path: Path) -> None:
