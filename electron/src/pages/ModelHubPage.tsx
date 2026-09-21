@@ -277,7 +277,8 @@ export const ModelHubPage: React.FC = () => {
       </div>
 
       {/* 模型卡片网格 */}
-      <div className="max-w-7xl mx-auto w-full px-6 py-5 flex-1">
+      {/* 底部留白：内容区全屏铺满，Dock 悬浮其上，不留白最后一排卡片会被遮挡 */}
+      <div className="max-w-7xl mx-auto w-full px-6 pt-5 flex-1 pb-[calc(var(--dock-height)_+_24px)]">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-28 gap-3">
             <Spin size="large" />
@@ -332,9 +333,9 @@ export const ModelHubPage: React.FC = () => {
               ))}
             </div>
 
-            {/* 分页控制器：右下角，避开底部 Dock 导航栏遮挡 */}
+            {/* 分页控制器：右下角（底部留白已由外层容器统一提供） */}
             {total > pageSize && (
-              <div className="flex justify-end mt-8 mb-20 pr-1">
+              <div className="flex justify-end mt-8 pr-1">
                 <Pagination
                   current={page}
                   pageSize={pageSize}
