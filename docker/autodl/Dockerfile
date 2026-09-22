@@ -19,6 +19,8 @@ FROM docker.1ms.run/library/python:3.10-slim-bookworm
 ARG TORCH_DEVICE=gpu
 ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple/
 ARG PIP_TRUSTED_HOST=pypi.tuna.tsinghua.edu.cn
+# CPU 版 torch 下载源（必须是「索引型」地址，见下方 CPU 分支说明）。
+ARG TORCH_CPU_INDEX_URL=https://download.pytorch.org/whl/cpu
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -45,9 +47,20 @@ RUN python -m pip install --upgrade pip setuptools wheel \
          python -m pip install --no-cache-dir --root-user-action=ignore "torch==2.9.1"; \
        else \
          echo "安装 CPU 版 torch"; \
-         python -m pip install --no-cache-dir --root-user-action=ignore "torch==2.9.1+cpu" \
-           --index-url https://mirrors.aliyun.com/pytorch-wheels/cpu \
-           --extra-index-url ${PIP_INDEX_URL}; \
+         # 分两步：依赖走国内源，torch 本体 --no-deps 只从官方 CPU 源取。机制与
+         # docker/Dockerfile.oss 完全一致，改动前请先读那里的说明。两个反例：
+         #   1) `--index-url 国内 + --extra-index-url 官方源`：pip 会合并两个源的候选，
+         #      官方 index 页把 sympy/networkx/mpmath 的链接指向 files.pythonhosted.org
+         #      （国内直连约 20kB/s），实测把 quantmind-oss 的 torch 层拖到 481s。
+         #   2) 把阿里云 pytorch-wheels 平铺目录当 --index-url：该路径下 /torch/ 返回
+         #      阿里云「About us」页（0 个 wheel 链接），根本解析不到 torch==2.9.1+cpu。
+         #      要用阿里云镜像必须写成 `--find-links https://mirrors.aliyun.com/pytorch-wheels/cpu/`。
+         python -m pip install --no-cache-dir --root-user-action=ignore \
+             filelock "typing-extensions>=4.10.0" "sympy>=1.13.3" \
+             "networkx>=2.5.1" jinja2 "fsspec>=0.8.5" \
+          && python -m pip install --no-cache-dir --root-user-action=ignore --no-deps \
+             "torch==2.9.1+cpu" --index-url ${TORCH_CPU_INDEX_URL} \
+          && python -c "import torch; print('torch', torch.__version__)"; \
        fi \
     && python -m pip install --no-cache-dir --root-user-action=ignore \
         lightgbm xgboost catboost scikit-learn scipy pandas numpy pyarrow requests pyyaml
