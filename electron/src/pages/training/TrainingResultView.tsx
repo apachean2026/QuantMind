@@ -242,8 +242,8 @@ const WfaInterpretation: React.FC<{ wfa: any }> = ({ wfa }) => {
   else checks.push({ label: '正窗占比', ok: false, text: `仅 ${Math.round(positiveRate * 100)}% 窗口为正，多数窗口失效` });
 
   if (hasIcir) {
-    if (Math.abs(icir) >= 0.3) checks.push({ label: 'ICIR', ok: true, text: `ICIR ${icir.toFixed(3)}，收益/波动比合理` });
-    else checks.push({ label: 'ICIR', ok: false, text: `ICIR ${icir.toFixed(3)} < 0.3，信号相对波动偏弱` });
+    if (Math.abs(icir) >= 0.5) checks.push({ label: 'ICIR', ok: true, text: `ICIR ${icir.toFixed(3)}，收益/波动比合理` });
+    else checks.push({ label: 'ICIR', ok: false, text: `ICIR ${icir.toFixed(3)} < 0.5，信号相对波动偏弱` });
   }
 
   const okCount = checks.filter(c => c.ok).length;
@@ -551,7 +551,7 @@ export const TrainingResultView: React.FC<TrainingResultViewProps> = ({
                   </div>
                   <div className="rounded-xl bg-slate-50 px-3 py-2 text-center">
                     <div className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">ICIR</div>
-                    <div className={`mt-0.5 text-sm font-bold ${Number(result.wfa.overall_icir) >= 0.3 ? 'text-emerald-600' : 'text-slate-700'}`}>
+                    <div className={`mt-0.5 text-sm font-bold ${Number(result.wfa.overall_icir) >= 0.5 ? 'text-emerald-600' : 'text-slate-700'}`}>
                       {Number.isFinite(Number(result.wfa.overall_icir)) ? Number(result.wfa.overall_icir).toFixed(3) : '—'}
                     </div>
                   </div>

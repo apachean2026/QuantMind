@@ -80,8 +80,8 @@ export const WfaInterpretation: React.FC<{ wfa: any }> = ({ wfa }) => {
 
   // 4. ICIR 综合
   if (hasIcir) {
-    if (Math.abs(icir) >= 0.3) checks.push({ label: 'ICIR', ok: true, text: `ICIR ${icir.toFixed(3)}，收益/波动比合理` });
-    else checks.push({ label: 'ICIR', ok: false, text: `ICIR ${icir.toFixed(3)} < 0.3，信号相对波动偏弱` });
+    if (Math.abs(icir) >= 0.5) checks.push({ label: 'ICIR', ok: true, text: `ICIR ${icir.toFixed(3)}，收益/波动比合理` });
+    else checks.push({ label: 'ICIR', ok: false, text: `ICIR ${icir.toFixed(3)} < 0.5，信号相对波动偏弱` });
   }
 
   const okCount = checks.filter(c => c.ok).length;

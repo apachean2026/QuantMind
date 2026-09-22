@@ -48,6 +48,9 @@ import { stockListService, Stock } from '../services/stockListService';
 
 const { Text } = Typography;
 
+// 个股推理同时使用的模型数量上限（与后端 consensus_model_ids[:4] 保持一致）
+const MAX_CONSENSUS_MODELS = 4;
+
 // 模型卡片类型
 type ModelCardOption = AvailableModelOption & {
   category: 'tree' | 'dl' | 'ensemble';
@@ -376,6 +379,7 @@ export const InferenceCenterPage: React.FC = () => {
     setIndividualModelsLoading(true);
     setAvailableModels([]);
     setSingleStockModelId('');
+    setConsensusModelIds([]);
     inferenceCenterService
       .getAvailableModels(currentMarket)
       .then((list) => {
@@ -402,6 +406,8 @@ export const InferenceCenterPage: React.FC = () => {
         setAvailableModels(liveModels);
         if (liveModels.length > 0) {
           setSingleStockModelId(liveModels[0].modelId);
+          // 个股推理默认同时使用全部可用模型（最多 4 个，与后端上限一致）
+          setConsensusModelIds(liveModels.slice(0, MAX_CONSENSUS_MODELS).map((m) => m.modelId));
         }
       })
       .catch((err) => {
@@ -409,6 +415,7 @@ export const InferenceCenterPage: React.FC = () => {
         if (!cancelled) {
           setAvailableModels([]);
           setSingleStockModelId('');
+          setConsensusModelIds([]);
         }
       })
       .finally(() => {
@@ -425,7 +432,8 @@ export const InferenceCenterPage: React.FC = () => {
     targetHorizon?: number
   ) => {
     const sym = (targetSymbol || symbol || 'SH600519').trim();
-    const mId = targetModelId || singleStockModelId;
+    // 主模型：显式指定 > 首个勾选模型；勾选的模型集合整体传给后端同时推理
+    const mId = targetModelId || singleStockModelId || consensusModelIds[0] || '';
     const hor = targetHorizon || horizon;
 
     if (!sym) {
@@ -485,6 +493,25 @@ export const InferenceCenterPage: React.FC = () => {
   const currentSelectedSingleModel = useMemo(() => {
     return availableModels.find((m) => m.modelId === singleStockModelId) || availableModels[0];
   }, [availableModels, singleStockModelId]);
+
+  // 勾选/取消模型：已勾选集合即本次个股推理同时使用的模型（最多 4 个）
+  const toggleConsensusModel = useCallback((modelId: string) => {
+    if (consensusModelIds.includes(modelId)) {
+      const next = consensusModelIds.filter((id) => id !== modelId);
+      setConsensusModelIds(next);
+      if (singleStockModelId === modelId) {
+        setSingleStockModelId(next[0] || '');
+      }
+      return;
+    }
+    if (consensusModelIds.length >= MAX_CONSENSUS_MODELS) {
+      message.warning(`最多同时使用 ${MAX_CONSENSUS_MODELS} 个模型`);
+      return;
+    }
+    const next = [...consensusModelIds, modelId];
+    setConsensusModelIds(next);
+    if (!singleStockModelId) setSingleStockModelId(modelId);
+  }, [consensusModelIds, singleStockModelId]);
 
   const handleCommitSingleCode = (raw: string) => {
     if (!raw.trim()) return;
@@ -869,9 +896,11 @@ export const InferenceCenterPage: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
                     <Database className="w-3.5 h-3.5 text-purple-500" /> 模型选型
-                    <span className="ml-1 text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-1.5 py-0.2 rounded-md border border-blue-100">
-                      {filteredSingleModels.length}
-                    </span>
+                    <Tooltip title={`勾选参与本次个股推理的模型，将同时执行推理（最多 ${MAX_CONSENSUS_MODELS} 个，首个为主模型）`}>
+                      <span className="ml-1 text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-1.5 py-0.2 rounded-md border border-blue-100 cursor-help">
+                        {consensusModelIds.length}/{MAX_CONSENSUS_MODELS}
+                      </span>
+                    </Tooltip>
                   </span>
                   <div className="flex items-center gap-1 bg-slate-200/70 p-0.5 rounded-lg text-[11px]">
                     {(['all', 'dl', 'tree'] as const).map((cat) => (
@@ -916,11 +945,12 @@ export const InferenceCenterPage: React.FC = () => {
                     </div>
                   ) : (
                   filteredSingleModels.map((m) => {
-                    const isSelected = singleStockModelId === m.modelId;
+                    const isSelected = consensusModelIds.includes(m.modelId);
+                    const isMain = isSelected && (singleStockModelId || consensusModelIds[0]) === m.modelId;
                     return (
                       <div
                         key={m.modelId}
-                        onClick={() => setSingleStockModelId(m.modelId)}
+                        onClick={() => toggleConsensusModel(m.modelId)}
                         className={clsx(
                           'p-2.5 rounded-xl border transition-all cursor-pointer flex flex-col gap-1',
                           isSelected
@@ -932,12 +962,18 @@ export const InferenceCenterPage: React.FC = () => {
                           <span className={clsx('text-[13px] font-black truncate', isSelected ? 'text-blue-800' : 'text-slate-900')}>
                             {m.modelName}
                           </span>
-                          <span className="text-[10px] font-bold font-mono px-1.5 py-0.2 rounded bg-slate-100 border border-slate-300 text-slate-700">
-                            {m.tag}
+                          <span className="flex items-center gap-1 shrink-0">
+                            {isMain && (
+                              <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-blue-600 text-white">主</span>
+                            )}
+                            <span className="text-[10px] font-bold font-mono px-1.5 py-0.2 rounded bg-slate-100 border border-slate-300 text-slate-700">
+                              {m.tag}
+                            </span>
                           </span>
                         </div>
                         <div className="flex items-center justify-between text-[11px] font-semibold text-slate-700">
                           <span>{m.horizonDesc}</span>
+                          {isSelected && <CheckCircle2 size={12} className="text-blue-600 shrink-0" />}
                         </div>
                       </div>
                     );
@@ -953,7 +989,7 @@ export const InferenceCenterPage: React.FC = () => {
                 block
                 icon={<Play size={15} fill="currentColor" />}
                 loading={singleStockLoading}
-                disabled={!singleStockModelId || individualModelsLoading}
+                disabled={consensusModelIds.length === 0 || individualModelsLoading}
                 onClick={() => handleRunSingleStockInference()}
                 style={{
                   height: 40,
@@ -964,7 +1000,9 @@ export const InferenceCenterPage: React.FC = () => {
                   boxShadow: '0 4px 14px rgba(37, 99, 235, 0.28)',
                 }}
               >
-                开始个股推理
+                {consensusModelIds.length > 1
+                  ? `开始个股推理（同时 ${consensusModelIds.length} 个模型）`
+                  : '开始个股推理'}
               </Button>
             </div>
           </div>

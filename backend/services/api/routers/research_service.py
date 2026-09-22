@@ -2595,7 +2595,10 @@ async def predict_single_stock(
 
     # “开始预测推理”走独立轻路线：pred.parquet 直读优先，否则实时推理，
     # 全程不落库（不写 run 记录/信号表/Redis 标记/pred 回写），结果只在前端缓存。
+    # 同时使用所有选定模型（consensus_model_ids，最多 4 个；留空=全部可用模型）
+    # 逐个对目标标的执行真实推理，避免只跑主模型、其余模型仅读历史残差。
     # 延迟导入避免 research/model_training 路由在应用启动阶段发生循环导入。
+    independent_models: list[dict[str, Any]] = []
     independent_main: dict[str, Any] | None = None
     if execute:
         if not selected_model:
@@ -2604,80 +2607,111 @@ async def predict_single_stock(
             _execute_single_day_inference,
             _resolve_requested_model,
         )
+        from backend.services.engine.inference.script_runner import (
+            InferenceScriptRunner,
+        )
 
-        try:
-            requested_model_id, resolved = await _resolve_requested_model(
-                {"tenant_id": tid, "user_id": uid}, chosen_model_id
-            )
-            requested_date = date.fromisoformat(target_date or latest_date)
-            storage_path = str(resolved.storage_path)
-            # ① pred.parquet 单标的直读（不物化分片、不写库）
-            hit = _read_pred_single_symbol(
-                storage_path, requested_date.isoformat(), normalized_symbol
-            )
-            hit_date = requested_date.isoformat()
-            live_signal: dict[str, Any] | None = None
-            if hit is None:
-                # ② 无命中则实时推理（persist=False：解析信号但不写库不发布）
-                execution = await _execute_single_day_inference(
-                    requested_model_id=requested_model_id,
-                    resolved=resolved,
-                    model_dir=Path(storage_path),
-                    requested_date=requested_date,
-                    tenant_id=tid,
-                    user_id=uid,
-                    symbols=[normalized_symbol],
-                    persist=False,
+        # 本次同时推理的模型集合：优先用户勾选，主模型必选，最多 4 个。
+        exec_model_ids: list[str] = []
+        for mid_candidate in consensus_model_ids or []:
+            mid_s = str(mid_candidate or "").strip()
+            if mid_s and mid_s not in exec_model_ids:
+                exec_model_ids.append(mid_s)
+        if chosen_model_id and chosen_model_id not in exec_model_ids:
+            exec_model_ids.insert(0, chosen_model_id)
+        if not exec_model_ids:
+            exec_model_ids = [
+                str(m.get("modelId") or "").strip()
+                for m in available_models
+                if str(m.get("modelId") or "").strip()
+            ]
+        exec_model_ids = exec_model_ids[:4]
+
+        requested_date = date.fromisoformat(target_date or latest_date)
+        for exec_mid in exec_model_ids:
+            try:
+                requested_model_id, resolved = await _resolve_requested_model(
+                    {"tenant_id": tid, "user_id": uid}, exec_mid
                 )
-                if not execution.get("success"):
-                    raise HTTPException(
-                        status_code=422,
-                        detail=execution.get("error_message") or "模型推理未产生有效结果",
-                    )
-                # 回退后的数据日可能有 parquet（请求日无数据但回退日有），再试一次
-                rolled = str(execution.get("data_trade_date") or hit_date)
-                hit = _read_pred_single_symbol(storage_path, rolled, normalized_symbol)
-                hit_date = rolled
+                storage_path = str(resolved.storage_path)
+                # ① pred.parquet 单标的直读（不物化分片、不写库）
+                hit = _read_pred_single_symbol(
+                    storage_path, requested_date.isoformat(), normalized_symbol
+                )
+                hit_date = requested_date.isoformat()
+                live_signal: dict[str, Any] | None = None
                 if hit is None:
-                    # ③ 取内存信号（已按 symbols 过滤，仅含目标股）
-                    for sig in execution.get("signals") or []:
-                        try:
-                            if StockCodeUtil.to_prefix(str(sig.get("symbol") or "")) == normalized_symbol:
-                                live_signal = sig
-                                break
-                        except Exception:
+                    # ② 无命中则实时推理（persist=False：解析信号但不写库不发布）
+                    execution = await _execute_single_day_inference(
+                        requested_model_id=requested_model_id,
+                        resolved=resolved,
+                        model_dir=Path(storage_path),
+                        requested_date=requested_date,
+                        tenant_id=tid,
+                        user_id=uid,
+                        symbols=[normalized_symbol],
+                        persist=False,
+                    )
+                    if not execution.get("success"):
+                        continue
+                    # 回退后的数据日可能有 parquet（请求日无数据但回退日有），再试一次
+                    rolled = str(execution.get("data_trade_date") or hit_date)
+                    hit = _read_pred_single_symbol(storage_path, rolled, normalized_symbol)
+                    hit_date = rolled
+                    if hit is None:
+                        # ③ 取内存信号（已按 symbols 过滤，仅含目标股）
+                        for sig in execution.get("signals") or []:
+                            try:
+                                if StockCodeUtil.to_prefix(str(sig.get("symbol") or "")) == normalized_symbol:
+                                    live_signal = sig
+                                    break
+                            except Exception:
+                                continue
+                        if live_signal is None:
                             continue
-                    if live_signal is None:
-                        raise HTTPException(status_code=422, detail="模型推理未产生有效结果")
-            if live_signal is not None:
-                fusion = float(live_signal["score"])
-                from backend.services.engine.inference.script_runner import (
-                    InferenceScriptRunner,
+                if live_signal is not None:
+                    fusion = float(live_signal["score"])
+                    side = InferenceScriptRunner._resolve_signal_sides(
+                        [fusion], [int(live_signal.get("consensus") or 0)]
+                    )[0]
+                    row_source = "live"
+                else:
+                    fusion = float(hit)
+                    side = "BUY" if fusion > 0.2 else ("SELL" if fusion < -0.2 else "HOLD")
+                    row_source = "pred_parquet"
+                independent_models.append(
+                    {
+                        "fusion_score": fusion,
+                        "signal_side": side,
+                        "score_rank": None,
+                        "quality": None,
+                        "expected_price": None,
+                        "run_model_id": exec_mid,
+                        "run_id": None,
+                        "trade_date": hit_date,
+                        "data_source": row_source,
+                    }
                 )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "[predict_single_stock] 模型 %s 个股推理失败，已跳过: %s",
+                    exec_mid,
+                    exc,
+                )
+                continue
+        if not independent_models:
+            raise HTTPException(status_code=422, detail="选定模型均未产生有效推理结果")
 
-                side = InferenceScriptRunner._resolve_signal_sides(
-                    [fusion], [int(live_signal.get("consensus") or 0)]
-                )[0]
-                data_source = "live"
-            else:
-                fusion = float(hit)
-                side = "BUY" if fusion > 0.2 else ("SELL" if fusion < -0.2 else "HOLD")
-                data_source = "pred_parquet"
-            independent_main = {
-                "fusion_score": fusion,
-                "signal_side": side,
-                "score_rank": None,
-                "quality": None,
-                "expected_price": None,
-                "run_model_id": chosen_model_id,
-                "run_id": None,
-                "trade_date": hit_date,
-            }
-        except HTTPException:
-            raise
-        except Exception as exc:
-            logger.exception("[predict_single_stock] 实时模型推理失败")
-            raise HTTPException(status_code=502, detail=f"实时模型推理失败: {exc}") from exc
+        # 主模型：优先用户指定，否则取本次真实推理分数最高者
+        independent_main = next(
+            (r for r in independent_models if r["run_model_id"] == chosen_model_id),
+            None,
+        )
+        if independent_main is None:
+            independent_main = max(
+                independent_models, key=lambda r: float(r["fusion_score"] or 0.0)
+            )
+        data_source = str(independent_main.get("data_source") or "live")
 
     # 3. 读真实推理分数：engine_signal_scores（混合A：默认读持久化真实分数）
     _sym_variants = list({
@@ -2769,6 +2803,13 @@ async def predict_single_stock(
     if independent_main is not None:
         main_row = independent_main
         resolved_date = str(independent_main["trade_date"])
+        # 本次真实执行的全部模型直接作为多模型共识来源（一模型一卡），
+        # 不再依赖信号表/历史 parquet，确保展示的是本次同时推理的结果。
+        consensus_rows = sorted(
+            independent_models,
+            key=lambda r: float(r["fusion_score"] or 0.0),
+            reverse=True,
+        )
         for qr in score_rows or []:
             if str(qr.get("trade_date")) != resolved_date:
                 continue
@@ -2784,7 +2825,8 @@ async def predict_single_stock(
     # 多模型共识兜底：当信号表在该基准日数据不全时（常见于独立轻路线 persist=False
     # 从未写库，或历史日期早于最近批次），从各模型的 pred.parquet 直读该标的
     # 当日分数补齐缺口，仍不写库。保证底部“多模型分数与30天曲线”有历史可回溯。
-    if len(consensus_rows) < len(available_models) and available_models:
+    # execute 轻路线已对选定模型逐个真实推理，共识直接来自本次结果，无需再兜底。
+    if not independent_models and len(consensus_rows) < len(available_models) and available_models:
         try:
             from backend.shared.model_registry import model_registry_service as _mrs_cons
 
