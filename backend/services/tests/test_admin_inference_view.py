@@ -14,20 +14,24 @@ def test_next_weekday_auto_inference_skips_weekend():
     nxt = next_weekday_auto_inference(friday_afternoon)
     assert nxt.weekday() == 0
     assert nxt.date().isoformat() == "2026-09-14"
-    assert nxt.hour == 8
+    assert nxt.hour == 6
+    assert nxt.minute == 30
 
 
 def test_next_weekday_auto_inference_same_day_before_run_time():
-    monday_early = datetime(2026, 9, 14, 7, 0, tzinfo=_SH)
+    monday_early = datetime(2026, 9, 14, 6, 0, tzinfo=_SH)
     nxt = next_weekday_auto_inference(monday_early)
     assert nxt.date().isoformat() == "2026-09-14"
-    assert nxt.hour == 8
+    assert nxt.hour == 6
+    assert nxt.minute == 30
 
 
 def test_next_weekday_auto_inference_after_run_time():
-    monday_after = datetime(2026, 9, 14, 9, 0, tzinfo=_SH)
+    monday_after = datetime(2026, 9, 14, 7, 0, tzinfo=_SH)
     nxt = next_weekday_auto_inference(monday_after)
     assert nxt.date().isoformat() == "2026-09-15"
+    assert nxt.hour == 6
+    assert nxt.minute == 30
 
 
 def test_reason_label():

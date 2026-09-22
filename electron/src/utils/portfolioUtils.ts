@@ -139,8 +139,8 @@ export const calculatePositionsWinRate = (accountInfo: AccountInfo | null): WinR
             }
             validCount++;
         } else {
-            // 兜底逻辑：手动计算当前持仓盈亏状态
-            const price = toPositiveNumber(pos.last_price ?? pos.current_price ?? pos.price, 0);
+            // 兜底：与持仓明细同口径，用 mark price（重估价）对比成本
+            const price = toPositiveNumber(pos.price ?? pos.last_price ?? pos.current_price, 0);
             const cost = toPositiveNumber(pos.cost_price ?? pos.avg_cost ?? pos.avg_price ?? pos.cost, 0);
 
             if (price > 0 && cost > 0) {

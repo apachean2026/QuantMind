@@ -68,32 +68,43 @@ export const buildNormalizedHoldings = (
         .map(({ key, pos }) => {
             const code = resolveCode(key, pos);
             const shares = toFiniteNumber(pos.volume ?? pos.qty ?? pos.quantity ?? pos.total_volume, 0);
-            const value = toFiniteNumber(pos.market_value, 0);
-            const derivedCurrent = shares > 0 ? value / shares : 0;
+            const marketValue = toFiniteNumber(pos.market_value, 0);
+            // 模拟盘 Redis 重估只写 `price`/`market_value`，成交时写入的 `last_price`
+            // 会停在买价附近。若现价优先 last_price、盈亏却用 market_value，会出现
+            // 「成本>现价仍盈利」。现价必须与市值同源：优先 mark price，再推到 last。
+            const markPrice = toPositiveNumber(pos.price, NaN);
+            const lastPrice = toPositiveNumber(
+                pos.last_price ?? pos.current_price,
+                NaN,
+            );
+            const derivedFromMv = shares > 0 && marketValue > 0 ? marketValue / shares : NaN;
             const current = toPositiveNumber(
-                pos.last_price ?? pos.current_price ?? pos.price,
-                derivedCurrent,
+                Number.isFinite(markPrice) && markPrice > 0
+                    ? markPrice
+                    : Number.isFinite(derivedFromMv) && derivedFromMv > 0
+                      ? derivedFromMv
+                      : lastPrice,
+                0,
             );
 
             const providedCost = toPositiveNumber(
                 pos.cost_price ?? pos.avg_cost ?? pos.avg_price ?? pos.cost,
                 NaN,
             );
-            const providedProfit = toFiniteNumber(
-                pos.unrealized_pnl ?? pos.float_pnl ?? pos.pnl,
-                NaN,
-            );
-
             let cost = Number.isFinite(providedCost) ? providedCost : 0;
-            if (cost <= 0 && Number.isFinite(providedProfit) && shares > 0) {
-                cost = (value - providedProfit) / shares;
-            }
-            if (cost <= 0 && Number.isFinite(current) && current > 0 && shares > 0) {
+            if (cost <= 0 && current > 0) {
                 cost = current;
             }
 
+            const side = String(pos.side || pos.position_side || 'long').toLowerCase();
+            const isShort = side === 'short' || String(key).includes(':short');
+            const value = shares > 0 && current > 0 ? shares * current : marketValue;
+            // 一律用「展示现价 vs 成本」重算，不信任可能与现价脱节的后端 pnl / market_value
+            const profit =
+                cost > 0 && current > 0 && shares > 0
+                    ? (isShort ? cost - current : current - cost) * shares
+                    : 0;
             const costValue = shares * cost;
-            const profit = Number.isFinite(providedProfit) ? providedProfit : (value - costValue);
             const profitPercent = costValue > 0 ? (profit / costValue) * 100 : 0;
 
             return {

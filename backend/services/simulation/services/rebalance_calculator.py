@@ -90,10 +90,10 @@ class RebalanceCalculator:
     """
     调仓计算器：
     0. 调仓周期闸门（rebalance_days，非调仓日不出调仓单）
-    1. 根据 signal score 排序，取 TopK
+    1. 按 score 全量排序，跳过不可交易后连续补位至 TopK
     2. TopkDropout 增量轮换（有持仓时每期最多换 n_drop 只）
     3. 计算目标权重（支持多种模式）
-    4. 计算目标持仓金额 → 目标股数，剔除涨跌停标的
+    4. 计算目标持仓金额 → 目标股数
     5. 计算买卖指令（先卖后买）
     """
 
@@ -144,18 +144,24 @@ class RebalanceCalculator:
                 logger.info("RebalanceCalculator: min_score 过滤后无信号")
                 return []
 
-        # 1. 剔除涨跌停、停牌标的
-        tradable_signals = self._filter_tradable(signals, quotes)
-        if not tradable_signals:
+        # 1–2. 全市场按分排序后跳过不可交易，连续补位直到凑满 topk
+        # （禁止先截断宇宙再过滤，否则真 TOP 被滤掉后无法用更低名次补齐）
+        ranked = sorted(signals, key=lambda x: x.score, reverse=True)
+        topk_signals: list[SignalScore] = []
+        for sig in ranked:
+            if len(topk_signals) >= strategy.topk:
+                break
+            if self._is_tradable(sig, quotes):
+                topk_signals.append(sig)
+        if not topk_signals:
             logger.info("RebalanceCalculator: 无可交易标的，跳过调仓")
             return []
-
-        # 2. TopK 筛选
-        topk_signals = sorted(
-            tradable_signals,
-            key=lambda x: x.score,
-            reverse=True,
-        )[: strategy.topk]
+        if len(topk_signals) < strategy.topk:
+            logger.info(
+                "RebalanceCalculator: 可交易不足 topk=%d，仅选中 %d",
+                strategy.topk,
+                len(topk_signals),
+            )
 
         # 2.5 TopkDropout 增量轮换：有持仓时不追「当日完整 topk」，只换 n_drop 只，
         #     避免分数排名小幅波动导致每期全量轮换（换手/费用失控）。
@@ -314,46 +320,51 @@ class RebalanceCalculator:
         signals: list[SignalScore],
         quotes: dict[str, Quote],
     ) -> list[SignalScore]:
-        """剔除不可交易标的。
+        """剔除不可交易标的（保留顺序，供测试/调试复用）。"""
+        return [sig for sig in signals if self._is_tradable(sig, quotes)]
+
+    def _is_tradable(
+        self,
+        sig: SignalScore,
+        quotes: dict[str, Quote],
+    ) -> bool:
+        """单票是否可进入本期目标持仓。
 
         按信号方向分别过滤：
         - 买入信号：跳过涨停、停牌
         - 卖出信号：跳过跌停、停牌
         - 无方向信号：跳过涨跌停、停牌（保守策略）
         """
-        tradable = []
-        for sig in signals:
-            quote = quotes.get(sig.symbol)
-            if not quote:
-                logger.debug("RebalanceCalculator: %s 无行情数据，跳过", sig.symbol)
-                continue
-            if quote.is_suspended:
-                logger.debug("RebalanceCalculator: %s 停牌，跳过", sig.symbol)
-                continue
-            if quote.current_price <= 0:
-                logger.debug("RebalanceCalculator: %s 价格无效，跳过", sig.symbol)
-                continue
+        quote = quotes.get(sig.symbol)
+        if not quote:
+            logger.debug("RebalanceCalculator: %s 无行情数据，跳过", sig.symbol)
+            return False
+        if quote.is_suspended:
+            logger.debug("RebalanceCalculator: %s 停牌，跳过", sig.symbol)
+            return False
+        if quote.current_price <= 0:
+            logger.debug("RebalanceCalculator: %s 价格无效，跳过", sig.symbol)
+            return False
 
-            side = getattr(sig, "side", None)
-            if side == "BUY" or side == "buy":
-                if quote.is_limit_up:
-                    logger.debug("RebalanceCalculator: %s 涨停，买入跳过", sig.symbol)
-                    continue
-            elif side == "SELL" or side == "sell":
-                if quote.is_limit_down:
-                    logger.debug("RebalanceCalculator: %s 跌停，卖出跳过", sig.symbol)
-                    continue
-            else:
-                if quote.is_limit_up or quote.is_limit_down:
-                    logger.debug(
-                        "RebalanceCalculator: %s 涨跌停（up=%s down=%s），跳过",
-                        sig.symbol,
-                        quote.is_limit_up,
-                        quote.is_limit_down,
-                    )
-                    continue
-            tradable.append(sig)
-        return tradable
+        side = getattr(sig, "side", None)
+        if side == "BUY" or side == "buy":
+            if quote.is_limit_up:
+                logger.debug("RebalanceCalculator: %s 涨停，买入跳过", sig.symbol)
+                return False
+        elif side == "SELL" or side == "sell":
+            if quote.is_limit_down:
+                logger.debug("RebalanceCalculator: %s 跌停，卖出跳过", sig.symbol)
+                return False
+        else:
+            if quote.is_limit_up or quote.is_limit_down:
+                logger.debug(
+                    "RebalanceCalculator: %s 涨跌停（up=%s down=%s），跳过",
+                    sig.symbol,
+                    quote.is_limit_up,
+                    quote.is_limit_down,
+                )
+                return False
+        return True
 
     def _calc_weights(
         self,

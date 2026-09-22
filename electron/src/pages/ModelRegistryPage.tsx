@@ -22,7 +22,6 @@ import {
   ModelTrainingRunStatus,
   InferenceRunRecord,
   InferencePrecheckResult,
-  AutoInferenceSettings,
   LatestInferenceRunInfo,
   ModelShapSummaryResponse,
 } from '../services/modelTrainingService';
@@ -95,8 +94,6 @@ export const ModelRegistryPage: React.FC = () => {
   const [inferencePrecheckLoading, setInferencePrecheckLoading] = useState(false);
   const [inferenceTargetDate, setInferenceTargetDate] = useState<string>('—');
   const [inferenceTargetLoading, setInferenceTargetLoading] = useState(false);
-  const [autoSettings, setAutoSettings] = useState<AutoInferenceSettings | null>(null);
-  const [autoSaving, setAutoSaving] = useState(false);
   const [latestInferenceRun, setLatestInferenceRun] = useState<LatestInferenceRunInfo | null>(null);
   const [latestInferenceRunLoading, setLatestInferenceRunLoading] = useState(false);
   const [historyRunIdFilter, setHistoryRunIdFilter] = useState('');
@@ -192,7 +189,6 @@ export const ModelRegistryPage: React.FC = () => {
     setLastInferenceRun(null);
     setInferenceHistory([]);
     setInferencePrecheck(null);
-    setAutoSettings(null);
     setLatestInferenceRun(null);
     setHistoryRunIdFilter('');
     setHistoryStatusFilter('all');
@@ -309,13 +305,6 @@ export const ModelRegistryPage: React.FC = () => {
     finally { setInferenceHistoryLoading(false); }
   }, []);
 
-  const loadAutoSettings = useCallback(async (modelId: string) => {
-    try {
-      const s = await modelTrainingService.getAutoInferenceSettings(modelId);
-      setAutoSettings(s);
-    } catch { setAutoSettings(null); }
-  }, []);
-
   const loadLatestInferenceRun = useCallback(async (modelId: string) => {
     setLatestInferenceRunLoading(true);
     try {
@@ -332,10 +321,9 @@ export const ModelRegistryPage: React.FC = () => {
     const currentDate = inferenceDate ? inferenceDate.format('YYYY-MM-DD') : undefined;
     await Promise.all([
       loadPrecheck(modelId, currentDate),
-      loadAutoSettings(modelId),
       loadLatestInferenceRun(modelId),
     ]);
-  }, [inferenceDate, loadAutoSettings, loadLatestInferenceRun, loadPrecheck]);
+  }, [inferenceDate, loadLatestInferenceRun, loadPrecheck]);
 
   const handleSetDefault = async () => {
     if (!selectedModel) return;
@@ -435,18 +423,6 @@ export const ModelRegistryPage: React.FC = () => {
     } catch (err: any) {
       message.error(`推理失败: ${err?.message ?? '未知'}`);
     } finally { setInferenceRunning(false); }
-  };
-
-  const handleToggleAuto = async (enabled: boolean) => {
-    if (!selectedModel || !autoSettings) return;
-    setAutoSaving(true);
-    try {
-      const next = { ...autoSettings, enabled };
-      const saved = await modelTrainingService.saveAutoInferenceSettings(selectedModel.model_id, next);
-      setAutoSettings(saved);
-      message.success(enabled ? '自动推理已开启' : '自动推理已关闭');
-    } catch { message.error('保存失败'); }
-    finally { setAutoSaving(false); }
   };
 
   const handleDeleteHistory = (runId: string) => {

@@ -100,7 +100,8 @@ class SimulationDailySnapshotService:
             qty = float(pos.get("volume") or 0.0)
             if not symbol or qty <= 0:
                 continue
-            price = float(pos.get("last_price") or pos.get("price") or 0.0)
+            # 与重估口径一致：优先 mark price（结算/remark 写入），勿用陈旧 last_price
+            price = float(pos.get("price") or pos.get("last_price") or 0.0)
             cost_price = float(
                 pos.get("cost_price")
                 or pos.get("avg_cost")

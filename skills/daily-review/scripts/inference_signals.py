@@ -84,7 +84,8 @@ def resolve_latest_model_id(conn=None) -> str:
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT model_id FROM qm_model_inference_dispatch_logs "
-                "WHERE trigger_source='celery_auto_inference_if_needed' "
+                "WHERE trigger_source IN ('celery_backfill_default_inference', "
+                "'celery_auto_inference_if_needed') "
                 "AND status='success' AND model_id IS NOT NULL "
                 "ORDER BY created_at DESC LIMIT 1"
             )
@@ -103,7 +104,12 @@ def _latest_dispatch_run(cur, model_id: str, data_trade_date: date | None,
 
     celery 的 run 只写 dispatch_logs + engine_signal_scores，不写 qm_model_inference_runs；
     复盘/补跑按此表定位用户模型推理。"""
-    conds = ["trigger_source='celery_auto_inference_if_needed'", "status='success'", "model_id=%s"]
+    conds = [
+        "trigger_source IN ('celery_backfill_default_inference', "
+        "'celery_auto_inference_if_needed')",
+        "status='success'",
+        "model_id=%s",
+    ]
     args: list = [model_id]
     if data_trade_date is not None:
         conds.append("data_trade_date=%s")

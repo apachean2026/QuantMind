@@ -42,10 +42,11 @@ const DISPATCH_GRID =
 const emptyMonitor = (): AdminInferenceMonitorData => ({
     schedule: {
         enabled: false,
-        cron: '工作日 08:00',
+        cron: '工作日 06:30',
         timezone: 'Asia/Shanghai',
         next_run_at: null,
-        task: 'engine.tasks.auto_inference_if_needed',
+        task: 'engine.tasks.backfill_default_inference',
+        description: '默认模型推理缺口补全（含历史空洞，同「一键补全至最新」）',
     },
     summary: {
         total: 0,
@@ -129,7 +130,7 @@ export const AdminInferenceMonitor: React.FC = () => {
                         推理监控
                     </Title>
                     <Text type="secondary">
-                        自动推理调度（Celery Beat 工作日 08:00）的成功、失败与跳过记录。
+                        默认模型推理缺口补全（Celery Beat 工作日 06:30）的成功、失败与跳过记录。
                     </Text>
                 </div>
                 <Space wrap>

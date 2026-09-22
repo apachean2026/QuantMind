@@ -100,14 +100,16 @@ def run_pipeline_run(self, run_id: str) -> dict[str, Any]:
     default_retry_delay=60,
 )
 def auto_inference_if_needed() -> dict[str, Any]:
-    """
-    Celery Beat 定时任务：工作日 08:00（Asia/Shanghai）扫描并执行自动推理。
+    """[已下线] 原工作日 08:00 自动推理扫描。
 
-    调度目标仅来自：
-    1. run_status=running 且绑定策略的投资组合；
-    2. qm_model_inference_settings 中 enabled=TRUE 的用户设置。
-    不注入系统级虚任务，也不做默认 production 目录兜底。
+    Beat 已取消；日常调度收敛为 ``engine.tasks.backfill_default_inference``
+   （工作日 06:30，默认模型缺口补全）。本函数仅保留供紧急手动
+    ``celery call``，请勿重新挂回 beat。
     """
+    logger.warning(
+        "[AutoInference] 任务已下线，请改用 engine.tasks.backfill_default_inference；"
+        "本次仍按旧逻辑执行（手动调用兼容）"
+    )
     from zoneinfo import ZoneInfo
     from sqlalchemy import create_engine as sa_create_engine
     from sqlalchemy import text as sa_text
@@ -937,6 +939,149 @@ def strategy_lab_daily_scan(lookback_days: int = 7) -> dict[str, Any]:
     except Exception as e:
         logger.exception("[StrategyLabScan] failed")
         return {"status": "failed", "error": str(e)}
+
+
+@celery_app.task(
+    name="engine.tasks.backfill_default_inference",
+    max_retries=0,
+)
+def backfill_default_inference(
+    tenant_id: str | None = None,
+    user_id: str | None = None,
+    model_id: str | None = None,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """工作日 06:30：补全所有用户默认模型推理缺口（含历史空洞）。
+
+    与前端「一键补全至最新」同链路（gap_backfill）：
+    扫描 pred.parquet 覆盖，缺口上限截至 QuantDB 因子已产出日，
+    逐日 InferenceScriptRunner 并合并回 pred.parquet。
+    数据同步窗口约 01:00–06:00，本任务安排在同步之后。
+    """
+    from backend.services.engine.inference.gap_backfill import (
+        backfill_all_default_models,
+    )
+
+    try:
+        result = _run_async(
+            backfill_all_default_models(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                model_id=model_id,
+                dry_run=dry_run,
+            )
+        )
+        # 写入调度留痕，供管理台推理监控 / daily-review 技能读取
+        try:
+            _write_default_backfill_dispatch_logs(result)
+        except Exception as log_exc:
+            logger.warning(
+                "[DefaultInferenceBackfill] 写 dispatch_logs 失败: %s", log_exc
+            )
+        logger.info(
+            "[DefaultInferenceBackfill] done status=%s models=%s completed=%s "
+            "partial=%s failed=%s skipped=%s",
+            result.get("status"),
+            result.get("total_models"),
+            result.get("completed"),
+            result.get("partial"),
+            result.get("failed"),
+            result.get("skipped"),
+        )
+        return result
+    except Exception as exc:
+        logger.exception("[DefaultInferenceBackfill] failed")
+        return {"status": "failed", "error": str(exc)}
+
+
+def _write_default_backfill_dispatch_logs(result: dict[str, Any]) -> None:
+    """把默认模型补全结果写入 qm_model_inference_dispatch_logs。"""
+    import os
+    from sqlalchemy import create_engine as sa_create_engine
+    from sqlalchemy import text as sa_text
+    from sqlalchemy.orm import sessionmaker as sa_sessionmaker
+
+    details = list(result.get("details") or [])
+    if not details:
+        return
+
+    sync_db_url = str(os.getenv("DATABASE_URL", "")).strip()
+    if "+asyncpg" in sync_db_url:
+        sync_db_url = sync_db_url.replace("+asyncpg", "+psycopg2")
+    if not sync_db_url or "postgresql" not in sync_db_url:
+        return
+
+    engine = sa_create_engine(sync_db_url, pool_pre_ping=True)
+    Session = sa_sessionmaker(bind=engine)
+    db = Session()
+    try:
+        db.execute(
+            sa_text(
+                """
+                CREATE TABLE IF NOT EXISTS qm_model_inference_dispatch_logs (
+                  id BIGSERIAL PRIMARY KEY,
+                  trigger_source TEXT NOT NULL,
+                  tenant_id TEXT NOT NULL,
+                  user_id TEXT NOT NULL,
+                  strategy_id TEXT,
+                  model_id TEXT,
+                  data_trade_date DATE,
+                  prediction_trade_date DATE,
+                  status TEXT NOT NULL,
+                  reason_code TEXT,
+                  reason_detail TEXT,
+                  run_id TEXT,
+                  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+                """
+            )
+        )
+        for d in details:
+            st = str(d.get("status") or "")
+            if st == "up_to_date":
+                status, reason = "skipped", "UP_TO_DATE"
+            elif st == "dry_run":
+                status, reason = "skipped", "DRY_RUN"
+            elif st == "completed":
+                status, reason = "success", None
+            elif st == "partial":
+                status, reason = "failed", "PARTIAL"
+            else:
+                status, reason = "failed", "BACKFILL_FAILED"
+            cutoff = d.get("data_cutoff_date")
+            db.execute(
+                sa_text(
+                    """
+                    INSERT INTO qm_model_inference_dispatch_logs (
+                      trigger_source, tenant_id, user_id, strategy_id, model_id,
+                      data_trade_date, prediction_trade_date,
+                      status, reason_code, reason_detail, run_id, created_at
+                    ) VALUES (
+                      :trigger_source, :tenant_id, :user_id, NULL, :model_id,
+                      CAST(:data_trade_date AS DATE), CAST(:prediction_trade_date AS DATE),
+                      :status, :reason_code, :reason_detail, NULL, NOW()
+                    )
+                    """
+                ),
+                {
+                    "trigger_source": "celery_backfill_default_inference",
+                    "tenant_id": str(d.get("tenant_id") or "default"),
+                    "user_id": str(d.get("user_id") or ""),
+                    "model_id": str(d.get("model_id") or "") or None,
+                    "data_trade_date": cutoff,
+                    "prediction_trade_date": cutoff,
+                    "status": status,
+                    "reason_code": reason,
+                    "reason_detail": (
+                        f"gap={d.get('gap')} appended={d.get('appended')} "
+                        f"failed={d.get('failed')} error={d.get('error') or ''}"
+                    )[:500],
+                },
+            )
+        db.commit()
+    finally:
+        db.close()
+        engine.dispose()
 
 
 @celery_app.task(name="engine.tasks.backfill_inference_quality")

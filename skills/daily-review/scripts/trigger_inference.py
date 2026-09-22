@@ -50,7 +50,8 @@ def main() -> int:
                 try:
                     row = await conn.fetchrow(
                         "SELECT user_id, model_id FROM qm_model_inference_dispatch_logs "
-                        "WHERE trigger_source='celery_auto_inference_if_needed' "
+                        "WHERE trigger_source IN ('celery_backfill_default_inference', "
+                        "'celery_auto_inference_if_needed') "
                         "AND status='success' AND model_id IS NOT NULL "
                         "ORDER BY created_at DESC LIMIT 1"
                     )

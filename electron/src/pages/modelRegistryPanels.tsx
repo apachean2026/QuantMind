@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
-import { Button, Card, Tag, Typography, Empty, Spin, Progress, Divider, Input, Modal, Tabs, Switch, DatePicker, Table, Drawer, Badge, Tooltip, Collapse, Select, Pagination, message, Space, Alert } from 'antd';
+import { Button, Card, Tag, Typography, Empty, Spin, Progress, Divider, Input, Modal, Tabs, DatePicker, Table, Drawer, Badge, Tooltip, Collapse, Select, Pagination, message, Space, Alert } from 'antd';
 import { clsx } from 'clsx';
 import dayjs from 'dayjs';
 import {
@@ -14,7 +14,6 @@ import {
   InferenceRunRecord,
   InferencePrecheckResult,
   InferenceRankingResult,
-  AutoInferenceSettings,
   LatestInferenceRunInfo,
   ModelShapSummaryResponse,
   ModelShapSummaryItem, modelTrainingService,
@@ -849,9 +848,6 @@ export const InferenceCenterPanel: React.FC<{
   lastRun: InferenceRunRecord | null;
   history: InferenceRunRecord[];
   historyLoading: boolean;
-  autoSettings: AutoInferenceSettings | null;
-  autoSaving: boolean;
-  onToggleAuto: (enabled: boolean) => void;
   latestInferenceRun: LatestInferenceRunInfo | null;
   latestInferenceRunLoading: boolean;
   precheck: InferencePrecheckResult | null;
@@ -867,7 +863,7 @@ export const InferenceCenterPanel: React.FC<{
 }> = ({
   model, inferenceDate, onDateChange, targetDate, targetDateLoading, horizonDays,
   running, onRun, onRunAsDefault, isDefault, lastRun, history, historyLoading,
-  autoSettings, autoSaving, onToggleAuto, latestInferenceRun, latestInferenceRunLoading, precheck, precheckLoading, onRefreshPrecheck,
+  latestInferenceRun, latestInferenceRunLoading, precheck, precheckLoading, onRefreshPrecheck,
   historyRunIdFilter, onHistoryRunIdFilterChange, historyStatusFilter, onHistoryStatusFilterChange, historyDateFilter, onHistoryDateFilterChange,
   onDeleteHistory,
 }) => {
@@ -1149,13 +1145,17 @@ export const InferenceCenterPanel: React.FC<{
 
             <div className="glass-panel rounded-2xl p-4 border border-slate-100/50 flex items-center justify-between shrink-0">
                <div className="flex items-center gap-3">
-                 <RefreshCw size={14} className={clsx("text-blue-500", autoSettings?.enabled && "animate-spin-slow")} />
+                 <RefreshCw size={14} className="text-blue-500" />
                  <div>
-                   <Text className="text-xs font-bold text-slate-700 block leading-tight">自动调度</Text>
-                   <Text className="text-xs text-slate-400">次日 00:00 起进入任务队列</Text>
+                   <Text className="text-xs font-bold text-slate-700 block leading-tight">每日自动补全</Text>
+                   <Text className="text-xs text-slate-400">工作日 06:30 对默认模型补齐缺口（含历史）</Text>
                  </div>
                </div>
-               <Switch size="small" checked={autoSettings?.enabled} loading={autoSaving} onChange={onToggleAuto} className={autoSettings?.enabled ? 'bg-blue-600' : ''} />
+               {isDefault ? (
+                 <Tag color="blue" className="m-0 rounded-full text-[10px] font-bold">默认模型已纳入</Tag>
+               ) : (
+                 <Tag className="m-0 rounded-full text-[10px] font-bold">设为默认后生效</Tag>
+               )}
             </div>
          </div>
        </div>
@@ -1272,7 +1272,7 @@ export const ProductionMonitorPanel: React.FC<{ model: UserModelRecord }> = ({ m
       {error && <Alert type="warning" showIcon message="生产数据加载失败" description={error} className="rounded-xl" />}
       {!error && loading && <div className="py-8 text-center"><Spin /></div>}
       {!error && !loading && items.length === 0 && (
-        <Empty description="暂无生产数据。每日自动推理后，次日回填真实 IC（滞后 5 个交易日）" />
+        <Empty description="暂无生产数据。默认模型每日补全后，次日回填真实 IC（滞后 5 个交易日）" />
       )}
       {!error && !loading && items.length > 0 && (
         <>

@@ -100,10 +100,13 @@ NEWS_MATCHER_RELOAD_SEC = int(os.getenv("NEWS_MATCHER_RELOAD_SEC", "600"))
 beat_schedule = {}
 if AUTO_INFERENCE_ENABLED:
     beat_schedule = {
-        # 交易日 08:00 触发自动推理扫描，支持多策略依次执行
-        "auto-inference-window-scan-weekdays": {
-            "task": "engine.tasks.auto_inference_if_needed",
-            "schedule": crontab(minute="0", hour="8", day_of_week="1-5"),
+        # 数据同步约 01:00–06:00 完成后，工作日 06:30 补全所有用户默认模型
+        # 推理缺口（含历史中间空洞），链路同前端「一键补全至最新」。
+        # 原 08:00 auto_inference_if_needed（用户开关 + running 组合）已下线，
+        # 统一收敛到本任务；任务函数仍保留供紧急手动 celery call。
+        "backfill-default-inference-weekdays": {
+            "task": "engine.tasks.backfill_default_inference",
+            "schedule": crontab(minute="30", hour="6", day_of_week="1-5"),
         },
         # 推理质量回填：每日 02:30 回填已完成推理但缺 quality 记录的日期
         # （滞后 5 天等真实收益兑现，算生产 Rank IC）

@@ -280,15 +280,6 @@ export interface MarketMAFilter {
   ref_date: string;
 }
 
-export interface AutoInferenceSettings {
-  enabled: boolean;
-  schedule_desc: string;
-  schedule_time?: string;
-  last_run?: InferenceRunRecord;
-  next_run?: string;
-  updated_at?: string;
-}
-
 /** 回测交易成本覆盖参数。留空则回退模型 metadata.context，再回退 A股标准费率。 */
 export interface TradingCostParams {
   commission_rate?: number;
@@ -932,20 +923,6 @@ class ModelTrainingService {
     return resp.data;
   }
 
-
-  async getAutoInferenceSettings(modelId: string): Promise<AutoInferenceSettings> {
-    const resp = await this.client.get<AutoInferenceSettings>(`/models/inference/settings/${modelId}`);
-    const data = resp.data as any;
-    return {
-      enabled: Boolean(data?.enabled),
-      schedule_desc: String(data?.schedule_desc ?? ''),
-      schedule_time: data?.schedule_time ? String(data.schedule_time) : undefined,
-      last_run: data?.last_run_json ? this.normalizeInferenceRun(data.last_run_json) : data?.last_run ? this.normalizeInferenceRun(data.last_run) : undefined,
-      next_run: data?.next_run ? String(data.next_run) : data?.next_run_at ? String(data.next_run_at) : undefined,
-      updated_at: data?.updated_at ? String(data.updated_at) : undefined,
-    };
-  }
-
   async getLatestInferenceRun(modelId?: string): Promise<LatestInferenceRunInfo | null> {
     const resp = await this.client.get<LatestInferenceRunInfo>('/models/inference/latest', {
       params: modelId ? { model_id: modelId } : undefined,
@@ -960,22 +937,6 @@ class ModelTrainingService {
       status: data?.status ? String(data.status) : undefined,
       updated_at: data?.updated_at ? String(data.updated_at) : undefined,
       matched_model: typeof data?.matched_model === 'boolean' ? data.matched_model : null,
-    };
-  }
-
-  async saveAutoInferenceSettings(modelId: string, settings: AutoInferenceSettings): Promise<AutoInferenceSettings> {
-    const resp = await this.client.put<AutoInferenceSettings>(`/models/inference/settings/${modelId}`, {
-      enabled: settings.enabled,
-      schedule_time: settings.schedule_time,
-    });
-    const data = resp.data as any;
-    return {
-      enabled: Boolean(data?.enabled),
-      schedule_desc: String(data?.schedule_desc ?? ''),
-      schedule_time: data?.schedule_time ? String(data.schedule_time) : undefined,
-      last_run: data?.last_run_json ? this.normalizeInferenceRun(data.last_run_json) : data?.last_run ? this.normalizeInferenceRun(data.last_run) : undefined,
-      next_run: data?.next_run ? String(data.next_run) : data?.next_run_at ? String(data.next_run_at) : undefined,
-      updated_at: data?.updated_at ? String(data.updated_at) : undefined,
     };
   }
 

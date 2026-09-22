@@ -106,6 +106,7 @@ class SimulationRemarkWorker:
                         px - float(pos.get("price") or 0)
                     ) > 1e-9:
                         pos["price"] = px
+                        pos["last_price"] = px
                         pos["market_value"] = mv
                         dirty = True
                     total_mv += mv

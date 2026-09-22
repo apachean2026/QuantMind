@@ -83,10 +83,11 @@ async def get_inference_monitor(
 
     schedule = {
         "enabled": auto_inference_enabled(),
-        "cron": "工作日 08:00",
+        "cron": "工作日 06:30",
         "timezone": "Asia/Shanghai",
         "next_run_at": isoformat_dt(next_weekday_auto_inference()),
-        "task": "engine.tasks.auto_inference_if_needed",
+        "task": "engine.tasks.backfill_default_inference",
+        "description": "默认模型推理缺口补全（含历史空洞，同「一键补全至最新」）",
     }
 
     empty = {
@@ -176,35 +177,7 @@ async def get_inference_monitor(
         ).all()
         items = [_row_item(row) for row in rows]
 
-        try:
-            setting_rows = (
-                await db.execute(
-                    text(
-                        """
-                        SELECT tenant_id, user_id, model_id, schedule_time, last_run_id,
-                               next_run_at, updated_at
-                        FROM qm_model_inference_settings
-                        WHERE enabled = TRUE
-                        ORDER BY updated_at DESC
-                        LIMIT 50
-                        """
-                    )
-                )
-            ).all()
-            settings = [
-                {
-                    "tenant_id": row.tenant_id,
-                    "user_id": str(row.user_id or ""),
-                    "model_id": row.model_id,
-                    "schedule_time": row.schedule_time,
-                    "last_run_id": row.last_run_id,
-                    "next_run_at": isoformat_dt(row.next_run_at),
-                    "updated_at": isoformat_dt(row.updated_at),
-                }
-                for row in setting_rows
-            ]
-        except Exception:
-            settings = []
+        settings: list[dict] = []  # 用户态「自动推理」开关已下线，不再展示 enabled 设置
 
     return _ok(
         {

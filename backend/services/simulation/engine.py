@@ -57,6 +57,47 @@ from backend.shared.strategy_storage import get_strategy_storage_service
 
 logger = logging.getLogger(__name__)
 
+_STRATEGY_KWARG_KEYS = (
+    "topk",
+    "n_drop",
+    "rebalance_days",
+    "weight_mode",
+    "min_score",
+    "max_position_pct",
+    "lot_size",
+)
+
+
+def _extract_strategy_config_kwargs(code_str: str) -> dict[str, Any]:
+    """从策略代码 STRATEGY_CONFIG.kwargs 提取选股参数（topk/n_drop 等）。"""
+    import ast
+
+    if not code_str or not str(code_str).strip():
+        return {}
+    try:
+        tree = ast.parse(code_str)
+    except Exception:
+        return {}
+    for node in tree.body:
+        if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+            continue
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        if not any(isinstance(t, ast.Name) and t.id == "STRATEGY_CONFIG" for t in targets):
+            continue
+        try:
+            cfg = ast.literal_eval(node.value)
+        except Exception:
+            return {}
+        if not isinstance(cfg, dict):
+            return {}
+        kwargs = cfg.get("kwargs") if isinstance(cfg.get("kwargs"), dict) else {}
+        merged = {**kwargs}
+        for key in _STRATEGY_KWARG_KEYS:
+            if key in cfg and key not in merged:
+                merged[key] = cfg[key]
+        return {k: merged[k] for k in _STRATEGY_KWARG_KEYS if k in merged}
+    return {}
+
 
 @dataclass
 class ExecutionReport:
@@ -382,11 +423,15 @@ class SimulationEngine:
 
         lot_size 默认值按市场规则（CN 100 股整手，其余 1）；显式传入的
         策略参数仍优先。
+
+        参数优先级：params_override > strategies.parameters >
+        STRATEGY_CONFIG.kwargs（策略代码）> StrategyConfig 默认值。
         """
         rules = rules_for(market)
         default_lot = rules.lot_size
         # 默认配置
         config = StrategyConfig(lot_size=default_lot)
+        code_kwargs: dict[str, Any] = {}
 
         try:
             # 尝试从策略存储服务加载
@@ -397,7 +442,15 @@ class SimulationEngine:
             )
 
             if strategy:
-                params = strategy.get("parameters", {}) or {}
+                code_kwargs = _extract_strategy_config_kwargs(
+                    str(strategy.get("code") or "")
+                )
+                params = dict(strategy.get("parameters", {}) or {})
+                # 代码里写的 topk/n_drop 补进 parameters（parameters 显式值优先）
+                for key in ("topk", "n_drop", "rebalance_days", "weight_mode",
+                            "min_score", "max_position_pct", "lot_size"):
+                    if key not in params and key in code_kwargs:
+                        params[key] = code_kwargs[key]
                 config = StrategyConfig(
                     topk=int(params.get("topk", 10)),
                     weight_mode=WeightMode(params.get("weight_mode", "equal")),
@@ -405,6 +458,8 @@ class SimulationEngine:
                     min_score=float(params.get("min_score", 0.0)),
                     max_position_pct=float(params.get("max_position_pct", 0.15)),
                     lot_size=int(params.get("lot_size", default_lot)),
+                    n_drop=int(params.get("n_drop", 0) or 0),
+                    rebalance_days=max(1, int(params.get("rebalance_days", 1) or 1)),
                 )
         except Exception as e:
             logger.warning("SimulationEngine: 加载策略配置失败 %s, 使用默认配置", e)
@@ -423,9 +478,14 @@ class SimulationEngine:
                 config.max_position_pct = float(params_override["max_position_pct"])
             if params_override.get("lot_size") is not None:
                 config.lot_size = int(params_override["lot_size"])
+            if params_override.get("n_drop") is not None:
+                config.n_drop = int(params_override["n_drop"])
+            if params_override.get("rebalance_days") is not None:
+                config.rebalance_days = max(1, int(params_override["rebalance_days"]))
             logger.info(
-                "SimulationEngine: 应用参数覆盖, topk=%d weight_mode=%s",
+                "SimulationEngine: 应用参数覆盖, topk=%d n_drop=%d weight_mode=%s",
                 config.topk,
+                config.n_drop,
                 config.weight_mode.value,
             )
 

@@ -64,6 +64,35 @@ class TestTopkDropout:
         assert sells == []
         assert buys == ["A", "B", "C"]
 
+    def test_tradable_fill_down_to_topk(self):
+        """真 TOP 不可交易时，从全排序继续往下补位直到凑满 topk。"""
+        calc = RebalanceCalculator()
+        # A/B 涨停不可买；应补到 C/D/E
+        signals = [
+            _sig("A", 0.99),
+            _sig("B", 0.98),
+            _sig("C", 0.90),
+            _sig("D", 0.80),
+            _sig("E", 0.70),
+            _sig("F", 0.10),
+        ]
+        strategy = StrategyConfig(topk=3, n_drop=0, max_position_pct=1.0)
+        account = _account({}, cash=1_000_000)
+        quotes = {
+            "A": Quote(symbol="A", current_price=10.0, is_limit_up=True),
+            "B": Quote(symbol="B", current_price=10.0, is_limit_up=True),
+            "C": _quote("C"),
+            "D": _quote("D"),
+            "E": _quote("E"),
+            "F": _quote("F"),
+        }
+
+        orders = calc.calculate(signals, strategy, quotes, account)
+
+        sells, buys = _orders_by_side(orders)
+        assert sells == []
+        assert buys == ["C", "D", "E"]
+
     def test_dropout_swaps_only_n_drop(self):
         """持仓部分跌出 topk → 只卖分数最低的 n_drop 只，只买等量新股。"""
         calc = RebalanceCalculator()

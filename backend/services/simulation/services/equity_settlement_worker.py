@@ -158,6 +158,7 @@ for pos_key, u in pairs(updates) do
     local pos = positions[pos_key]
     if pos then
         pos.price = tonumber(u.price)
+        pos.last_price = tonumber(u.price)
         pos.market_value = tonumber(u.market_value)
         positions[pos_key] = pos
         changed = changed + 1

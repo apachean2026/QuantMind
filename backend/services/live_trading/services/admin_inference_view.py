@@ -32,6 +32,11 @@ REASON_LABELS = {
     "LOCK_HELD": "任务锁冲突",
     "EXECUTION_FAILED": "执行失败",
     "EXCEPTION": "执行异常",
+    "UP_TO_DATE": "已是最新",
+    "DRY_RUN": "试运行跳过",
+    "PARTIAL": "部分补全失败",
+    "BACKFILL_FAILED": "缺口补全失败",
+    "NO_TARGETS": "无调度目标",
 }
 
 
@@ -54,9 +59,9 @@ def auto_inference_enabled() -> bool:
 
 
 def next_weekday_auto_inference(now: datetime | None = None) -> datetime:
-    """下一次自动推理运行时间：下一个工作日 08:00（Asia/Shanghai）。"""
+    """下一次默认模型补全时间：下一个工作日 06:30（Asia/Shanghai）。"""
     current = (now.astimezone(_SH_TZ) if now else datetime.now(_SH_TZ))
-    candidate = current.replace(hour=8, minute=0, second=0, microsecond=0)
+    candidate = current.replace(hour=6, minute=30, second=0, microsecond=0)
     if current >= candidate:
         candidate += timedelta(days=1)
     while candidate.weekday() >= 5:

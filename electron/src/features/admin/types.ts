@@ -553,6 +553,7 @@ export interface AdminInferenceMonitor {
         timezone: string;
         next_run_at?: string | null;
         task: string;
+        description?: string;
     };
     summary: {
         total: number;

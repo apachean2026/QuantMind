@@ -32,6 +32,27 @@ def _normalize_signal_symbol(raw: object) -> str:
     return StockCodeUtil.to_suffix(text) or text
 
 
+def _rows_to_signals(rows: list[Any]) -> list[SignalScore]:
+    return [
+        SignalScore(
+            symbol=_normalize_signal_symbol(row[0]),
+            score=float(row[1]),
+            trade_date=row[2],
+            run_id=str(row[3]),
+            tenant_id=str(row[4]),
+            user_id=str(row[5]),
+        )
+        for row in rows
+    ]
+
+
+def _sql_limit_clause(limit: int | None) -> str:
+    """limit 为 None / <=0 时不截断，避免 topk 选股被静默砍宇宙。"""
+    if limit is None or int(limit) <= 0:
+        return ""
+    return " LIMIT :limit"
+
+
 class SignalLoader:
     """
     从 engine_signal_scores 表加载最新 PK 信号。
@@ -56,16 +77,18 @@ class SignalLoader:
             user_id: 用户 ID
             run_id: 指定批次 ID，若 None 则取最新 trade_date
             min_score: 最小得分阈值，低于此值的信号将被过滤
-            limit: 返回数量限制
+            limit: 返回数量上限；None/<=0 表示加载该截面全部行
+                （托管模拟盘 topk 选股必须全量，否则可交易过滤后无法补位）
 
         Returns:
             信号列表，按 score 降序排列
         """
         tenant = (tenant_id or "").strip() or "default"
         uid = str(user_id or "").strip()
+        limit_sql = _sql_limit_clause(limit)
 
         if run_id:
-            query = text("""
+            query = text(f"""
                 SELECT symbol, fusion_score, trade_date, run_id, tenant_id, user_id
                 FROM engine_signal_scores
                 WHERE tenant_id = :tenant_id
@@ -73,17 +96,16 @@ class SignalLoader:
                   AND run_id = :run_id
                   AND fusion_score >= :min_score
                 ORDER BY fusion_score DESC
-                LIMIT :limit
+                {limit_sql}
             """)
-            params = {
+            params: dict[str, Any] = {
                 "tenant_id": tenant,
                 "user_id": uid,
                 "run_id": run_id,
                 "min_score": min_score,
-                "limit": limit or 1000,
             }
         else:
-            query = text("""
+            query = text(f"""
                 SELECT symbol, fusion_score, trade_date, run_id, tenant_id, user_id
                 FROM engine_signal_scores
                 WHERE tenant_id = :tenant_id
@@ -94,35 +116,26 @@ class SignalLoader:
                   )
                   AND fusion_score >= :min_score
                 ORDER BY fusion_score DESC
-                LIMIT :limit
+                {limit_sql}
             """)
             params = {
                 "tenant_id": tenant,
                 "user_id": uid,
                 "min_score": min_score,
-                "limit": limit or 1000,
             }
+        if limit_sql:
+            params["limit"] = int(limit)  # type: ignore[arg-type]
 
         try:
             result = await db.execute(query, params)
-            rows = result.fetchall()
-            signals = [
-                SignalScore(
-                    symbol=_normalize_signal_symbol(row[0]),
-                    score=float(row[1]),
-                    trade_date=row[2],
-                    run_id=str(row[3]),
-                    tenant_id=str(row[4]),
-                    user_id=str(row[5]),
-                )
-                for row in rows
-            ]
+            signals = _rows_to_signals(result.fetchall())
             logger.info(
-                "SignalLoader: 加载信号 %d 条, tenant=%s user=%s run_id=%s",
+                "SignalLoader: 加载信号 %d 条, tenant=%s user=%s run_id=%s limit=%s",
                 len(signals),
                 tenant,
                 uid,
                 run_id or "latest",
+                limit if limit_sql else "all",
             )
             if signals or run_id:
                 return signals
@@ -235,40 +248,33 @@ class SignalLoader:
             "user_id": uid,
             "trade_date": trade_date,
             "min_score": min_score,
-            "limit": limit or 1000,
         }
         if run_id:
             conditions.append("run_id = :run_id")
             params["run_id"] = run_id
+        limit_sql = _sql_limit_clause(limit)
+        if limit_sql:
+            params["limit"] = int(limit)  # type: ignore[arg-type]
 
         query = text(f"""
             SELECT symbol, fusion_score, trade_date, run_id, tenant_id, user_id
             FROM engine_signal_scores
             WHERE {" AND ".join(conditions)}
             ORDER BY fusion_score DESC
-            LIMIT :limit
+            {limit_sql}
         """)
 
         try:
             rows = (await db.execute(query, params)).fetchall()
-            signals = [
-                SignalScore(
-                    symbol=_normalize_signal_symbol(row[0]),
-                    score=float(row[1]),
-                    trade_date=row[2],
-                    run_id=str(row[3]),
-                    tenant_id=str(row[4]),
-                    user_id=str(row[5]),
-                )
-                for row in rows
-            ]
+            signals = _rows_to_signals(rows)
             logger.info(
-                "SignalLoader: 加载 %s 的信号 %d 条, tenant=%s user=%s run_id=%s",
+                "SignalLoader: 加载 %s 的信号 %d 条, tenant=%s user=%s run_id=%s limit=%s",
                 trade_date,
                 len(signals),
                 tenant,
                 uid,
                 run_id or "any",
+                limit if limit_sql else "all",
             )
             return signals
         except Exception as e:
