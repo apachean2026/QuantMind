@@ -1,6 +1,5 @@
 """回测结果持久化（PostgreSQL）"""
 
-import asyncio
 import json
 import logging
 import os
@@ -17,11 +16,6 @@ from backend.services.engine.qlib_app.utils.structured_logger import StructuredT
 
 logger = logging.getLogger(__name__)
 task_logger = StructuredTaskLogger(logger, "BacktestPersistence")
-
-try:
-    from backend.shared.cos_service import get_cos_service
-except Exception:
-    get_cos_service = None
 
 
 class BacktestPersistence:
@@ -42,24 +36,6 @@ class BacktestPersistence:
     def __init__(self) -> None:
         self._local_result_root = self._resolve_local_result_root()
         self._local_result_root.mkdir(parents=True, exist_ok=True)
-        self._enable_cos_backup = os.getenv("QLIB_BACKTEST_COS_BACKUP_ENABLED", "false").strip().lower() in (
-            "1",
-            "true",
-            "yes",
-            "on",
-        )
-        self._cos_backup_prefix = os.getenv("QLIB_BACKTEST_COS_PREFIX", "backtests/results").strip().strip("/")
-        self._cos_service = None
-        if self._enable_cos_backup and get_cos_service:
-            try:
-                self._cos_service = get_cos_service()
-                if not self._cos_service.client:
-                    task_logger.warning("cos_backup_unavailable", "QLIB_BACKTEST_COS_BACKUP_ENABLED=true，但 COS 不可用，已回退仅本地存储")
-            except Exception as exc:
-                task_logger.warning("cos_service_init_failed", "初始化 COS 服务失败，已回退仅本地存储", error=str(exc))
-                self._cos_service = None
-        elif self._enable_cos_backup and not get_cos_service:
-            task_logger.warning("cos_dependency_missing", "QLIB_BACKTEST_COS_BACKUP_ENABLED=true，但 COS 依赖不可用，已回退仅本地存储")
 
     async def ensure_tables(self) -> None:
         statements = [
@@ -75,8 +51,6 @@ class BacktestPersistence:
               config_json JSONB,
               result_json JSONB,
               result_file_path TEXT,
-              result_cos_key TEXT,
-              result_cos_url TEXT,
               result_backup_status TEXT NOT NULL DEFAULT 'none',
               result_backup_at TIMESTAMPTZ
             );
@@ -101,18 +75,6 @@ class BacktestPersistence:
                 WHERE table_name='qlib_backtest_runs' AND column_name='result_file_path'
               ) THEN
                 ALTER TABLE qlib_backtest_runs ADD COLUMN result_file_path TEXT;
-              END IF;
-              IF NOT EXISTS (
-                SELECT 1 FROM information_schema.columns
-                WHERE table_name='qlib_backtest_runs' AND column_name='result_cos_key'
-              ) THEN
-                ALTER TABLE qlib_backtest_runs ADD COLUMN result_cos_key TEXT;
-              END IF;
-              IF NOT EXISTS (
-                SELECT 1 FROM information_schema.columns
-                WHERE table_name='qlib_backtest_runs' AND column_name='result_cos_url'
-              ) THEN
-                ALTER TABLE qlib_backtest_runs ADD COLUMN result_cos_url TEXT;
               END IF;
               IF NOT EXISTS (
                 SELECT 1 FROM information_schema.columns
@@ -166,9 +128,8 @@ class BacktestPersistence:
             payload=local_payload,
         )
         has_local_payload = local_payload is not None
-        backup_status = "none"
-        if has_local_payload:
-            backup_status = "pending" if self._can_backup_to_cos() else "local_only"
+        # OSS 版无云端冷备：本地文件即唯一副本，状态恒为 local_only。
+        backup_status = "local_only" if has_local_payload else "none"
         config_json = json.dumps(config or {}, ensure_ascii=False)
         summary_json = json.dumps(summary_payload, ensure_ascii=False) if summary_payload is not None else None
         async with get_session() as session:
@@ -209,13 +170,6 @@ class BacktestPersistence:
                 },
             )
             await self._prune_user_history(session, user_id, tenant_id)
-        if has_local_payload and backup_status == "pending":
-            self._trigger_cos_backup(
-                backtest_id=backtest_id,
-                user_id=user_id,
-                tenant_id=tenant_id,
-                result_file_path=result_file_path,
-            )
 
     async def get_result(
         self,
@@ -235,7 +189,7 @@ class BacktestPersistence:
         async with get_session(read_only=True) as session:
             row = await session.execute(
                 text(
-                    "SELECT result_json, result_file_path, result_cos_key FROM qlib_backtest_runs "
+                    "SELECT result_json, result_file_path FROM qlib_backtest_runs "
                     "WHERE backtest_id = :id"
                     + (" AND tenant_id = :tenant_id" if tenant_id else "")
                     + (" AND user_id = :user_id" if user_id else "")
@@ -246,7 +200,7 @@ class BacktestPersistence:
         if not data:
             return None
 
-        # 如果指定了某些字段且这些字段都不在大字段列表中，则不需要读取本地/COS文件
+        # 如果指定了某些字段且这些字段都不在大字段列表中，则不需要读取本地文件
         needs_local = True
         if include_fields:
             needs_local = any(f in self.LARGE_RESULT_FIELDS for f in include_fields)
@@ -257,10 +211,6 @@ class BacktestPersistence:
         merged_payload = self._merge_summary_with_local(
             summary_payload=data["result_json"],
             result_file_path=data.get("result_file_path") if needs_local else None,
-            result_cos_key=data.get("result_cos_key") if needs_local else None,
-            backtest_id=backtest_id,
-            user_id=params.get("user_id"),
-            tenant_id=params.get("tenant_id"),
         )
         if not merged_payload:
             return None
@@ -491,7 +441,7 @@ class BacktestPersistence:
             rows = await session.execute(
                 text(
                     """
-                    SELECT b.result_json, b.user_id, b.result_file_path, b.result_cos_key, b.backtest_id, b.tenant_id,
+                    SELECT b.result_json, b.user_id, b.result_file_path,
                            COALESCE(
                                NULLIF(m.metadata_json->>'display_name', ''),
                                NULLIF(m.metadata_json->>'name', ''),
@@ -526,17 +476,10 @@ class BacktestPersistence:
             item = row[0]
             uid = row[1]
             result_file_path = row[2]
-            result_cos_key = row[3]
-            row_backtest_id = row[4]
-            row_tenant_id = row[5]
-            row_model_name = row[6]
+            row_model_name = row[3]
             payload = self._merge_summary_with_local(
                 summary_payload=item,
                 result_file_path=result_file_path if needs_local else None,
-                result_cos_key=result_cos_key if needs_local else None,
-                backtest_id=row_backtest_id,
-                user_id=uid,
-                tenant_id=row_tenant_id,
             )
             if not isinstance(payload, dict):
                 continue
@@ -650,12 +593,26 @@ class BacktestPersistence:
             return None
         path = Path(result_file_path)
         if not path.exists():
+            # 本地大字段文件（trades/equity_curve/positions…）是该回测结果
+            # 大字段的唯一副本。缺失意味着导出/对比会读到空 trades，此前完全静默，
+            # 这里补一条 warning 便于定位「导出只有表头」类问题。
+            task_logger.warning(
+                "local_result_file_missing",
+                "回测本地结果文件缺失，大字段（trades/equity_curve 等）将为空",
+                result_file_path=result_file_path,
+            )
             return None
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
             if isinstance(data, dict):
                 return data
-        except Exception:
+        except Exception as exc:
+            task_logger.warning(
+                "local_result_file_unreadable",
+                "回测本地结果文件解析失败，大字段将为空",
+                result_file_path=result_file_path,
+                error=str(exc),
+            )
             return None
         return None
 
@@ -663,25 +620,13 @@ class BacktestPersistence:
         self,
         summary_payload: dict[str, Any] | None,
         result_file_path: str | None,
-        result_cos_key: str | None,
-        backtest_id: str | None,
-        user_id: str | None,
-        tenant_id: str | None,
     ) -> dict[str, Any] | None:
-        if summary_payload is None and not result_file_path and not result_cos_key:
+        if summary_payload is None and not result_file_path:
             return None
         merged: dict[str, Any] = {}
         if isinstance(summary_payload, dict):
             merged.update(summary_payload)
         local_payload = self._read_local_result(result_file_path)
-        if not isinstance(local_payload, dict) and result_file_path and result_cos_key:
-            local_payload = self._restore_local_from_cos(
-                result_file_path=result_file_path,
-                result_cos_key=result_cos_key,
-                backtest_id=backtest_id,
-                user_id=user_id,
-                tenant_id=tenant_id,
-            )
         if isinstance(local_payload, dict):
             merged.update(local_payload)
         return merged or None
@@ -696,172 +641,24 @@ class BacktestPersistence:
         except Exception:
             return
 
-    def _can_backup_to_cos(self) -> bool:
-        return bool(
-            self._enable_cos_backup and self._cos_service and self._cos_service.client and self._cos_service.bucket_name
-        )
-
-    def _build_cos_key(self, backtest_id: str, user_id: str, tenant_id: str) -> str:
-        tenant = self._sanitize_segment(tenant_id)
-        user = self._sanitize_segment(user_id)
-        backtest = self._sanitize_segment(backtest_id)
-        return f"{self._cos_backup_prefix}/{tenant}/{user}/{backtest}.json"
-
-    def _trigger_cos_backup(
-        self,
-        backtest_id: str,
-        user_id: str,
-        tenant_id: str,
-        result_file_path: str | None,
-    ) -> None:
-        if not result_file_path or not self._can_backup_to_cos():
-            return
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            task_logger.warning("cos_backup_no_event_loop", "无可用事件循环，跳过 COS 冷备", backtest_id=backtest_id)
-            return
-        loop.create_task(
-            self._backup_local_result_to_cos(
-                backtest_id=backtest_id,
-                user_id=user_id,
-                tenant_id=tenant_id,
-                result_file_path=result_file_path,
-            )
-        )
-
-    async def _backup_local_result_to_cos(
-        self,
-        backtest_id: str,
-        user_id: str,
-        tenant_id: str,
-        result_file_path: str,
-    ) -> None:
-        path = Path(result_file_path)
-        if not path.exists():
-            await self._update_backup_status(
-                backtest_id=backtest_id,
-                user_id=user_id,
-                tenant_id=tenant_id,
-                status="missing_local",
-            )
-            return
-        cos_key = self._build_cos_key(backtest_id, user_id, tenant_id)
-        try:
-            content = await asyncio.to_thread(path.read_bytes)
-            upload_resp = await asyncio.to_thread(
-                self._cos_service.upload_file,
-                content,
-                cos_key,
-                "backtests",
-                "application/json",
-                True,
-            )
-            if not isinstance(upload_resp, dict) or not upload_resp.get("success"):
-                raise RuntimeError(str(upload_resp.get("error") if isinstance(upload_resp, dict) else upload_resp))
-            file_url = upload_resp.get("file_url")
-            await self._update_backup_status(
-                backtest_id=backtest_id,
-                user_id=user_id,
-                tenant_id=tenant_id,
-                status="backed_up",
-                cos_key=cos_key,
-                cos_url=file_url,
-            )
-        except Exception as exc:
-            task_logger.warning("cos_backup_failed", "回测结果 COS 冷备失败", backtest_id=backtest_id, error=str(exc))
-            await self._update_backup_status(
-                backtest_id=backtest_id,
-                user_id=user_id,
-                tenant_id=tenant_id,
-                status="failed",
-            )
-
-    async def _update_backup_status(
-        self,
-        backtest_id: str,
-        user_id: str,
-        tenant_id: str,
-        status: str,
-        cos_key: str | None = None,
-        cos_url: str | None = None,
-    ) -> None:
-        async with get_session() as session:
-            await session.execute(
-                text("""
-                    UPDATE qlib_backtest_runs
-                    SET
-                        result_backup_status = :status,
-                        result_cos_key = COALESCE(:cos_key, result_cos_key),
-                        result_cos_url = COALESCE(:cos_url, result_cos_url),
-                        result_backup_at = now()
-                    WHERE backtest_id = :backtest_id
-                      AND user_id = :user_id
-                      AND tenant_id = :tenant_id
-                    """),
-                {
-                    "status": status,
-                    "cos_key": cos_key,
-                    "cos_url": cos_url,
-                    "backtest_id": backtest_id,
-                    "user_id": user_id,
-                    "tenant_id": tenant_id,
-                },
-            )
-
-    def _restore_local_from_cos(
-        self,
-        result_file_path: str,
-        result_cos_key: str,
-        backtest_id: str | None,
-        user_id: str | None,
-        tenant_id: str | None,
-    ) -> dict[str, Any] | None:
-        if not self._can_backup_to_cos():
-            return None
-        try:
-            response = self._cos_service.client.get_object(
-                Bucket=self._cos_service.bucket_name,
-                Key=result_cos_key,
-            )
-            content = response["Body"].get_raw_stream().read()
-            data = json.loads(content.decode("utf-8"))
-            if not isinstance(data, dict):
-                return None
-            path = Path(result_file_path)
-            path.parent.mkdir(parents=True, exist_ok=True)
-            temp_path = path.with_suffix(".json.tmp")
-            temp_path.write_bytes(content)
-            temp_path.replace(path)
-            if backtest_id and user_id and tenant_id:
-                try:
-                    loop = asyncio.get_running_loop()
-                    loop.create_task(
-                        self._update_backup_status(
-                            backtest_id=backtest_id,
-                            user_id=user_id,
-                            tenant_id=tenant_id,
-                            status="restored_from_cos",
-                        )
-                    )
-                except RuntimeError:
-                    pass
-            return data
-        except Exception as exc:
-            task_logger.warning("cos_restore_failed", "从 COS 回源回测文件失败", key=result_cos_key, error=str(exc))
-            return None
-
     async def _prune_user_history(self, session, user_id: str, tenant_id: str) -> None:
         """
         每个 user_id + tenant_id 仅保留最近 HISTORY_RETENTION_LIMIT 条记录，
         避免回测历史无限增长导致查询和存储压力持续升高。
+
+        注意：本地结果文件（trades/equity_curve 等大字段的唯一副本）
+        **不再随 DB 行删除**。此前这里会 unlink 掉被裁剪记录的
+        result_file_path，导致：
+          - 记录被删后本地文件丢失，任何仍持有该 backtest_id 的入口
+            （导出、对比、参数优化子回测）读到空 trades；
+          - 导出接口静默返回只有表头的空 CSV（200 + 0 行）。
+        现改为：裁剪仅回收 DB 索引行，本地文件保留，由运维显式清理磁盘。
         """
         rows = await session.execute(
             text("""
                 WITH ranked AS (
                     SELECT
                         backtest_id,
-                        result_file_path,
                         ROW_NUMBER() OVER (
                             PARTITION BY user_id, tenant_id
                             ORDER BY created_at DESC, backtest_id DESC
@@ -869,7 +666,7 @@ class BacktestPersistence:
                     FROM qlib_backtest_runs
                     WHERE user_id = :user_id AND tenant_id = :tenant_id
                 )
-                SELECT backtest_id, result_file_path
+                SELECT backtest_id
                 FROM ranked
                 WHERE rn > :retention_limit
                 """),
@@ -890,5 +687,11 @@ class BacktestPersistence:
                 """),
             {"backtest_ids": stale_ids},
         )
-        for row in stale_rows:
-            self._remove_local_result_file(row.get("result_file_path"))
+        # 仅回收 DB 索引行，保留本地结果文件（大字段唯一副本，删除不可恢复）。
+        task_logger.info(
+            "prune_user_history",
+            "回测历史裁剪：已回收 DB 索引行，本地结果文件保留",
+            user_id=user_id,
+            tenant_id=tenant_id,
+            pruned_count=len(stale_ids),
+        )

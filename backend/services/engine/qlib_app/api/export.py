@@ -99,11 +99,27 @@ async def export_backtest(
         if initial_capital is None and isinstance(r.get("config"), dict):
             initial_capital = _to_finite_float(r["config"].get("initial_capital"))
 
+        # 导出只有表头的空 CSV 是「静默失败」：记录存在（此前已返回 200 + 0 行），
+        # 用户无法区分「没有成交」与「本地结果文件被清理」。这里显式回 409，
+        # 让前端提示可诊断的原因。
+        # 注：trades 属大字段，仅存于本地结果文件，API 层拿不到该文件路径
+        # （QlibBacktestResult 不暴露 result_file_path），故用统一提示覆盖两种情形。
+        if not trades:
+            raise HTTPException(
+                status_code=409,
+                detail="该回测的成交流水为空或结果文件已缺失，无法导出明细",
+            )
+
         rows = _build_quick_trade_rows(
             trades=[x for x in trades if isinstance(x, dict)],
             equity_curve=[x for x in equity_curve if isinstance(x, dict)],
             initial_capital=initial_capital,
         )
+        if not rows:
+            raise HTTPException(
+                status_code=409,
+                detail="该回测的成交流水无法解析为明细，无法导出",
+            )
         for row in rows:
             writer.writerow(
                 [

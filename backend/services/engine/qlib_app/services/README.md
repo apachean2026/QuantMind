@@ -164,9 +164,8 @@
   - `BacktestPersistence` 新增本地结果目录（默认 `data/backtest_results`，可由 `QLIB_BACKTEST_RESULT_DIR` 覆盖），按 `tenant_id/user_id/backtest_id.json` 落盘回测大字段。
   - PostgreSQL `qlib_backtest_runs` 新增 `result_file_path` 字段，`result_json` 改为仅存摘要指标与状态，降低远程 PG 写入压力。
   - 回测结果读取改为“PG 摘要 + 本地 JSON 明细”协同模式：先读 `result_json`，再自动合并 `result_file_path` 指向的本地文件。
-  - 删除/历史裁剪时会同步清理本地 JSON 文件，避免遗留脏文件。
-  - 可选启用 COS 冷备（`QLIB_BACKTEST_COS_BACKUP_ENABLED=true`）：本地文件写入后异步上传到 COS，记录 `result_cos_key/result_cos_url`；本地文件缺失时会尝试从 COS 自动回源恢复。
-  - 可通过 `QLIB_BACKTEST_COS_PREFIX` 配置 COS 对象前缀（默认 `backtests/results`）。
+  - 删除回测记录时会同步清理本地 JSON 文件；历史裁剪（`HISTORY_RETENTION_LIMIT`）只回收 DB 索引行，**保留**本地结果文件（大字段唯一副本，删除不可恢复）。
+  - OSS 版不含云端冷备：回测大字段仅落本地 `QLIB_BACKTEST_RESULT_DIR`，`result_backup_status` 恒为 `local_only`。
 - 后台执行清零（2026-02-25）：
   - `risk_monitor_service.start_risk_monitoring` 移除 `asyncio.create_task`，改为单次风险评估（无服务内后台协程）。
   - `user_strategy_loader.get_strategy` 移除 `ThreadPoolExecutor` 分支；事件循环运行中改为直接回退文件系统读取，避免线程池执行。

@@ -23,6 +23,24 @@ def _normalize_display_quantity(symbol: str, quantity: float) -> int:
     return qty_int
 
 
+def _resolve_trade_action(action_raw: str) -> str:
+    """把各写入路径的 action 口径统一映射为买入/卖出。
+
+    写入侧存在三种口径：
+    - cn_exchange: "buy" / "sell"
+    - recording_strategy: "buy" / "sell"
+    - risk_analyzer._parse_trades_df: "buy_to_open" / "sell_to_close" /
+      "buy_to_cover" / "sell_to_open"
+    此前只判断 == "buy"，导致后两种口径全部落成「卖出」。
+    """
+    action = str(action_raw or "").strip().lower()
+    if action.startswith("buy"):
+        return "买入"
+    if action.startswith("sell"):
+        return "卖出"
+    return "卖出"
+
+
 def _build_quick_trade_rows(
     *,
     trades: list[dict[str, Any]],
@@ -60,7 +78,20 @@ def _build_quick_trade_rows(
 
         display_price = explicit_price if explicit_price is not None else 0.0
         display_quantity = explicit_quantity if explicit_quantity is not None else 0.0
-        should_restore = explicit_quantity is None and has_valid_factor and adj_price is not None and adj_quantity is not None
+        # 复权回算：写入侧给出的是复权口径（adj_*）而展示列缺失时，用 factor
+        # 还原为非复权口径。注意 risk_analyzer 归一化后 price/quantity 已存在，
+        # 旧判定 `explicit_quantity is None` 恒为 False，factor 形同白取；
+        # 改为「quantity 非整手（说明仍是复权小数股数）或展示列缺失」才回算。
+        quantity_is_integer_like = (
+            explicit_quantity is not None
+            and abs(explicit_quantity - round(explicit_quantity)) <= 1e-6
+        )
+        should_restore = (
+            has_valid_factor
+            and adj_price is not None
+            and adj_quantity is not None
+            and (explicit_quantity is None or not quantity_is_integer_like)
+        )
         if should_restore:
             display_price = adj_price / factor
             display_quantity = adj_quantity * factor
@@ -75,8 +106,8 @@ def _build_quick_trade_rows(
             commission = 0.0
 
         action_raw = str(trade.get("action", "")).strip().lower()
-        is_buy = action_raw == "buy"
-        is_sell = action_raw == "sell"
+        is_buy = action_raw.startswith("buy")
+        is_sell = action_raw.startswith("sell")
 
         has_balance = _to_finite_float(trade.get("balance")) is not None
         has_equity_after = _to_finite_float(trade.get("equity_after")) is not None
@@ -103,7 +134,7 @@ def _build_quick_trade_rows(
             {
                 "date": trade_date,
                 "symbol": str(trade.get("symbol", "")),
-                "action": "买入" if is_buy else "卖出",
+                "action": _resolve_trade_action(action_raw),
                 "display_price": display_price,
                 "qty_int": qty_int,
                 "amount": amount,

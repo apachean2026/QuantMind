@@ -641,7 +641,23 @@ class BacktestService {
 
         if (error.response) {
           // 服务器返回错误 - 确保 detail 被序列化为字符串
-          const rawDetail = error.response.data?.detail ?? error.response.statusText;
+          // 注意：exportCSV 用 responseType:'blob'，错误体也会是 Blob，
+          // 此时 data.detail 取不到，需要先读文本再解析，否则 detail 丢失。
+          let errorData: any = error.response.data;
+          if (
+            typeof Blob !== 'undefined' &&
+            errorData instanceof Blob &&
+            errorData.type &&
+            !errorData.type.startsWith('text/csv')
+          ) {
+            try {
+              const text = await errorData.text();
+              errorData = text ? JSON.parse(text) : null;
+            } catch {
+              errorData = null;
+            }
+          }
+          const rawDetail = errorData?.detail ?? error.response.statusText;
           let message = '';
           if (typeof rawDetail === 'string') {
             message = rawDetail;
@@ -1214,23 +1230,7 @@ class BacktestService {
 
     // 已确认网关导出路由不可用时，直接走本地生成，避免重复 502 噪音
     if (this.exportRouteAvailable === false) {
-      const result = await this.getResult(backtestId, false);
-      let csvSource: any = result;
-      const trades = Array.isArray((csvSource as any)?.trades) ? (csvSource as any).trades : [];
-      if (!trades.length) {
-        try {
-          const detail = await this.getTrades(backtestId);
-          csvSource = {
-            ...csvSource,
-            trades: Array.isArray(detail?.trades) ? detail.trades : [],
-            positions: Array.isArray(detail?.positions) ? detail.positions : (csvSource as any)?.positions,
-          };
-        } catch (err) {
-          console.warn('本地导出补取交易明细失败:', err);
-        }
-      }
-      const csv = this.buildCsvFromBacktestResult(csvSource);
-      return new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+      return this.buildLocalCsvBlob(backtestId);
     }
 
     try {
@@ -1243,6 +1243,11 @@ class BacktestService {
       return response.data;
     } catch (error: any) {
       const status = Number(error?.status || error?.response?.status || 0);
+      // 409：后端明确告知「成交流水不可用」（结果文件缺失/被清理），
+      // 已在 detail 里给出可诊断原因，直接抛出让页面提示，不再走本地兜底。
+      if (status === 409) {
+        throw error;
+      }
       // 部分网关仅保留历史 /pdf 转发规则，失败时自动回退
       if (status === 404 || status === 502) {
         console.warn('CSV 路径不可用，回退到兼容导出路径 /pdf');
@@ -1258,32 +1263,40 @@ class BacktestService {
           const fallbackStatus = Number(
             fallbackError?.status || fallbackError?.response?.status || 0
           );
+          if (fallbackStatus === 409) {
+            throw fallbackError;
+          }
           if (fallbackStatus === 404 || fallbackStatus === 502) {
             this.exportRouteAvailable = false;
             console.warn('导出接口不可用，回退到前端本地 CSV 生成');
-            const result = await this.getResult(backtestId, false);
-            let csvSource: any = result;
-            const trades = Array.isArray((csvSource as any)?.trades) ? (csvSource as any).trades : [];
-            if (!trades.length) {
-              try {
-                const detail = await this.getTrades(backtestId);
-                csvSource = {
-                  ...csvSource,
-                  trades: Array.isArray(detail?.trades) ? detail.trades : [],
-                  positions: Array.isArray(detail?.positions) ? detail.positions : (csvSource as any)?.positions,
-                };
-              } catch (err) {
-                console.warn('本地导出补取交易明细失败:', err);
-              }
-            }
-            const csv = this.buildCsvFromBacktestResult(csvSource);
-            return new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+            return this.buildLocalCsvBlob(backtestId);
           }
           throw fallbackError;
         }
       }
       throw error;
     }
+  }
+
+  /** 本地兜底 CSV 生成（后端导出接口不可用时使用）。 */
+  private async buildLocalCsvBlob(backtestId: string): Promise<Blob> {
+    const result = await this.getResult(backtestId, false);
+    let csvSource: any = result;
+    const trades = Array.isArray((csvSource as any)?.trades) ? (csvSource as any).trades : [];
+    if (!trades.length) {
+      try {
+        const detail = await this.getTrades(backtestId);
+        csvSource = {
+          ...csvSource,
+          trades: Array.isArray(detail?.trades) ? detail.trades : [],
+          positions: Array.isArray(detail?.positions) ? detail.positions : (csvSource as any)?.positions,
+        };
+      } catch (err) {
+        console.warn('本地导出补取交易明细失败:', err);
+      }
+    }
+    const csv = this.buildCsvFromBacktestResult(csvSource);
+    return new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
   }
 
   /**
