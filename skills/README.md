@@ -51,6 +51,7 @@ cp -r skills/<skill-name> ~/.claude/skills/
 | [backtest-center](backtest-center/) | 回测中心：快速回测、专家模式、策略对比、参数优化、向量化极速回测 | 回测、策略对比、参数优化 |
 | [rd-agent-factor-mining](rd-agent-factor-mining/) | RD-Agent 因子挖掘端到端流水线：preflight → 演化 → 回测评估 → IC/Sharpe 排序 → 入库，支持五市场 | 挖因子、因子挖掘、RD-Agent、一键挖因子 |
 | [model-train-infer-backtest-report](model-train-infer-backtest-report/) | 训练-推理-组合回测-专业报告全流程：13 种模型类型、批量推理全年、自定义组合回测（阈值+大盘MA+止损）、研报 MD+PDF | 训练模型、推理全年、T+3、止损、出报告 |
+| [model-training-config](model-training-config/) | 训练配置文件生成器：自然语言 → 可直接导入的 quantmind-model-training-config（YAML/.yml），带 schema 校验脚本与 4 个演示配置 | 训练配置文件、生成训练配置、导入配置、训练配置模板 |
 
 ### 交易
 

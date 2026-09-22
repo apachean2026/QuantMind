@@ -1,0 +1,141 @@
+# QuantMind 模型训练配置 —— CN / L1L2 合并宽表 / T+5 / LightGBM（重正则版）
+# 用法：前端「模型训练」页 → 右上角「导入配置」→ 选择本文件 → 预览 → 确认。
+# 完整字段说明见 ../references/schema.md
+schema_version: 1
+kind: quantmind-model-training-config
+exported_at: "2026-09-22T00:00:00.000Z"
+market: CN
+factor_source: l1_l2_factors
+# 仅作导入时版本提示；真正训练用的是页面当前已发布目录版本
+factor_catalog_version: qdb-cn-l1_l2_factors-9783e05ac172
+factor_filter:
+  enabled: true
+  n_top: 80
+  ic_threshold: 0.01
+  icir_threshold: 0.15
+  correlation_threshold: 0.9
+configuration:
+  displayName: DEMO_L1L2_T5_LGB
+  displayNameMode: manual
+  selectedFeatures:
+    # 动量
+    - mom_ret_1d
+    - mom_ret_5d
+    - mom_ret_20d
+    - mom_ret_60d
+    - mom_ma_gap_5
+    - mom_ma_gap_20
+    - mom_macd_dif
+    - mom_rsi_14
+    - mom_kdj_k
+    # 波动
+    - vol_std_5
+    - vol_std_20
+    - vol_atr_14
+    - vol_parkinson_20
+    - vol_gk_20
+    - vol_amp_20
+    # 换手
+    - turn_1
+    - turn_5
+    - turn_20
+    - turn_std_20
+    - turn_z_20
+    - turn_ratio_1_20
+    # 资金量
+    - amt_log
+    - amt_ma_20
+    - amt_z_20
+    - amt_net_flow_20
+    - amt_up_ratio_20
+    - mfi_14
+    - obv_slope_20
+    - amt_vol_ratio_20
+    # 技术图形
+    - tech_bb_width
+    - tech_bb_pos
+    - tech_cci_20
+    - tech_adx_14
+    # 财务估值
+    - fun_pe
+    - fun_pb
+    - fun_bp
+    - fun_ep
+    - fun_value_zscore
+    - fun_roe
+    - fun_float_mv
+    # 筹码
+    - chip_profit_ratio_20
+    - chip_concentration_20
+    - chip_floating_ratio
+    # 风格
+    - style_beta_20
+    - style_idio_vol_20
+    - style_residual_ret_20
+    # 行业与概念
+    - ind_strength_20
+    - ind_ret_20
+    - ind_dispersion_20
+    - ind_crowding_20
+    - ind_volume_ratio_20
+    - concept_hot_score
+    - concept_leader_score
+    - concept_exposure_top1
+    # L2 微观结构 / 资金流
+    - micro_vpin_50
+    - micro_vpin_ma_20
+    - micro_toxicity_persistence
+    - micro_vpin_quantile_ratio
+    - micro_informed_ratio
+    - flow_cancel_spoof
+    - flow_cancel_hft_ratio
+    - flow_order_book_rebuild
+    - flow_imbalance_autocorr
+    - vol_realized_rkurt
+    - vol_price_divergence
+    - vol_turnover_concentration
+    - micro_liquidity_extreme
+    - micro_depth_slope
+    - micro_trade_buy_pressure
+    - micro_trade_sell_pressure
+  timePeriods:
+    train: ["2018-01-02", "2023-06-18"]
+    val: ["2023-06-26", "2025-01-21"]
+    test: ["2025-01-28", "2026-08-28"]
+  target:
+    mode: return
+    horizonDays: 5
+  params:
+    model_type: lightgbm
+    model_types: [lightgbm]
+    ensemble_method: none
+    prediction_mode: point
+    learning_rate: 0.01
+    num_leaves: 15
+    max_depth: 6
+    min_data_in_leaf: 500
+    path_smooth: 1
+    bagging_freq: 5
+    lambda_l1: 2
+    lambda_l2: 5
+    feature_fraction: 0.5
+    bagging_fraction: 0.7
+    num_boost_round: 3000
+    early_stopping_rounds: 100
+    objective: regression
+    metric: l2
+  context:
+    initialCapital: 1000000
+    benchmark: SH000300
+    commissionRate: 0.00025
+    slippage: 0.0005
+    dealPrice: open
+    market: CN
+    industry_as_feature: false
+  wfa:
+    enabled: false
+    strategy: rolling
+    nWindows: 4
+    trainYears: 3
+    valMonths: 12
+    stepMonths: 12

@@ -1,0 +1,96 @@
+# QuantMind 模型训练配置 —— CN / L1L2 / T+5 / GRU（深度学习示例）
+# 只需把 model_type 换成 gru，并给出 dl_* 超参；时间切分与 T+5 树模型一致，便于公平对比。
+schema_version: 1
+kind: quantmind-model-training-config
+exported_at: "2026-09-22T00:00:00.000Z"
+market: CN
+factor_source: l1_l2_factors
+factor_catalog_version: qdb-cn-l1_l2_factors-9783e05ac172
+factor_filter:
+  enabled: true
+  n_top: 80
+  ic_threshold: 0.01
+  icir_threshold: 0.15
+  correlation_threshold: 0.9
+configuration:
+  displayName: DEMO_L1L2_T5_GRU
+  displayNameMode: manual
+  selectedFeatures:
+    - mom_ret_5d
+    - mom_ret_20d
+    - mom_ma_gap_20
+    - mom_rsi_14
+    - vol_std_20
+    - vol_atr_14
+    - vol_parkinson_20
+    - vol_gk_20
+    - turn_20
+    - turn_std_20
+    - turn_z_20
+    - amt_log
+    - amt_ma_20
+    - amt_z_20
+    - amt_net_flow_20
+    - style_idio_vol_20
+    - style_beta_20
+    - style_residual_ret_20
+    - ind_strength_20
+    - ind_dispersion_20
+    - micro_vpin_50
+    - micro_vpin_ma_20
+    - micro_vpin_ma_5
+    - micro_toxicity_persistence
+    - micro_vpin_entropy
+    - flow_cancel_spoof
+    - flow_cancel_hft_ratio
+    - flow_order_book_rebuild
+    - flow_imbalance_autocorr
+    - flow_net_ratio
+    - vol_realized_rv
+    - vol_realized_rkurt
+    - vol_price_divergence
+    - micro_liquidity_extreme
+    - micro_liquidity_amihud_20
+    - micro_depth_slope
+    - micro_trade_buy_pressure
+    - micro_trade_sell_pressure
+    - micro_trade_interval_cv
+    - micro_jump_count_1pct
+    - micro_jump_cluster
+  timePeriods:
+    train: ["2018-01-02", "2023-06-18"]
+    val: ["2023-06-26", "2025-01-21"]
+    test: ["2025-01-28", "2026-08-28"]
+  target:
+    mode: return
+    horizonDays: 5
+  params:
+    model_type: gru
+    model_types: [gru]
+    ensemble_method: none
+    prediction_mode: point
+    dl_hidden_size: 64
+    dl_num_layers: 2
+    dl_dropout: 0.2
+    dl_lr: 0.001
+    dl_batch_size: 4000
+    dl_n_epochs: 200
+    dl_step_len: 20
+    early_stopping_rounds: 50
+    objective: regression
+    metric: l2
+  context:
+    initialCapital: 1000000
+    benchmark: SH000300
+    commissionRate: 0.00025
+    slippage: 0.0005
+    dealPrice: open
+    market: CN
+    industry_as_feature: false
+  wfa:
+    enabled: false
+    strategy: rolling
+    nWindows: 4
+    trainYears: 3
+    valMonths: 12
+    stepMonths: 12

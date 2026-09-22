@@ -1,0 +1,83 @@
+# QuantMind 模型训练配置 —— HK / T+5 / LightGBM（跨市场示例）
+# HK 也是 QuantDB 直读市场：若目录未发布/未就绪，训练页「开始训练」会被门禁拦住。
+# 本示例不固定 factor_source，导入后沿用页面当前因子源。
+schema_version: 1
+kind: quantmind-model-training-config
+exported_at: "2026-09-22T00:00:00.000Z"
+market: HK
+factor_filter:
+  enabled: true
+  n_top: 30
+  ic_threshold: 0.01
+  icir_threshold: 0.15
+  correlation_threshold: 0.9
+configuration:
+  displayName: DEMO_HK_T5_LGB
+  displayNameMode: manual
+  selectedFeatures:
+    - mom_ret_1d
+    - mom_ret_5d
+    - mom_ret_20d
+    - mom_ret_60d
+    - mom_ma_gap_5
+    - mom_ma_gap_20
+    - mom_macd_dif
+    - mom_rsi_14
+    - vol_std_20
+    - vol_gk_20
+    - vol_parkinson_20
+    - vol_atr_20
+    - vol_downside_20
+    - liq_volume
+    - liq_amount
+    - liq_turnover_os
+    - liq_amihud_20
+    - liq_volume_ma_10
+    - style_idio_vol_20
+    - style_idio_vol_60
+    - style_beta_20
+    - style_beta_60
+    - flow_vpin_ma_5
+    - flow_vpin_ma_20
+    - vol_realized_rv
+  timePeriods:
+    train: ["2018-01-02", "2023-06-18"]
+    val: ["2023-06-26", "2025-01-21"]
+    test: ["2025-01-28", "2026-08-28"]
+  target:
+    mode: return
+    horizonDays: 5
+  params:
+    model_type: lightgbm
+    model_types: [lightgbm]
+    ensemble_method: none
+    prediction_mode: point
+    learning_rate: 0.01
+    num_leaves: 15
+    max_depth: 6
+    min_data_in_leaf: 500
+    path_smooth: 1
+    bagging_freq: 5
+    lambda_l1: 2
+    lambda_l2: 5
+    feature_fraction: 0.5
+    bagging_fraction: 0.7
+    num_boost_round: 3000
+    early_stopping_rounds: 100
+    objective: regression
+    metric: l2
+  context:
+    initialCapital: 1000000
+    benchmark: HSI
+    commissionRate: 0.00025
+    slippage: 0.0005
+    dealPrice: open
+    market: HK
+    industry_as_feature: false
+  wfa:
+    enabled: false
+    strategy: rolling
+    nWindows: 4
+    trainYears: 3
+    valMonths: 12
+    stepMonths: 12
