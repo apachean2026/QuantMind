@@ -90,13 +90,20 @@ RUN --mount=type=cache,target=/root/.cache/pip,id=quantmind-pip \
          python -m pip install --root-user-action=ignore "torch==2.9.1"; \
        else \
          echo "[torch] 安装 CPU 版 torch（快速、无需 GPU）"; \
-         # torch 本体走官方 CPU 源；但其传递依赖（networkx/sympy/mpmath 等）必须走
-         # 默认国内源（清华）。若用单 --index-url 会把默认源覆盖为官方源，
-         # 导致这些依赖从 download.pytorch.org 拖慢构建。
-         python -m pip install --root-user-action=ignore "torch==2.9.1+cpu" \
-           --index-url ${PIP_INDEX_URL} \
-           --extra-index-url ${TORCH_CPU_INDEX_URL} \
-         || { echo "[torch] WARN: CPU 版 torch 安装失败（常见原因：当前 pip 源没有 torch==2.9.1+cpu）"; \
+         # 分两步装，避免纯 Python 依赖被拖到国外源（2026-09 实测本层 481s → 约 30s）：
+         #   1) 依赖（filelock/sympy/networkx/jinja2/fsspec；mpmath 随 sympy）走国内源；
+         #   2) torch 本体用 --no-deps 只从官方 CPU 源取（实测 19.8MB/s，约 9s）。
+         # 禁止退回「--index-url 国内 + --extra-index-url 官方源」：pip 会合并两个源的
+         # 候选，而官方 index 页把 sympy/networkx/mpmath 的链接指向 files.pythonhosted.org
+         # （国内直连约 20kB/s），正是把本层拖到 481s 的原因。
+         python -m pip install --root-user-action=ignore \
+             filelock "typing-extensions>=4.10.0" "sympy>=1.13.3" \
+             "networkx>=2.5.1" jinja2 "fsspec>=0.8.5" \
+          && python -m pip install --root-user-action=ignore --no-deps \
+             "torch==2.9.1+cpu" --index-url ${TORCH_CPU_INDEX_URL} \
+          && python -c "import torch; print('[torch] import OK:', torch.__version__)" \
+          && { python -m pip check || echo "[torch] WARN: pip check 有告警（不中断构建）"; } \
+         || { echo "[torch] WARN: CPU 版 torch 安装失败（常见原因：当前 pip 源缺依赖，或 TORCH_CPU_INDEX_URL 上没有 torch==2.9.1+cpu）"; \
               echo "[torch] WARN: 已回落为不含 torch 的镜像；需要 torch 请设置 TORCH_CPU_INDEX_URL=https://download.pytorch.org/whl/cpu 后重建"; \
               resolved=skip; }; \
        fi \
