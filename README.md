@@ -13,7 +13,8 @@
   <a href="#快速部署">快速部署</a> •
   <a href="#产品预览">产品预览</a> •
   <a href="#本地开发">本地开发</a> •
-  <a href="#交流社区">交流社区</a>
+  <a href="#交流社区">交流社区</a> •
+  <a href="https://quantmindai.cn/tutorial/" target="_blank">视频教程</a>
 </p>
 
 <p align="center">
@@ -23,6 +24,10 @@
   <img src="https://img.shields.io/badge/PyTorch-2.x-EE4C2C?style=flat-square&logo=pytorch&logoColor=white" alt="PyTorch">
   <img src="https://img.shields.io/badge/Docker-Ready-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker">
   <img src="https://img.shields.io/badge/License-AGPL%20v3-green?style=flat-square" alt="License">
+</p>
+
+<p align="center">
+  <a href="https://quantmindai.cn/tutorial/" target="_blank"><img src="https://img.shields.io/badge/视频教程-▶_立即观看-E50914?style=for-the-badge&logo=youtube&logoColor=white" alt="视频教程"></a>
 </p>
 
 </div>
