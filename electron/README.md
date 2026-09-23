@@ -117,7 +117,7 @@ npm run check:platform
   - 新增 `npm run build:package:win:dir`：仅生成目录产物（不出安装包），用于快速验证。
   - `electron-builder` 默认关闭依赖重建：`npmRebuild=false`、`nodeGypRebuild=false`、`buildDependenciesFromSource=false`，减少 Windows 打包阶段的本地重建风险。
   - NSIS 使用 electron-builder 默认模板（用户级安装，默认安装到用户目录），不再依赖额外动画/启动图片资源。
-  - Windows 安装器图标固定引用 `../tools/qmt_agent/icon.ico`，避免依赖 `electron/build` 下的本地图标资源。
+  - Windows 安装器图标引用 `build/logo.ico`，缺失时回退 `public/favicon.ico`，不依赖 `electron/build` 下的其它本地图标资源。
 - 创建文件/文件夹使用自定义弹窗（不依赖 `prompt()`）
 - 创建失败时会展示后端返回的详细错误信息
 - 当模型未返回代码块时，前端会基于内容特征自动包裹为代码块展示

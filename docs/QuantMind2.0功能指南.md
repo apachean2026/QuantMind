@@ -10,7 +10,7 @@
 - **技术栈**：后端 Python FastAPI（微服务单入口 `backend/main_oss.py`），前端 Electron + React + TypeScript。
 - **核心能力闭环**：
   ```text
-  数据底座 -> 因子挖掘 -> 模型训练 -> 批量推理 -> 组合回测 -> QMT/通达信实盘 -> 生产监控
+  数据底座 -> 因子挖掘 -> 模型训练 -> 批量推理 -> 组合回测 -> 模拟交易 -> 生产监控
   ```
 - **股票代码规范（CRITICAL）**：全项目强制使用**前缀格式**（如 `SH600036`），禁止后缀格式（`600036.SH`）。后端统一走 `backend/shared/stock_utils.py -> StockCodeUtil.to_prefix()`，前端走 `electron/src/utils/portfolioUtils.ts -> normalizeStockCode()`。
 - **Redis 库分配**：0=general、1=auth、2=trade、3=market、4=backtest、5=cache。
@@ -88,15 +88,17 @@ QuantMind 2.0 围绕五大方向升级：
 | DL | Transformer | 自注意力全局长程依赖，需大数据量 |
 | DL | TabNet | 表格专用 DL，自带特征选择，吃扁平特征 |
 | DL | TCN | 因果卷积，训练快 ~50%，捕捉波动率突变 |
-| DL | NativeTFT | QuantMind 自研轻量 TFT（GRU 编码+注意力+门控残差） |
+| DL | NativeTFT | 轻量化 TFT（GRU 编码+注意力+门控残差） |
 | DL | MLP | 神经网络基线，判断时序建模是否值得 |
 
 ### 3.2 模型训练流程能力
 
-- **可视化训练配置**：`electron/src/pages/training/`（训练参数、特征选择、WFA 滚动切分）。
-- **Optuna 自动化超参寻优**：自动搜索最优参数。
-- **Stacking 多模型集成**：基模型 + 元学习器融合（`backend/services/engine/inference/model_loader.py` 支持 `is_ensemble` + `stacking`）。
-- **算力调度**：本地 CPU/GPU；一键推送到 **AutoDL 远程 GPU 集群**（`backend/services/engine/training/remote_ssh_orchestrator.py`、`local_docker_orchestrator.py`）。
+- **可视化训练配置**：`electron/src/pages/training/`（训练参数、特征选择、WFA 稳定性诊断）。
+- **WFA 滚动窗口稳定性诊断**：rolling / expanding 多窗分别回测，输出各窗 IC 与「稳定 / 不稳定」结论；仅支持 LightGBM / XGBoost / CatBoost / Ridge（`docker/training/diagnostics/wfa.py`）。
+- **Stacking 多模型集成**：时序 K-Fold OOF + Ridge 元学习器（`docker/training/train.py: train_stacking`）；推理侧 `backend/services/engine/inference/model_loader.py` 支持 `is_ensemble` + `stacking`。**当前无 GUI 多选入口**，需导入训练配置文件（`model_types` ≥ 2 且 `ensemble_method: stacking`）。
+- **参数优化实验室**：Top-K 策略参数（`topk` / `n_drop`）网格搜索（`electron/src/components/optimization/`）。
+- **Optuna 超参搜索（后端可选 · 暂无前端入口）**：`docker/training/train.py: _tune_tree_hyperparams` 以验证集 Rank ICIR 为目标做 TPE 搜索，仅树模型；需 payload 顶层显式传 `optuna.enabled=true`，未安装 optuna 时自动降级跳过。
+- **算力调度**：本地 Docker 训练（CPU；`local_docker_orchestrator.py` 自动探测并挂载 GPU）；远程**自建 GPU 节点（AutoDL）**（`remote_ssh_orchestrator.py`、`node_manager.py`），需先在个人中心/后台配置节点。
 - **模型注册中心**：`backend/shared/model_registry.py`（`model_registry_service`），统一模型元数据、默认模型、策略绑定、启停/归档、集成模型注册。
 - **推理引擎**：`backend/services/engine/inference/`（`model_loader.py` 支持 LightGBM/XGBoost/CatBoost/sklearn/PyTorch 多框架加载）。
 - **训练/推理 API**：`backend/services/api/routers/model_training.py`（训练任务、模型 CRUD、默认模型、策略绑定、集成模型）。

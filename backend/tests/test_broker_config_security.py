@@ -21,7 +21,7 @@ from fastapi import HTTPException
 
 from backend.services.trade.routers import broker_config as mod
 from backend.services.trade_shared.deps import AuthContext, require_admin
-from backend.tests.test_qmt_exec_mirror import FakeRedisClient
+from backend.tests._fake_redis import FakeRedisClient
 
 
 def _redis(**stored: str) -> Any:

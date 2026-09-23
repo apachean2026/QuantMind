@@ -4,7 +4,6 @@
 
 ## 包含内容
 
-- QMT 核心表：`qmt_account_assets` / `qmt_positions` / `qmt_orders` / `qmt_trades` / `qmt_sync_logs`
 - 选股与行情表：`stock_daily`（含默认分区 + 当月分区）/ `stock_screener_snapshot`
 - 常用扩展：`uuid-ossp`、`pg_trgm`
 - 基础备份恢复：`db/20260303.sql`（镜像构建时打包，首次启动自动导入）

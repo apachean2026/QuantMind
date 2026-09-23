@@ -37,7 +37,6 @@
 | TradingView | 没本地数据、没 Python |
 | Backtrader / Zipline | 没 UI |
 | 聚宽 / 米筐 | SaaS 收费、不可定制 |
-| QMT / Ptrade | 门槛高、桌面客户端 |
 
 ---
 
