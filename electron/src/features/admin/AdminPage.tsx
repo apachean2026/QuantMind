@@ -9,6 +9,7 @@ import {
     ApiOutlined,
     SwapOutlined,
     GlobalOutlined,
+    QuestionCircleOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { AdminSystemLoadWidget } from './components/AdminSystemLoadWidget';
@@ -129,6 +130,7 @@ const AdminPage: React.FC = () => {
             ]
         },
         { key: 'settings', icon: <SettingOutlined />, label: '系统设置' },
+        { key: 'help', icon: <QuestionCircleOutlined />, label: '帮助中心' },
     ];
 
     const currentKey = location.pathname.split('/').pop() || 'overview';
@@ -210,7 +212,7 @@ const AdminPage: React.FC = () => {
                     {/* 资讯监控 / 订单 / 风控等大屏页面用全宽，其余保留 1400px 阅读宽度 */}
                     <div
                         className={
-                            ['news', 'inference', 'tags', 'settings', 'stock-pools', 'orders', 'risk'].includes(currentKey)
+                            ['news', 'inference', 'tags', 'settings', 'help', 'stock-pools', 'orders', 'risk'].includes(currentKey)
                                 ? `min-h-0 animate-in fade-in slide-in-from-bottom-4 duration-500 ${
                                       ['orders', 'risk'].includes(currentKey)
                                           ? 'flex w-full flex-1 flex-col'

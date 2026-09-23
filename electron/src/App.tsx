@@ -60,6 +60,7 @@ const AdminFeatureCatalog = lazy(() => import('./features/admin/components/Admin
 const AdminTrainingDatasets = lazy(() => import('./features/admin/components/AdminTrainingDatasets').then(m => ({ default: m.AdminTrainingDatasets })));
 const AdminAutoDLNodes = lazy(() => import('./features/admin/components/AdminAutoDLNodes').then(m => ({ default: m.AdminAutoDLNodes })));
 const AdminSystemSettings = lazy(() => import('./features/admin/components/AdminSystemSettings').then(m => ({ default: m.AdminSystemSettings })));
+const AdminHelpCenter = lazy(() => import('./features/admin/components/AdminHelpCenter').then(m => ({ default: m.AdminHelpCenter })));
 const AdminStockPool = lazy(() => import('./features/admin/components/AdminStockPool'));
 const AdminRiskControl = lazy(() => import('./features/admin/components/AdminRiskControl').then(m => ({ default: m.AdminRiskControl })));
 const AdminOrderManagement = lazy(() => import('./features/admin/components/AdminOrderManagement').then(m => ({ default: m.AdminOrderManagement })));
@@ -618,6 +619,7 @@ export default function App() {
                     <Route path="risk" element={<Suspense fallback={<RouteFallback />}><AdminRiskControl /></Suspense>} />
                     <Route path="quotes" element={<Navigate to="/admin/overview" replace />} />
                     <Route path="settings" element={<Suspense fallback={<RouteFallback />}><AdminSystemSettings /></Suspense>} />
+                    <Route path="help" element={<Suspense fallback={<RouteFallback />}><AdminHelpCenter /></Suspense>} />
                   </Route>
 
                   {/* 主应用路由 - 仪表盘等 */}
