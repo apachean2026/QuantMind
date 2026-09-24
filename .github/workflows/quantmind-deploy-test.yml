@@ -1,38 +1,64 @@
-name: QuantMind 部署测试
+name: QuantMind Docker 启动测试
 
 on:
   workflow_dispatch:
 
 jobs:
-  deploy:
+  deploy-test:
     runs-on: ubuntu-latest
 
     steps:
       - name: 1. 检出 QuantMind
         uses: actions/checkout@v4
 
-      - name: 2. 检查 Docker
+      - name: 2. 检查 Docker 环境
         run: |
           docker --version
           docker compose version
 
-      - name: 3. 查看官方部署文件
+      - name: 3. 检查 Compose 文件
         run: |
-          echo "===== deploy目录 ====="
-          ls -lah deploy || true
+          test -f docker-compose.yml
+          docker compose config
 
-          echo "===== docker目录 ====="
-          ls -lah docker || true
-
-          echo "===== compose文件 ====="
-          ls -lah docker-compose*.yml docker-compose*.yaml 2>/dev/null || true
-
-      - name: 4. 查看 Docker Compose 配置
+      - name: 4. 启动 QuantMind 原版服务
         run: |
-          if [ -f docker-compose.yml ]; then
-            docker compose config
-          elif [ -f docker-compose.yaml ]; then
-            docker compose -f docker-compose.yaml config
-          else
-            echo "没有找到 docker-compose.yml"
-          fi
+          docker compose up -d
+
+      - name: 5. 查看容器状态
+        run: |
+          docker compose ps
+
+      - name: 6. 等待服务启动
+        run: |
+          for i in {1..30}; do
+            echo "正在等待 QuantMind 启动，第 ${i} 次检查"
+
+            if curl --fail --silent http://127.0.0.1:8000/health; then
+              echo
+              echo "QuantMind 健康检查成功"
+              exit 0
+            fi
+
+            sleep 10
+          done
+
+          echo "QuantMind 在规定时间内没有通过健康检查"
+          docker compose ps
+          docker compose logs --tail=200
+          exit 1
+
+      - name: 7. 查看服务状态
+        if: always()
+        run: |
+          docker compose ps
+
+      - name: 8. 查看服务日志
+        if: always()
+        run: |
+          docker compose logs --tail=200
+
+      - name: 9. 关闭测试服务
+        if: always()
+        run: |
+          docker compose down
