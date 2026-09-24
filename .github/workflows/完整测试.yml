@@ -1,0 +1,69 @@
+name: QuantMind 完整部署测试
+
+on:
+  workflow_dispatch:
+
+jobs:
+  full-deploy-test:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+
+    steps:
+      - name: 1. 检出 QuantMind
+        uses: actions/checkout@v4
+
+      - name: 2. 检查系统环境
+        run: |
+          lsb_release -a
+          docker --version
+          docker compose version
+          df -h
+
+      - name: 3. 执行作者官方完整部署脚本
+        run: |
+          sudo bash deploy/full-deploy.sh
+
+      - name: 4. 查看 QuantMind 服务状态
+        run: |
+          cd /opt/quantmind
+          docker compose ps
+
+      - name: 5. 检查 QuantMind 健康状态
+        run: |
+          for i in {1..30}; do
+            echo "等待 QuantMind 健康检查，第 ${i} 次"
+
+            if curl --fail --silent http://127.0.0.1:8000/health; then
+              echo
+              echo "QuantMind 健康检查成功"
+              exit 0
+            fi
+
+            sleep 10
+          done
+
+          echo "QuantMind 健康检查失败"
+          cd /opt/quantmind
+          docker compose ps
+          docker compose logs --tail=200
+          exit 1
+
+      - name: 6. 最终查看服务状态
+        if: always()
+        run: |
+          cd /opt/quantmind
+          docker compose ps
+
+      - name: 7. 查看服务日志
+        if: always()
+        run: |
+          cd /opt/quantmind
+          docker compose logs --tail=200
+
+      - name: 8. 关闭测试服务
+        if: always()
+        run: |
+          if [ -d /opt/quantmind ]; then
+            cd /opt/quantmind
+            docker compose down || true
+          fi
