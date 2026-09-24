@@ -1,0 +1,41 @@
+name: QuantMind 环境检查
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出 QuantMind
+        uses: actions/checkout@v4
+
+      - name: 检查系统
+        run: |
+          echo "===== 系统 ====="
+          uname -a
+          echo
+          echo "===== Ubuntu ====="
+          cat /etc/os-release
+
+      - name: 检查 Docker
+        run: |
+          echo "===== Docker ====="
+          docker --version
+          echo
+          echo "===== Docker Compose ====="
+          docker compose version
+
+      - name: 检查 QuantMind 文件
+        run: |
+          echo "===== 当前目录 ====="
+          pwd
+          echo
+          echo "===== 根目录 ====="
+          ls -lah
+          echo
+          echo "===== Docker 文件 ====="
+          find . -maxdepth 2 \
+            \( -name "docker-compose.yml" -o -name "docker-compose.yaml" -o -name "Dockerfile" \) \
+            -print
