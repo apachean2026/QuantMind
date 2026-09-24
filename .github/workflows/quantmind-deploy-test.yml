@@ -1,0 +1,38 @@
+name: QuantMind 部署测试
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 1. 检出 QuantMind
+        uses: actions/checkout@v4
+
+      - name: 2. 检查 Docker
+        run: |
+          docker --version
+          docker compose version
+
+      - name: 3. 查看官方部署文件
+        run: |
+          echo "===== deploy目录 ====="
+          ls -lah deploy || true
+
+          echo "===== docker目录 ====="
+          ls -lah docker || true
+
+          echo "===== compose文件 ====="
+          ls -lah docker-compose*.yml docker-compose*.yaml 2>/dev/null || true
+
+      - name: 4. 查看 Docker Compose 配置
+        run: |
+          if [ -f docker-compose.yml ]; then
+            docker compose config
+          elif [ -f docker-compose.yaml ]; then
+            docker compose -f docker-compose.yaml config
+          else
+            echo "没有找到 docker-compose.yml"
+          fi
