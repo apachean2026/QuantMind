@@ -1,4 +1,4 @@
-name: QuantMind 完整部署测试
+name: QuantMind 完整部署测试 + Inference API 检查
 
 on:
   workflow_dispatch:
@@ -9,25 +9,50 @@ jobs:
     timeout-minutes: 180
 
     steps:
+
+      # =========================================================
+      # 1. 检出 QuantMind
+      # =========================================================
       - name: 1. 检出 QuantMind
         uses: actions/checkout@v4
 
+      # =========================================================
+      # 2. 检查系统环境
+      # =========================================================
       - name: 2. 检查系统环境
         run: |
-          lsb_release -a
+          echo "===== 系统信息 ====="
+          lsb_release -a || true
+
+          echo
+          echo "===== Docker ====="
           docker --version
           docker compose version
+
+          echo
+          echo "===== 磁盘空间 ====="
           df -h
 
+      # =========================================================
+      # 3. 执行作者官方完整部署脚本
+      # =========================================================
       - name: 3. 执行作者官方完整部署脚本
         run: |
           sudo bash deploy/full-deploy.sh
 
+      # =========================================================
+      # 4. 查看 QuantMind 服务状态
+      # =========================================================
       - name: 4. 查看 QuantMind 服务状态
         run: |
           cd /opt/quantmind
+
+          echo "===== Docker Compose 服务状态 ====="
           docker compose ps
 
+      # =========================================================
+      # 5. 检查 QuantMind 健康状态
+      # =========================================================
       - name: 5. 检查 QuantMind 健康状态
         run: |
           for i in {1..30}; do
@@ -43,27 +68,284 @@ jobs:
           done
 
           echo "QuantMind 健康检查失败"
+
           cd /opt/quantmind
+
+          echo
+          echo "===== Docker Compose 状态 ====="
           docker compose ps
+
+          echo
+          echo "===== Docker Compose 日志 ====="
           docker compose logs --tail=200
+
           exit 1
 
+      # =========================================================
+      # 5.5 查看 QuantMind OpenAPI 路由
+      #
+      # 目的：
+      # 自动检查作者当前版本到底提供了哪些
+      # inference / predict / model / signal / stock
+      # 等相关 API。
+      #
+      # 这一阶段只读取 API，不执行任何模型推理。
+      # =========================================================
+      - name: 5.5 查看 QuantMind Inference API 路由
+        run: |
+          echo "========================================================="
+          echo "开始读取 QuantMind OpenAPI"
+          echo "========================================================="
+
+          if ! curl --fail --silent --show-error \
+            http://127.0.0.1:8000/openapi.json \
+            -o /tmp/openapi.json; then
+
+            echo "无法读取 http://127.0.0.1:8000/openapi.json"
+
+            echo
+            echo "===== 当前服务状态 ====="
+            cd /opt/quantmind
+            docker compose ps
+
+            exit 1
+          fi
+
+          echo
+          echo "OpenAPI 文件读取成功"
+          echo "文件大小："
+          wc -c /tmp/openapi.json
+
+          echo
+          echo "========================================================="
+          echo "筛选 Inference / Predict / Model / Signal / Stock API"
+          echo "========================================================="
+
+          python3 - <<'PY'
+          import json
+
+          path = "/tmp/openapi.json"
+
+          with open(path, "r", encoding="utf-8") as f:
+              data = json.load(f)
+
+          paths = data.get("paths", {})
+
+          print(f"OpenAPI 总 API 路由数量: {len(paths)}")
+          print()
+
+          keywords = [
+              "inference",
+              "infer",
+              "predict",
+              "prediction",
+              "model",
+              "signal",
+              "stock",
+              "ranking",
+              "rank",
+              "top",
+              "select",
+              "selection",
+              "screen",
+          ]
+
+          found = []
+
+          for route, methods in paths.items():
+              route_lower = route.lower()
+
+              matched = any(
+                  keyword in route_lower
+                  for keyword in keywords
+              )
+
+              if not matched:
+                  continue
+
+              found.append((route, methods))
+
+          if not found:
+              print("没有通过路由名称找到明显的 Inference / Predict / Model / Signal API。")
+              print()
+              print("可能原因：")
+              print("1. API 路径名称没有使用这些关键词")
+              print("2. Inference Hub 通过其他内部 API 调用")
+              print("3. API Gateway 与业务服务之间还有一层路由")
+          else:
+              print(f"找到相关 API 路由: {len(found)}")
+              print()
+
+              for route, methods in found:
+                  print("=" * 70)
+                  print(route)
+
+                  for method, info in methods.items():
+
+                      if method.startswith("_"):
+                          continue
+
+                      print()
+                      print("  方法:", method.upper())
+                      print("  Summary:", info.get("summary", ""))
+                      print("  Description:", info.get("description", ""))
+
+                      parameters = info.get("parameters", [])
+
+                      if parameters:
+                          print("  Parameters:")
+
+                          for parameter in parameters:
+                              print(
+                                  "    -",
+                                  parameter.get("name"),
+                                  "| in=",
+                                  parameter.get("in"),
+                                  "| required=",
+                                  parameter.get("required", False),
+                              )
+
+                              schema = parameter.get("schema")
+
+                              if schema:
+                                  print(
+                                      "      schema:",
+                                      json.dumps(
+                                          schema,
+                                          ensure_ascii=False
+                                      )
+                                  )
+
+                      request_body = info.get("requestBody")
+
+                      if request_body:
+                          print("  RequestBody:")
+
+                          content = request_body.get(
+                              "content",
+                              {}
+                          )
+
+                          for content_type, content_info in content.items():
+
+                              print(
+                                  "    Content-Type:",
+                                  content_type
+                              )
+
+                              schema = content_info.get("schema")
+
+                              if schema:
+                                  print(
+                                      "    Schema:",
+                                      json.dumps(
+                                          schema,
+                                          ensure_ascii=False
+                                      )
+                                  )
+
+                      responses = info.get("responses", {})
+
+                      if responses:
+                          print("  Responses:")
+
+                          for status_code, response_info in responses.items():
+                              print(
+                                  "    -",
+                                  status_code,
+                                  response_info.get(
+                                      "description",
+                                      ""
+                                  )
+                              )
+
+          print()
+          print("=" * 70)
+          print("OpenAPI 检查完成")
+          print("=" * 70)
+          PY
+
+      # =========================================================
+      # 5.6 输出完整 API 路由名称
+      #
+      # 如果上面的关键词筛选没有找到目标，
+      # 这里可以进一步查看所有路由。
+      # =========================================================
+      - name: 5.6 输出全部 API 路由
+        run: |
+          python3 - <<'PY'
+          import json
+
+          with open("/tmp/openapi.json", "r", encoding="utf-8") as f:
+              data = json.load(f)
+
+          paths = data.get("paths", {})
+
+          print("=========================================================")
+          print("QuantMind 全部 API 路由")
+          print("=========================================================")
+
+          for route in sorted(paths):
+              methods = paths[route]
+
+              available_methods = []
+
+              for method in methods:
+                  if not method.startswith("_"):
+                      available_methods.append(method.upper())
+
+              print(
+                  f"{','.join(available_methods):8s} {route}"
+              )
+
+          print()
+          print(
+              f"API 总数量: {len(paths)}"
+          )
+          PY
+
+      # =========================================================
+      # 6. 最终查看服务状态
+      # =========================================================
       - name: 6. 最终查看服务状态
         if: always()
         run: |
-          cd /opt/quantmind
-          docker compose ps
+          if [ -d /opt/quantmind ]; then
+            cd /opt/quantmind
 
+            echo "===== 最终 Docker Compose 状态 ====="
+            docker compose ps
+          else
+            echo "/opt/quantmind 不存在"
+          fi
+
+      # =========================================================
+      # 7. 查看服务日志
+      # =========================================================
       - name: 7. 查看服务日志
         if: always()
         run: |
-          cd /opt/quantmind
-          docker compose logs --tail=200
+          if [ -d /opt/quantmind ]; then
+            cd /opt/quantmind
 
+            echo "===== QuantMind 最近日志 ====="
+            docker compose logs --tail=200
+          else
+            echo "/opt/quantmind 不存在"
+          fi
+
+      # =========================================================
+      # 8. 关闭测试服务
+      #
+      # 注意：
+      # 这个 Workflow 只是测试和查 API。
+      # 完成后主动关闭 Docker。
+      # =========================================================
       - name: 8. 关闭测试服务
         if: always()
         run: |
           if [ -d /opt/quantmind ]; then
             cd /opt/quantmind
+
             docker compose down || true
           fi
