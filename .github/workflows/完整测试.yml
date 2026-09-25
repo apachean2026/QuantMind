@@ -215,7 +215,7 @@ jobs:
       - name: 5.4 查看推理请求参数结构
         run: |
           echo "========================================================="
-          echo "查看 InferenceRunRequest"
+          echo "查看 InferenceRunRequest / BatchInferenceRequest"
           echo "========================================================="
 
           python3 - <<'PY'
@@ -346,6 +346,146 @@ jobs:
           echo "========================================================="
 
       # =========================================================
+      # 5.6A 查找认证 / 登录接口
+      # =========================================================
+      - name: 5.6A 查找认证登录接口
+        run: |
+          echo "========================================================="
+          echo "查找 QuantMind 认证 / 登录接口"
+          echo "========================================================="
+
+          python3 - <<'PY'
+          import json
+
+          with open("/tmp/openapi.json", "r", encoding="utf-8") as f:
+              data = json.load(f)
+
+          paths = data.get("paths", {})
+
+          keywords = [
+              "auth",
+              "login",
+              "token",
+              "session",
+              "oauth",
+              "me"
+          ]
+
+          found = 0
+
+          for path, methods in paths.items():
+
+              path_lower = path.lower()
+
+              if any(k in path_lower for k in keywords):
+
+                  for method, info in methods.items():
+
+                      method_upper = method.upper()
+
+                      if method_upper in {
+                          "GET",
+                          "POST",
+                          "PUT",
+                          "PATCH"
+                      }:
+
+                          found += 1
+
+                          print()
+                          print("=" * 70)
+                          print(
+                              f"{method_upper} {path}"
+                          )
+
+                          print(
+                              "Summary:",
+                              info.get(
+                                  "summary",
+                                  ""
+                              )
+                          )
+
+                          description = (
+                              info.get(
+                                  "description",
+                                  ""
+                              )
+                              or ""
+                          )
+
+                          if description:
+                              print(
+                                  "Description:",
+                                  description[:1500]
+                              )
+
+                          parameters = (
+                              info.get(
+                                  "parameters",
+                                  []
+                              )
+                          )
+
+                          if parameters:
+                              print("Parameters:")
+
+                              for parameter in parameters:
+
+                                  print(
+                                      "  -",
+                                      parameter.get(
+                                          "name",
+                                          ""
+                                      ),
+                                      parameter.get(
+                                          "in",
+                                          ""
+                                      ),
+                                      parameter.get(
+                                          "required",
+                                          False
+                                      )
+                                  )
+
+                          request_body = info.get(
+                              "requestBody"
+                          )
+
+                          if request_body:
+
+                              print(
+                                  "Request Body:"
+                              )
+
+                              print(
+                                  json.dumps(
+                                      request_body,
+                                      ensure_ascii=False,
+                                      indent=2
+                                  )[:4000]
+                              )
+
+          print()
+          print("=" * 70)
+
+          if found == 0:
+              print("没有找到明显的认证 / 登录接口")
+
+          else:
+              print(
+                  f"共找到 {found} 个可能的认证相关接口"
+              )
+
+          print("=" * 70)
+          PY
+
+          echo
+          echo "========================================================="
+          echo "认证接口搜索完成"
+          echo "========================================================="
+
+      # =========================================================
       # 5.7 检查用户态推理接口
       # =========================================================
       - name: 5.7 检查用户态推理接口
@@ -370,6 +510,7 @@ jobs:
       # =========================================================
       # 5.8 检查股票终端接口
       # =========================================================
+      - name: 5.8 检查股票终端接口
       - name: 5.8 检查股票终端接口
         run: |
           echo "========================================================="
@@ -454,7 +595,7 @@ jobs:
           docker compose logs --tail=100 quantmind-celery || true
 
       # =========================================================
-      # 9. 查看 Beat 日志
+      # 9. 查看 Celery Beat 日志
       # =========================================================
       - name: 9. 查看 Celery Beat 日志
         if: always()
