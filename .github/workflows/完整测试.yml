@@ -196,18 +196,9 @@ jobs:
           echo "检查 QuantMind 管理员推理前置接口"
           echo "========================================================="
 
-          echo
-          echo "GET /api/v1/admin/models/precheck-inference"
-          echo
-
           curl -i \
             http://127.0.0.1:8000/api/v1/admin/models/precheck-inference \
             || true
-
-          echo
-          echo "========================================================="
-          echo "管理员推理前置检查完成"
-          echo "========================================================="
 
       # =========================================================
       # 5.4 查看推理请求参数结构
@@ -287,9 +278,7 @@ jobs:
 
                   for method, info in methods.items():
 
-                      method_upper = method.upper()
-
-                      if method_upper in {
+                      if method.upper() in {
                           "POST",
                           "PUT",
                           "PATCH"
@@ -297,30 +286,13 @@ jobs:
 
                           print()
                           print(
-                              f"{method_upper} {path}"
+                              f"{method.upper()} {path}"
                           )
 
                           print(
                               "Summary:",
-                              info.get(
-                                  "summary",
-                                  ""
-                              )
+                              info.get("summary", "")
                           )
-
-                          description = (
-                              info.get(
-                                  "description",
-                                  ""
-                              )
-                              or ""
-                          )
-
-                          if description:
-                              print(
-                                  "Description:",
-                                  description[:1000]
-                              )
           PY
 
       # =========================================================
@@ -332,18 +304,9 @@ jobs:
           echo "查询 QuantMind 当前默认模型"
           echo "========================================================="
 
-          echo
-          echo "GET /api/v1/models/default"
-          echo
-
           curl -i \
             http://127.0.0.1:8000/api/v1/models/default \
             || true
-
-          echo
-          echo "========================================================="
-          echo "默认模型检查完成"
-          echo "========================================================="
 
       # =========================================================
       # 5.6A 查找认证 / 登录接口
@@ -362,130 +325,40 @@ jobs:
 
           paths = data.get("paths", {})
 
-          keywords = [
-              "auth",
-              "login",
-              "token",
-              "session",
-              "oauth",
-              "me"
-          ]
+          for path in [
+              "/api/v1/auth/login",
+              "/api/v1/auth/logout",
+              "/api/v1/auth/refresh",
+              "/api/v1/users/me"
+          ]:
 
-          found = 0
+              print()
+              print("=" * 70)
+              print(path)
+              print("=" * 70)
 
-          for path, methods in paths.items():
+              methods = paths.get(path)
 
-              path_lower = path.lower()
+              if not methods:
+                  print("未找到")
+                  continue
 
-              if any(k in path_lower for k in keywords):
+              for method, info in methods.items():
 
-                  for method, info in methods.items():
+                  print(
+                      method.upper(),
+                      "->",
+                      info.get("summary", "")
+                  )
 
-                      method_upper = method.upper()
-
-                      if method_upper in {
-                          "GET",
-                          "POST",
-                          "PUT",
-                          "PATCH"
-                      }:
-
-                          found += 1
-
-                          print()
-                          print("=" * 70)
-                          print(
-                              f"{method_upper} {path}"
-                          )
-
-                          print(
-                              "Summary:",
-                              info.get(
-                                  "summary",
-                                  ""
-                              )
-                          )
-
-                          description = (
-                              info.get(
-                                  "description",
-                                  ""
-                              )
-                              or ""
-                          )
-
-                          if description:
-                              print(
-                                  "Description:",
-                                  description[:1500]
-                              )
-
-                          parameters = (
-                              info.get(
-                                  "parameters",
-                                  []
-                              )
-                          )
-
-                          if parameters:
-                              print("Parameters:")
-
-                              for parameter in parameters:
-
-                                  print(
-                                      "  -",
-                                      parameter.get(
-                                          "name",
-                                          ""
-                                      ),
-                                      parameter.get(
-                                          "in",
-                                          ""
-                                      ),
-                                      parameter.get(
-                                          "required",
-                                          False
-                                      )
-                                  )
-
-                          request_body = info.get(
-                              "requestBody"
-                          )
-
-                          if request_body:
-
-                              print(
-                                  "Request Body:"
-                              )
-
-                              print(
-                                  json.dumps(
-                                      request_body,
-                                      ensure_ascii=False,
-                                      indent=2
-                                  )[:4000]
-                              )
-
-          print()
-          print("=" * 70)
-
-          if found == 0:
-              print("没有找到明显的认证 / 登录接口")
-          else:
-              print(
-                  f"共找到 {found} 个可能的认证相关接口"
-              )
-
-          print("=" * 70)
+                  if info.get("description"):
+                      print(
+                          info.get("description")
+                      )
           PY
 
-          echo
-          echo "========================================================="
-          echo "认证接口搜索完成"
-          echo "========================================================="
-
       # =========================================================
-      # 5.6B 查看登录请求、Token 响应结构
+      # 5.6B 查看登录请求 / Token 响应结构
       # =========================================================
       - name: 5.6B 查看登录请求 Token 响应结构
         run: |
@@ -505,13 +378,11 @@ jobs:
               .get("schemas", {})
           )
 
-          names = [
+          for name in [
               "UserLogin",
               "TokenResponse",
-              "RefreshTokenRequest",
-          ]
-
-          for name in names:
+              "RefreshTokenRequest"
+          ]:
 
               print()
               print("=" * 70)
@@ -531,122 +402,258 @@ jobs:
               else:
                   print("未找到该 Schema")
 
-          print()
-          print("=" * 70)
-          print("检查 /api/v1/auth/login")
-          print("=" * 70)
-
-          login_api = (
-              data
-              .get("paths", {})
-              .get("/api/v1/auth/login", {})
-              .get("post", {})
-          )
-
-          print()
-          print("请求体：")
-
-          print(
-              json.dumps(
-                  login_api.get(
-                      "requestBody",
-                      {}
-                  ),
-                  ensure_ascii=False,
-                  indent=2
-              )
-          )
-
-          print()
-          print("响应：")
-
-          print(
-              json.dumps(
-                  login_api.get(
-                      "responses",
-                      {}
-                  ),
-                  ensure_ascii=False,
-                  indent=2
-              )
-          )
-
-          print()
-          print("=" * 70)
-          print("TokenResponse 检查完成")
-          print("=" * 70)
-          PY
-
-          echo
-          echo "========================================================="
-          echo "登录请求 / Token 响应结构检查完成"
-          echo "========================================================="
-
       # =========================================================
-      # 5.7 检查用户态推理接口
+      # 5.6C 真实登录测试
       # =========================================================
-      - name: 5.7 检查用户态推理接口
+      - name: 5.6C QuantMind 真实登录测试
+        env:
+          QUANTMIND_TENANT_ID: ${{ secrets.QUANTMIND_TENANT_ID }}
+          QUANTMIND_USERNAME: ${{ secrets.QUANTMIND_USERNAME }}
+          QUANTMIND_PASSWORD: ${{ secrets.QUANTMIND_PASSWORD }}
         run: |
           echo "========================================================="
-          echo "检查用户态推理接口"
+          echo "QuantMind 真实登录测试"
           echo "========================================================="
 
-          echo
-          echo "GET /api/v1/models/inference/precheck"
-          echo
+          if [ -z "$QUANTMIND_TENANT_ID" ]; then
+            echo "错误：没有设置 QUANTMIND_TENANT_ID"
+            exit 1
+          fi
+
+          if [ -z "$QUANTMIND_USERNAME" ]; then
+            echo "错误：没有设置 QUANTMIND_USERNAME"
+            exit 1
+          fi
+
+          if [ -z "$QUANTMIND_PASSWORD" ]; then
+            echo "错误：没有设置 QUANTMIND_PASSWORD"
+            exit 1
+          fi
+
+          echo "租户 ID：已配置"
+          echo "用户名：已配置"
+          echo "密码：已配置"
+
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.request
+          import urllib.error
+
+          url = "http://127.0.0.1:8000/api/v1/auth/login"
+
+          payload = {
+              "tenant_id": os.environ["QUANTMIND_TENANT_ID"],
+              "username": os.environ["QUANTMIND_USERNAME"],
+              "password": os.environ["QUANTMIND_PASSWORD"],
+          }
+
+          data = json.dumps(payload).encode("utf-8")
+
+          request = urllib.request.Request(
+              url,
+              data=data,
+              headers={
+                  "Content-Type": "application/json",
+                  "Accept": "application/json",
+              },
+              method="POST",
+          )
+
+          try:
+
+              with urllib.request.urlopen(
+                  request,
+                  timeout=60
+              ) as response:
+
+                  body = response.read().decode(
+                      "utf-8"
+                  )
+
+                  print(
+                      "HTTP 状态码:",
+                      response.status
+                  )
+
+                  result = json.loads(body)
+
+          except urllib.error.HTTPError as e:
+
+              body = e.read().decode(
+                  "utf-8",
+                  errors="replace"
+              )
+
+              print(
+                  "HTTP 状态码:",
+                  e.code
+              )
+
+              print(
+                  "登录失败响应:"
+              )
+
+              print(body)
+
+              raise SystemExit(1)
+
+          except Exception as e:
+
+              print(
+                  "登录请求失败:",
+                  repr(e)
+              )
+
+              raise SystemExit(1)
+
+          access_token = result.get(
+              "access_token"
+          )
+
+          refresh_token = result.get(
+              "refresh_token"
+          )
+
+          expires_in = result.get(
+              "expires_in"
+          )
+
+          token_type = result.get(
+              "token_type",
+              "bearer"
+          )
+
+          if not access_token:
+
+              print(
+                  "登录响应中没有 access_token"
+              )
+
+              print(
+                  "返回字段:",
+                  list(result.keys())
+              )
+
+              raise SystemExit(1)
+
+          print("登录成功")
+          print(
+              "token_type:",
+              token_type
+          )
+          print(
+              "expires_in:",
+              expires_in
+          )
+          print(
+              "access_token: 已获取"
+          )
+          print(
+              "refresh_token:",
+              "已获取" if refresh_token else "未返回"
+          )
+
+          # 不把真实 Token 打到 GitHub 日志
+          with open(
+              "/tmp/quantmind_access_token",
+              "w",
+              encoding="utf-8"
+          ) as f:
+
+              f.write(access_token)
+
+          os.chmod(
+              "/tmp/quantmind_access_token",
+              0o600
+          )
+
+          # 通过 GitHub 环境文件传给后续步骤
+          with open(
+              os.environ["GITHUB_ENV"],
+              "a",
+              encoding="utf-8"
+          ) as f:
+
+              f.write(
+                  "QUANTMIND_ACCESS_TOKEN="
+                  + access_token
+                  + "\n"
+              )
+
+          print()
+          print(
+              "Token 已保存到当前 Runner 环境"
+          )
+          PY
+
+      # =========================================================
+      # 5.6D 使用 Token 检查当前用户
+      # =========================================================
+      - name: 5.6D 检查当前登录用户
+        env:
+          QUANTMIND_ACCESS_TOKEN: ${{ env.QUANTMIND_ACCESS_TOKEN }}
+        run: |
+          echo "========================================================="
+          echo "检查当前登录用户"
+          echo "========================================================="
+
+          if [ -z "$QUANTMIND_ACCESS_TOKEN" ]; then
+            echo "没有取得 access_token"
+            exit 1
+          fi
 
           curl -i \
+            -H "Authorization: Bearer ${QUANTMIND_ACCESS_TOKEN}" \
+            http://127.0.0.1:8000/api/v1/users/me
+
+      # =========================================================
+      # 5.7 使用 Token 检查用户态推理
+      # =========================================================
+      - name: 5.7 使用 Token 检查用户态推理
+        env:
+          QUANTMIND_ACCESS_TOKEN: ${{ env.QUANTMIND_ACCESS_TOKEN }}
+        run: |
+          echo "========================================================="
+          echo "使用 Token 检查用户态推理接口"
+          echo "========================================================="
+
+          curl -i \
+            -H "Authorization: Bearer ${QUANTMIND_ACCESS_TOKEN}" \
             http://127.0.0.1:8000/api/v1/models/inference/precheck \
             || true
 
-          echo
-          echo "========================================================="
-          echo "用户态推理接口检查完成"
-          echo "========================================================="
-
       # =========================================================
-      # 5.8 检查股票终端接口
+      # 5.8 使用 Token 检查股票终端
       # =========================================================
-      - name: 5.8 检查股票终端接口
+      - name: 5.8 使用 Token 检查股票终端
+        env:
+          QUANTMIND_ACCESS_TOKEN: ${{ env.QUANTMIND_ACCESS_TOKEN }}
         run: |
           echo "========================================================="
-          echo "检查股票终端接口"
+          echo "使用 Token 检查股票终端"
           echo "========================================================="
 
-          echo
-          echo "GET /api/v1/stock-terminal/list"
-          echo
-
           curl -i \
+            -H "Authorization: Bearer ${QUANTMIND_ACCESS_TOKEN}" \
             "http://127.0.0.1:8000/api/v1/stock-terminal/list?page=1&page_size=5" \
             || true
 
-          echo
-          echo "========================================================="
-          echo "股票终端接口检查完成"
-          echo "========================================================="
-
       # =========================================================
-      # 5.9 检查市场日历
+      # 5.9 使用 Token 检查市场日历
       # =========================================================
-      - name: 5.9 检查市场日历
+      - name: 5.9 使用 Token 检查市场日历
+        env:
+          QUANTMIND_ACCESS_TOKEN: ${{ env.QUANTMIND_ACCESS_TOKEN }}
         run: |
           echo "========================================================="
-          echo "检查 QuantMind 市场日历"
+          echo "使用 Token 检查市场日历"
           echo "========================================================="
-
-          echo
-          echo "GET /api/v1/stock-terminal/market-calendar"
-          echo
 
           curl -i \
+            -H "Authorization: Bearer ${QUANTMIND_ACCESS_TOKEN}" \
             "http://127.0.0.1:8000/api/v1/stock-terminal/market-calendar?months=1" \
             || true
-
-          echo
-          echo "========================================================="
-          echo "市场日历检查完成"
-          echo "========================================================="
 
       # =========================================================
       # 6. 查看 Docker 最终状态
