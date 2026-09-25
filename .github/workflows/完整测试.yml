@@ -17,8 +17,6 @@ jobs:
       QUANTMIND_TENANT_ID: ${{ secrets.QUANTMIND_TENANT_ID }}
       QUANTMIND_USERNAME: ${{ secrets.QUANTMIND_USERNAME }}
       QUANTMIND_PASSWORD: ${{ secrets.QUANTMIND_PASSWORD }}
-
-      # QuantMind 在 GitHub Actions 当前 Runner 上的地址
       QUANTMIND_URL: http://127.0.0.1:8000
 
     steps:
@@ -29,8 +27,9 @@ jobs:
       - name: 1. Checkout
         uses: actions/checkout@v4
 
+
       # =========================================================
-      # 2. 系统环境
+      # 2. 检查系统环境
       # =========================================================
       - name: 2. 检查系统环境
         shell: bash
@@ -38,26 +37,28 @@ jobs:
           set -e
 
           echo "========================================================="
-          echo "系统环境"
+          echo "QuantMind GitHub Actions 环境"
           echo "========================================================="
 
-          echo "操作系统："
-          uname -a
+          echo
+          echo "当前目录："
+          pwd
 
           echo
           echo "Python："
-          python3 --version || true
+          python3 --version
 
           echo
           echo "Docker："
-          docker --version || true
+          docker --version
 
           echo
           echo "Docker Compose："
-          docker compose version || true
+          docker compose version
+
 
       # =========================================================
-      # 3. 检查 GitHub Secrets
+      # 3. 检查 Secrets
       # =========================================================
       - name: 3. 检查 QuantMind Secrets
         shell: bash
@@ -65,7 +66,7 @@ jobs:
           set -e
 
           echo "========================================================="
-          echo "检查 QuantMind 登录配置"
+          echo "检查 QuantMind Secrets"
           echo "========================================================="
 
           if [ -z "$QUANTMIND_TENANT_ID" ]; then
@@ -83,9 +84,10 @@ jobs:
             exit 1
           fi
 
-          echo "Tenant ID：已配置"
-          echo "Username：已配置"
-          echo "Password：已配置"
+          echo "✅ QUANTMIND_TENANT_ID：已配置"
+          echo "✅ QUANTMIND_USERNAME：已配置"
+          echo "✅ QUANTMIND_PASSWORD：已配置"
+
 
       # =========================================================
       # 4. 官方部署
@@ -101,21 +103,25 @@ jobs:
 
           if [ ! -f "deploy/full-deploy.sh" ]; then
             echo "❌ 没有找到 deploy/full-deploy.sh"
+
             echo
             echo "当前目录："
             pwd
+
             echo
             echo "目录内容："
             ls -la
+
             exit 1
           fi
 
-          echo "找到官方部署脚本：deploy/full-deploy.sh"
+          echo "✅ 找到官方部署脚本"
 
           sudo bash deploy/full-deploy.sh
 
+
       # =========================================================
-      # 5. Docker 服务状态
+      # 5. 查看 Docker
       # =========================================================
       - name: 5. 检查 Docker 服务
         shell: bash
@@ -129,27 +135,31 @@ jobs:
           docker ps -a
 
           echo
+          echo "Docker Compose："
+
           docker compose ps 2>/dev/null || true
 
+
       # =========================================================
-      # 6. 等待 QuantMind 启动
+      # 6. 等待 QuantMind API
       # =========================================================
-      - name: 6. 等待 QuantMind
+      - name: 6. 等待 QuantMind API
         shell: bash
         run: |
           set -e
 
           echo "========================================================="
-          echo "等待 QuantMind API 启动"
+          echo "等待 QuantMind API"
           echo "========================================================="
 
           for i in $(seq 1 60); do
 
-            echo "第 ${i}/60 次检查..."
+            echo
+            echo "第 ${i}/60 次检查"
 
             HTTP_CODE=$(curl \
               -s \
-              -o /tmp/quantmind_health.txt \
+              -o /tmp/quantmind_health.json \
               -w "%{http_code}" \
               "$QUANTMIND_URL/health" \
               || true)
@@ -157,32 +167,40 @@ jobs:
             echo "HTTP 状态码：$HTTP_CODE"
 
             if [ "$HTTP_CODE" = "200" ]; then
-              echo
-              echo "✅ QuantMind 已启动"
 
-              cat /tmp/quantmind_health.txt || true
+              echo
+              echo "✅ QuantMind API 已启动"
+
+              echo
+              echo "Health 返回："
+
+              cat /tmp/quantmind_health.json || true
 
               exit 0
             fi
 
             sleep 5
+
           done
 
           echo
-          echo "❌ QuantMind 启动超时"
+          echo "❌ QuantMind API 启动超时"
 
           echo
           echo "Docker 状态："
+
           docker ps -a
 
           echo
-          echo "Docker Compose 状态："
+          echo "Docker Compose："
+
           docker compose ps 2>/dev/null || true
 
           exit 1
 
+
       # =========================================================
-      # 7. 下载 OpenAPI
+      # 7. 获取 OpenAPI
       # =========================================================
       - name: 7. 获取 QuantMind OpenAPI
         shell: bash
@@ -207,7 +225,9 @@ jobs:
 
           echo
           echo "OpenAPI 文件大小："
+
           wc -c /tmp/quantmind_openapi.json
+
 
       # =========================================================
       # 8. 检查关键 API
@@ -241,40 +261,52 @@ jobs:
               "/api/v1/models/inference/runs",
           ]
 
+          print()
+
           for target in targets:
+
               if target in paths:
                   print(f"✅ {target}")
               else:
                   print(f"⚠️ 未找到 {target}")
 
           print()
-          print("实际推理接口：")
+          print("=========================================================")
+          print("真实推理接口")
+          print("=========================================================")
 
-          path = "/api/v1/models/inference/run"
+          endpoint = "/api/v1/models/inference/run"
 
-          if path in paths:
-              operation = paths[path].get("post", {})
+          if endpoint in paths:
 
-              print("POST", path)
-              print("summary:", operation.get("summary"))
+              operation = paths[endpoint].get("post", {})
 
-              request_body = operation.get("requestBody")
+              print("METHOD: POST")
+              print("PATH:", endpoint)
+              print("SUMMARY:", operation.get("summary"))
 
-              if request_body:
-                  print("requestBody:")
-                  print(
-                      json.dumps(
-                          request_body,
-                          ensure_ascii=False,
-                          indent=2
-                      )
+              print()
+              print("REQUEST BODY:")
+
+              print(
+                  json.dumps(
+                      operation.get("requestBody"),
+                      ensure_ascii=False,
+                      indent=2
                   )
+              )
+
+          else:
+
+              print("❌ 没有找到模型推理接口")
+              raise SystemExit(1)
           PY
 
+
       # =========================================================
-      # 9. 登录 QuantMind
+      # 9. QuantMind 登录
       # =========================================================
-      - name: 9. QuantMind 登录
+      - name: 9. QuantMind 登录认证
         shell: bash
         run: |
           set -e
@@ -285,6 +317,7 @@ jobs:
 
           LOGIN_URL="$QUANTMIND_URL/api/v1/auth/login"
 
+          echo
           echo "登录地址：$LOGIN_URL"
           echo "Tenant ID：已隐藏"
           echo "Username：已隐藏"
@@ -308,14 +341,19 @@ jobs:
             -H "X-Tenant-Id: $QUANTMIND_TENANT_ID" \
             --data @/tmp/login.json)
 
+          echo
           echo "登录 HTTP 状态码：$HTTP_CODE"
 
           if [ "$HTTP_CODE" != "200" ]; then
+
             echo
             echo "❌ QuantMind 登录失败"
+
             echo
             echo "服务器返回："
+
             cat /tmp/login_response.json
+
             exit 1
           fi
 
@@ -330,23 +368,34 @@ jobs:
           token = data.get("access_token")
 
           if not token:
+
               print("❌ 登录成功，但没有找到 access_token")
-              print(json.dumps(data, ensure_ascii=False, indent=2))
+
+              print(
+                  json.dumps(
+                      data,
+                      ensure_ascii=False,
+                      indent=2
+                  )
+              )
+
               raise SystemExit(1)
 
           with open("/tmp/quantmind_token.txt", "w") as f:
               f.write(token)
 
+          print()
           print("✅ QuantMind 登录成功")
           print("Access Token：已获取")
           PY
 
           rm -f /tmp/login.json
 
+
       # =========================================================
       # 10. 验证当前用户
       # =========================================================
-      - name: 10. 验证登录状态
+      - name: 10. 验证当前用户
         shell: bash
         run: |
           set -e
@@ -365,15 +414,22 @@ jobs:
             -H "Authorization: Bearer $TOKEN" \
             -H "X-Tenant-Id: $QUANTMIND_TENANT_ID")
 
+          echo
           echo "HTTP 状态码：$HTTP_CODE"
 
           if [ "$HTTP_CODE" != "200" ]; then
-            echo "❌ 用户验证失败"
+
+            echo "❌ 当前用户验证失败"
+
             cat /tmp/current_user.json
+
             exit 1
           fi
 
           echo "✅ 当前用户验证成功"
+
+          echo
+          echo "用户信息："
 
           python3 - <<'PY'
           import json
@@ -381,16 +437,23 @@ jobs:
           with open("/tmp/current_user.json", "r", encoding="utf-8") as f:
               data = json.load(f)
 
-          print()
-
           if isinstance(data, dict):
-              for key in ["id", "username", "email", "tenant_id", "role"]:
+
+              for key in [
+                  "id",
+                  "username",
+                  "email",
+                  "tenant_id",
+                  "role"
+              ]:
+
                   if key in data:
                       print(f"{key}: {data[key]}")
           PY
 
+
       # =========================================================
-      # 11. 获取模型列表
+      # 11. 获取模型列表并自动选择 model_id
       # =========================================================
       - name: 11. 获取 QuantMind 模型
         shell: bash
@@ -411,29 +474,179 @@ jobs:
             -H "Authorization: Bearer $TOKEN" \
             -H "X-Tenant-Id: $QUANTMIND_TENANT_ID")
 
+          echo
           echo "HTTP 状态码：$HTTP_CODE"
 
           if [ "$HTTP_CODE" != "200" ]; then
+
             echo "❌ 获取模型失败"
+
             cat /tmp/models.json
+
             exit 1
           fi
 
-          echo "✅ 模型列表获取成功"
+          echo
+          echo "========================================================="
+          echo "QuantMind 模型原始返回"
+          echo "========================================================="
+
+          cat /tmp/models.json
+
+          echo
+          echo "========================================================="
+          echo "解析模型"
+          echo "========================================================="
 
           python3 - <<'PY'
           import json
+          import os
 
-          with open("/tmp/models.json", "r", encoding="utf-8") as f:
+          path = "/tmp/models.json"
+
+          with open(path, "r", encoding="utf-8") as f:
               data = json.load(f)
 
+          candidates = []
+
+          # 情况 1：
+          # [
+          #   {...},
+          #   {...}
+          # ]
+          if isinstance(data, list):
+
+              candidates = data
+
+          # 情况 2：
+          # {
+          #   "data": [...]
+          # }
+          elif isinstance(data, dict):
+
+              for key in [
+                  "data",
+                  "items",
+                  "models",
+                  "results"
+              ]:
+
+                  value = data.get(key)
+
+                  if isinstance(value, list):
+
+                      candidates = value
+
+                      break
+
+              # 情况 3：
+              # {
+              #   "id": "...",
+              #   ...
+              # }
+              if not candidates and data.get("id"):
+
+                  candidates = [data]
+
           print()
-          print("模型数据：")
-          print(json.dumps(data, ensure_ascii=False, indent=2))
+          print("模型数量：", len(candidates))
+
+          if not candidates:
+
+              print()
+              print("❌ 没有发现任何模型")
+
+              print()
+              print(
+                  json.dumps(
+                      data,
+                      ensure_ascii=False,
+                      indent=2
+                  )
+              )
+
+              raise SystemExit(1)
+
+          print()
+
+          selected = None
+
+          for index, model in enumerate(candidates, 1):
+
+              print(
+                  f"---------------- 模型 {index} ----------------"
+              )
+
+              if isinstance(model, dict):
+
+                  print("id:", model.get("id"))
+                  print("model_id:", model.get("model_id"))
+                  print("name:", model.get("name"))
+                  print("status:", model.get("status"))
+                  print("type:", model.get("type"))
+
+                  model_id = (
+                      model.get("model_id")
+                      or model.get("id")
+                  )
+
+                  if model_id and selected is None:
+
+                      selected = str(model_id)
+
+              else:
+
+                  print(model)
+
+          if not selected:
+
+              print()
+              print("❌ 没有找到可用的 model_id")
+
+              raise SystemExit(1)
+
+          print()
+          print("=========================================================")
+          print("自动选择的 model_id")
+          print("=========================================================")
+
+          print(selected)
+
+          with open(
+              "/tmp/quantmind_model_id.txt",
+              "w"
+          ) as f:
+
+              f.write(selected)
+
+          github_env = os.environ.get("GITHUB_ENV")
+
+          if github_env:
+
+              with open(
+                  github_env,
+                  "a"
+              ) as f:
+
+                  f.write(
+                      f"QUANTMIND_MODEL_ID={selected}\n"
+                  )
+
+          print()
+          print("✅ model_id 保存成功")
           PY
+
 
       # =========================================================
       # 12. 推理前置检查
+      #
+      # 这里修复了之前的 422：
+      #
+      # 原来：
+      # GET /api/v1/models/inference/precheck
+      #
+      # 现在：
+      # GET /api/v1/models/inference/precheck?model_id=xxx
       # =========================================================
       - name: 12. 推理前置检查
         shell: bash
@@ -445,33 +658,47 @@ jobs:
           echo "========================================================="
 
           TOKEN=$(cat /tmp/quantmind_token.txt)
+          MODEL_ID=$(cat /tmp/quantmind_model_id.txt)
+
+          echo
+          echo "model_id：$MODEL_ID"
 
           HTTP_CODE=$(curl \
             -s \
             -o /tmp/precheck.json \
             -w "%{http_code}" \
+            --get \
             "$QUANTMIND_URL/api/v1/models/inference/precheck" \
             -H "Authorization: Bearer $TOKEN" \
-            -H "X-Tenant-Id: $QUANTMIND_TENANT_ID")
+            -H "X-Tenant-Id: $QUANTMIND_TENANT_ID" \
+            --data-urlencode "model_id=$MODEL_ID")
 
+          echo
           echo "HTTP 状态码：$HTTP_CODE"
 
           echo
-          echo "Precheck 返回："
+          echo "========================================================="
+          echo "Precheck 返回"
+          echo "========================================================="
 
           cat /tmp/precheck.json
 
           echo
 
           if [ "$HTTP_CODE" != "200" ]; then
+
+            echo
             echo "❌ 推理前置检查失败"
+
             exit 1
           fi
 
+          echo
           echo "✅ 推理前置检查通过"
 
+
       # =========================================================
-      # 13. 获取 InferenceRunRequest 参数
+      # 13. 获取 InferenceRunRequest
       # =========================================================
       - name: 13. 获取 InferenceRunRequest 参数
         shell: bash
@@ -490,12 +717,22 @@ jobs:
           with open(path, "r", encoding="utf-8") as f:
               data = json.load(f)
 
-          schemas = data.get("components", {}).get("schemas", {})
+          schemas = (
+              data
+              .get("components", {})
+              .get("schemas", {})
+          )
 
-          schema = schemas.get("InferenceRunRequest")
+          schema = schemas.get(
+              "InferenceRunRequest"
+          )
 
           if not schema:
-              print("❌ 没有找到 InferenceRunRequest")
+
+              print(
+                  "❌ 没有找到 InferenceRunRequest"
+              )
+
               raise SystemExit(1)
 
           print(
@@ -507,10 +744,11 @@ jobs:
           )
           PY
 
+
       # =========================================================
-      # 14. 显示实际推理接口
+      # 14. 显示推理接口完整定义
       # =========================================================
-      - name: 14. 显示推理接口详细定义
+      - name: 14. 显示推理接口定义
         shell: bash
         run: |
           set -e
@@ -527,7 +765,9 @@ jobs:
           with open(path, "r", encoding="utf-8") as f:
               data = json.load(f)
 
-          endpoint = "/api/v1/models/inference/run"
+          endpoint = (
+              "/api/v1/models/inference/run"
+          )
 
           operation = (
               data
@@ -536,11 +776,18 @@ jobs:
               .get("post", {})
           )
 
-          print("METHOD: POST")
-          print("PATH:", endpoint)
+          print()
+          print("METHOD:")
+          print("POST")
+
+          print()
+          print("PATH:")
+          print(endpoint)
+
           print()
           print("SUMMARY:")
           print(operation.get("summary"))
+
           print()
           print("REQUEST BODY:")
           print(
@@ -550,15 +797,33 @@ jobs:
                   indent=2
               )
           )
+
+          print()
+          print("=========================================================")
+          print("InferenceRunRequest Schema")
+          print("=========================================================")
+
+          schema = (
+              data
+              .get("components", {})
+              .get("schemas", {})
+              .get("InferenceRunRequest")
+          )
+
+          print(
+              json.dumps(
+                  schema,
+                  ensure_ascii=False,
+                  indent=2
+              )
+          )
           PY
 
+
       # =========================================================
-      # 15. 暂停在真实推理参数确认点
+      # 15. 当前阶段完成
       #
-      # 目前故意不执行 POST /models/inference/run
-      # 因为 InferenceRunRequest 的字段还没有确认。
-      #
-      # 防止错误参数真正触发模型任务。
+      # 暂时不真正调用 /inference/run
       # =========================================================
       - name: 15. 当前阶段完成
         shell: bash
@@ -567,33 +832,50 @@ jobs:
 
           echo
           echo "========================================================="
-          echo "QuantMind 自动选股准备完成"
+          echo "QuantMind 自动选股接口诊断完成"
           echo "========================================================="
 
           echo
-          echo "目前已经确认："
-          echo "✅ QuantMind 已部署"
-          echo "✅ QuantMind API 已启动"
-          echo "✅ OpenAPI 获取成功"
-          echo "✅ 登录成功"
-          echo "✅ Access Token 获取成功"
-          echo "✅ 当前用户验证成功"
-          echo "✅ 模型接口正常"
-          echo "✅ 推理前置检查已执行"
-          echo "✅ POST /api/v1/models/inference/run 已确认"
-          echo
-          echo "⚠️ 暂时没有真正执行模型推理。"
-          echo
-          echo "原因："
-          echo "还需要确认 InferenceRunRequest 的具体字段。"
-          echo
-          echo "下一步只需要把本次运行日志中的："
-          echo
-          echo "InferenceRunRequest 参数"
-          echo
-          echo "这一部分发给我。"
+          echo "已经完成："
+
+          echo "✅ GitHub Actions 启动"
+          echo "✅ QuantMind 官方部署"
+          echo "✅ Docker 服务检查"
+          echo "✅ QuantMind API 启动"
+          echo "✅ OpenAPI 获取"
+          echo "✅ QuantMind 登录"
+          echo "✅ Access Token 获取"
+          echo "✅ 当前用户验证"
+          echo "✅ 模型列表获取"
+          echo "✅ model_id 自动获取"
+          echo "✅ Precheck 携带 model_id"
+          echo "✅ InferenceRunRequest 获取"
+
           echo
           echo "========================================================="
+          echo "当前不会执行真正模型推理"
+          echo "========================================================="
+
+          echo
+          echo "原因："
+          echo "需要先确认 InferenceRunRequest 的真实字段。"
+
+          echo
+          echo "下一步根据这个 Schema 构造："
+          echo
+          echo "POST /api/v1/models/inference/run"
+
+          echo
+          echo "然后再获取："
+          echo
+          echo "GET /api/v1/models/inference/runs/{run_id}"
+
+          echo
+          echo "最终得到每日选股结果。"
+
+          echo
+          echo "========================================================="
+
 
       # =========================================================
       # 16. 最终 Docker 状态
@@ -613,10 +895,11 @@ jobs:
 
           docker compose ps 2>/dev/null || true
 
+
       # =========================================================
-      # 17. 失败时输出日志
+      # 17. 失败诊断
       # =========================================================
-      - name: 17. 失败日志
+      - name: 17. QuantMind 失败诊断
         if: failure()
         shell: bash
         run: |
@@ -626,32 +909,41 @@ jobs:
 
           echo
           echo "Docker 容器："
+
           docker ps -a || true
 
           echo
           echo "Docker Compose："
+
           docker compose ps 2>/dev/null || true
 
           echo
           echo "最近容器日志："
 
           for container in $(docker ps -aq); do
+
             echo
             echo "---------------------------------------------------------"
             echo "CONTAINER: $container"
             echo "---------------------------------------------------------"
 
-            docker logs --tail 100 "$container" 2>&1 || true
+            docker logs \
+              --tail 100 \
+              "$container" \
+              2>&1 || true
+
           done
 
+
       # =========================================================
-      # 18. 清理 Token
+      # 18. 清理认证文件
       # =========================================================
       - name: 18. 清理临时认证文件
         if: always()
         shell: bash
         run: |
           rm -f /tmp/quantmind_token.txt
+          rm -f /tmp/quantmind_model_id.txt
           rm -f /tmp/login.json
           rm -f /tmp/login_response.json
           rm -f /tmp/current_user.json
