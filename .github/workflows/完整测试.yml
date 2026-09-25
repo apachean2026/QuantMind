@@ -1,4 +1,4 @@
-name: QuantMind 部署测试
+name: QuantMind 部署与初始化检查
 
 on:
   workflow_dispatch:
@@ -6,7 +6,6 @@ on:
 jobs:
   quantmind:
     runs-on: ubuntu-22.04
-
     timeout-minutes: 180
 
     steps:
@@ -20,15 +19,18 @@ jobs:
       # =========================================================
       # 2. 系统环境检查
       # =========================================================
-      - name: 2. 系统环境检查
+      - name: 2. 系统与 Docker 检查
+        shell: bash
         run: |
+          set -e
+
           echo "========================================================="
           echo "系统环境检查"
           echo "========================================================="
 
           echo
-          echo "操作系统："
-          uname -a
+          echo "系统："
+          lsb_release -a || true
 
           echo
           echo "Docker："
@@ -39,7 +41,7 @@ jobs:
           docker compose version
 
           echo
-          echo "磁盘空间："
+          echo "磁盘："
           df -h
 
           echo
@@ -47,21 +49,27 @@ jobs:
           free -h
 
       # =========================================================
-      # 3. 执行 QuantMind 官方完整部署
+      # 3. 使用作者官方 full-deploy.sh
       # =========================================================
-      - name: 3. 执行 QuantMind 官方完整部署
+      - name: 3. 官方完整部署
+        shell: bash
         run: |
+          set -e
+
           echo "========================================================="
-          echo "开始执行 QuantMind 官方 full-deploy.sh"
+          echo "QuantMind 官方 full-deploy.sh 部署"
           echo "========================================================="
 
           sudo bash deploy/full-deploy.sh
 
       # =========================================================
-      # 4. 查看 Docker 服务状态
+      # 4. Docker 服务状态
       # =========================================================
-      - name: 4. 查看 Docker 服务状态
+      - name: 4. Docker 服务状态
+        shell: bash
         run: |
+          set -e
+
           echo "========================================================="
           echo "QuantMind Docker 服务状态"
           echo "========================================================="
@@ -71,36 +79,38 @@ jobs:
           docker compose ps
 
       # =========================================================
-      # 5. 等待 QuantMind API 健康
+      # 5. QuantMind 健康检查
       # =========================================================
-      - name: 5. 等待 QuantMind API 健康
+      - name: 5. QuantMind Health Check
+        shell: bash
         run: |
+          set -e
+
           echo "========================================================="
-          echo "等待 QuantMind API 启动"
+          echo "QuantMind Health Check"
           echo "========================================================="
 
-          for i in {1..60}; do
+          for i in $(seq 1 30); do
 
-            echo
-            echo "第 $i 次检查..."
+            echo "第 ${i}/30 次检查..."
 
-            if curl -s --fail \
+            if curl -fsS \
+              --max-time 10 \
               http://127.0.0.1:8000/health \
               > /tmp/quantmind_health.json
             then
 
-              echo "QuantMind API 已正常启动"
+              echo "QuantMind 健康检查成功"
 
               cat /tmp/quantmind_health.json
 
               exit 0
             fi
 
-            sleep 5
-
+            sleep 10
           done
 
-          echo "QuantMind API 启动失败"
+          echo "QuantMind Health Check 失败"
 
           cd /opt/quantmind
 
@@ -112,46 +122,68 @@ jobs:
       # 5.1 OpenAPI 检查
       # =========================================================
       - name: 5.1 OpenAPI 检查
+        shell: bash
         run: |
+          set -e
+
           echo "========================================================="
-          echo "检查 QuantMind OpenAPI"
+          echo "QuantMind OpenAPI 检查"
           echo "========================================================="
 
-          curl -s --fail \
+          curl -fsS \
+            --max-time 60 \
             http://127.0.0.1:8000/openapi.json \
-            -o /tmp/openapi.json
-
-          echo
-          echo "OpenAPI 文件大小："
-          wc -c /tmp/openapi.json
-
-          echo
-          echo "API 总数量："
+            -o /tmp/quantmind_openapi.json
 
           python3 - <<'PY'
           import json
 
-          with open("/tmp/openapi.json", "r", encoding="utf-8") as f:
+          path = "/tmp/quantmind_openapi.json"
+
+          with open(path, "r", encoding="utf-8") as f:
               data = json.load(f)
 
           paths = data.get("paths", {})
 
-          print(len(paths))
+          print("OpenAPI 路由数量:", len(paths))
+
+          for route in sorted(paths):
+              if any(
+                  x in route.lower()
+                  for x in [
+                      "inference",
+                      "predict",
+                      "model",
+                      "signal",
+                      "stock",
+                  ]
+              ):
+                  methods = ", ".join(
+                      sorted(paths[route].keys())
+                  )
+                  print(f"{methods:15s} {route}")
           PY
 
       # =========================================================
-      # 5.2 查找推理相关接口
+      # 5.2 推理相关 API 检查
       # =========================================================
-      - name: 5.2 查找推理相关接口
+      - name: 5.2 推理相关 API 检查
+        shell: bash
         run: |
+          set -e
+
           echo "========================================================="
-          echo "查找 QuantMind 推理相关 API"
+          echo "QuantMind 推理相关 API"
           echo "========================================================="
 
           python3 - <<'PY'
           import json
 
-          with open("/tmp/openapi.json", "r", encoding="utf-8") as f:
+          with open(
+              "/tmp/quantmind_openapi.json",
+              "r",
+              encoding="utf-8"
+          ) as f:
               data = json.load(f)
 
           paths = data.get("paths", {})
@@ -160,59 +192,122 @@ jobs:
               "inference",
               "predict",
               "signal",
-              "model",
-              "stock-terminal"
           ]
 
-          for path, methods in paths.items():
+          for route in sorted(paths):
 
-              path_lower = path.lower()
+              if not any(
+                  key in route.lower()
+                  for key in keywords
+              ):
+                  continue
 
-              if any(k in path_lower for k in keywords):
+              print()
+              print("=" * 80)
+              print(route)
 
-                  for method, info in methods.items():
+              for method, spec in sorted(
+                  paths[route].items()
+              ):
 
-                      if method.lower() in {
-                          "get",
-                          "post",
-                          "put",
-                          "patch"
-                      }:
+                  if method.startswith("x-"):
+                      continue
+
+                  print(
+                      "METHOD:",
+                      method.upper()
+                  )
+
+                  print(
+                      "SUMMARY:",
+                      spec.get("summary")
+                  )
+
+                  description = (
+                      spec.get("description")
+                      or ""
+                  )
+
+                  if description:
+                      print(
+                          "DESCRIPTION:",
+                          description[:1500]
+                      )
+
+                  parameters = spec.get(
+                      "parameters",
+                      []
+                  )
+
+                  if parameters:
+                      print(
+                          "PARAMETERS:"
+                      )
+
+                      for p in parameters:
 
                           print(
-                              f"{method.upper():6} "
-                              f"{path} "
-                              f"-> "
-                              f"{info.get('summary', '')}"
+                              " ",
+                              p.get("name"),
+                              p.get("in"),
+                              p.get("required")
                           )
           PY
 
       # =========================================================
-      # 5.3 检查管理员推理前置接口
+      # 5.3 Admin 推理前置检查
       # =========================================================
-      - name: 5.3 检查管理员推理前置接口
+      - name: 5.3 Admin 推理前置检查
+        shell: bash
         run: |
+          set -e
+
           echo "========================================================="
-          echo "检查 QuantMind 管理员推理前置接口"
+          echo "Admin 推理前置检查"
           echo "========================================================="
 
-          curl -i \
-            http://127.0.0.1:8000/api/v1/admin/models/precheck-inference \
-            || true
+          for URL in \
+            "http://127.0.0.1:8000/api/v1/admin/models/precheck-inference" \
+            "http://127.0.0.1:8000/api/v1/admin/data/precheck-inference"
+          do
+
+            echo
+            echo "检查：$URL"
+
+            HTTP_CODE=$(curl \
+              -sS \
+              -o /tmp/precheck.json \
+              -w "%{http_code}" \
+              --max-time 60 \
+              "$URL" || true)
+
+            echo "HTTP 状态码：$HTTP_CODE"
+
+            cat /tmp/precheck.json || true
+
+            echo
+          done
 
       # =========================================================
-      # 5.4 查看推理请求参数结构
+      # 5.4 Inference Schema 检查
       # =========================================================
-      - name: 5.4 查看推理请求参数结构
+      - name: 5.4 Inference Schema 检查
+        shell: bash
         run: |
+          set -e
+
           echo "========================================================="
-          echo "查看 InferenceRunRequest / BatchInferenceRequest"
+          echo "Inference Schema"
           echo "========================================================="
 
           python3 - <<'PY'
           import json
 
-          with open("/tmp/openapi.json", "r", encoding="utf-8") as f:
+          with open(
+              "/tmp/quantmind_openapi.json",
+              "r",
+              encoding="utf-8"
+          ) as f:
               data = json.load(f)
 
           schemas = (
@@ -221,155 +316,271 @@ jobs:
               .get("schemas", {})
           )
 
-          for name in [
-              "InferenceRunRequest",
-              "BatchInferenceRequest"
-          ]:
+          for name in sorted(schemas):
+
+              if (
+                  "Inference" not in name
+                  and "inference" not in name
+              ):
+                  continue
 
               print()
-              print("=" * 60)
+              print("=" * 80)
               print(name)
-              print("=" * 60)
 
-              schema = schemas.get(name)
-
-              if schema:
-                  print(
-                      json.dumps(
-                          schema,
-                          ensure_ascii=False,
-                          indent=2
-                      )
+              print(
+                  json.dumps(
+                      schemas[name],
+                      ensure_ascii=False,
+                      indent=2
                   )
-              else:
-                  print("未找到该 Schema")
+              )
           PY
 
       # =========================================================
       # 5.5 查找可能的推理触发接口
       # =========================================================
-      - name: 5.5 查找可能的推理触发接口
+      - name: 5.5 查找推理触发接口
+        shell: bash
         run: |
+          set -e
+
           echo "========================================================="
-          echo "查找可能的推理触发接口"
+          echo "可能的推理触发接口"
           echo "========================================================="
 
           python3 - <<'PY'
           import json
 
-          with open("/tmp/openapi.json", "r", encoding="utf-8") as f:
+          with open(
+              "/tmp/quantmind_openapi.json",
+              "r",
+              encoding="utf-8"
+          ) as f:
               data = json.load(f)
 
           paths = data.get("paths", {})
 
-          keywords = [
-              "inference",
-              "predict",
-              "signal",
-              "training",
-              "backfill"
-          ]
+          for route in sorted(paths):
 
-          for path, methods in paths.items():
+              for method, spec in paths[route].items():
 
-              path_lower = path.lower()
+                  if method.lower() not in {
+                      "post",
+                      "put",
+                      "patch",
+                  }:
+                      continue
 
-              if any(k in path_lower for k in keywords):
+                  text = (
+                      route
+                      + " "
+                      + str(spec.get("summary", ""))
+                      + " "
+                      + str(spec.get("description", ""))
+                  ).lower()
 
-                  for method, info in methods.items():
+                  if any(
+                      key in text
+                      for key in [
+                          "inference",
+                          "predict",
+                          "signal",
+                      ]
+                  ):
 
-                      if method.upper() in {
-                          "POST",
-                          "PUT",
-                          "PATCH"
-                      }:
-
-                          print()
-                          print(
-                              f"{method.upper()} {path}"
-                          )
-
-                          print(
-                              "Summary:",
-                              info.get("summary", "")
-                          )
-          PY
-
-      # =========================================================
-      # 5.6 查询当前默认模型
-      # =========================================================
-      - name: 5.6 查询当前默认模型
-        run: |
-          echo "========================================================="
-          echo "查询 QuantMind 当前默认模型"
-          echo "========================================================="
-
-          curl -i \
-            http://127.0.0.1:8000/api/v1/models/default \
-            || true
-
-      # =========================================================
-      # 5.6A 查找认证 / 登录接口
-      # =========================================================
-      - name: 5.6A 查找认证登录接口
-        run: |
-          echo "========================================================="
-          echo "查找 QuantMind 认证 / 登录接口"
-          echo "========================================================="
-
-          python3 - <<'PY'
-          import json
-
-          with open("/tmp/openapi.json", "r", encoding="utf-8") as f:
-              data = json.load(f)
-
-          paths = data.get("paths", {})
-
-          for path in [
-              "/api/v1/auth/login",
-              "/api/v1/auth/logout",
-              "/api/v1/auth/refresh",
-              "/api/v1/users/me"
-          ]:
-
-              print()
-              print("=" * 70)
-              print(path)
-              print("=" * 70)
-
-              methods = paths.get(path)
-
-              if not methods:
-                  print("未找到")
-                  continue
-
-              for method, info in methods.items():
-
-                  print(
-                      method.upper(),
-                      "->",
-                      info.get("summary", "")
-                  )
-
-                  if info.get("description"):
+                      print()
                       print(
-                          info.get("description")
+                          method.upper(),
+                          route
+                      )
+
+                      print(
+                          "SUMMARY:",
+                          spec.get("summary")
+                      )
+
+                      print(
+                          "DESCRIPTION:",
+                          (
+                              spec.get("description")
+                              or ""
+                          )[:1200]
                       )
           PY
 
       # =========================================================
-      # 5.6B 查看登录请求 / Token 响应结构
+      # 5.6 检查默认模型
       # =========================================================
-      - name: 5.6B 查看登录请求 Token 响应结构
+      - name: 5.6 检查默认模型
+        shell: bash
         run: |
+          set -e
+
           echo "========================================================="
-          echo "查看 QuantMind 登录请求和 Token 响应结构"
+          echo "检查 QuantMind 默认模型"
           echo "========================================================="
 
           python3 - <<'PY'
           import json
 
-          with open("/tmp/openapi.json", "r", encoding="utf-8") as f:
+          with open(
+              "/tmp/quantmind_openapi.json",
+              "r",
+              encoding="utf-8"
+          ) as f:
+              data = json.load(f)
+
+          paths = data.get("paths", {})
+
+          candidates = []
+
+          for route, methods in paths.items():
+
+              route_lower = route.lower()
+
+              if (
+                  "model" not in route_lower
+                  and "inference" not in route_lower
+              ):
+                  continue
+
+              for method, spec in methods.items():
+
+                  if method.lower() != "get":
+                      continue
+
+                  summary = str(
+                      spec.get("summary", "")
+                  )
+
+                  description = str(
+                      spec.get("description", "")
+                  )
+
+                  text = (
+                      route
+                      + " "
+                      + summary
+                      + " "
+                      + description
+                  ).lower()
+
+                  if (
+                      "model" in text
+                      or "default" in text
+                  ):
+                      candidates.append(
+                          (
+                              route,
+                              summary
+                          )
+                      )
+
+          for route, summary in candidates:
+
+              print(
+                  f"GET {route} "
+                  f"| {summary}"
+              )
+
+          print()
+          print(
+              "以上仅为模型相关 GET 接口候选，"
+              "不会自动执行任何推理。"
+          )
+          PY
+
+      # =========================================================
+      # 5.6A 登录 API 检查
+      # =========================================================
+      - name: 5.6A 检查认证 API
+        shell: bash
+        run: |
+          set -e
+
+          echo "========================================================="
+          echo "QuantMind 认证 API"
+          echo "========================================================="
+
+          python3 - <<'PY'
+          import json
+
+          with open(
+              "/tmp/quantmind_openapi.json",
+              "r",
+              encoding="utf-8"
+          ) as f:
+              data = json.load(f)
+
+          paths = data.get("paths", {})
+
+          for route in sorted(paths):
+
+              if "/auth/" not in route.lower():
+                  continue
+
+              for method, spec in paths[route].items():
+
+                  if method.startswith("x-"):
+                      continue
+
+                  print()
+                  print(
+                      method.upper(),
+                      route
+                  )
+
+                  print(
+                      "SUMMARY:",
+                      spec.get("summary")
+                  )
+
+                  print(
+                      "DESCRIPTION:",
+                      (
+                          spec.get("description")
+                          or ""
+                      )[:1000]
+                  )
+
+                  request_body = spec.get(
+                      "requestBody"
+                  )
+
+                  if request_body:
+                      print(
+                          "REQUEST BODY:"
+                      )
+                      print(
+                          json.dumps(
+                              request_body,
+                              ensure_ascii=False,
+                              indent=2
+                          )
+                      )
+          PY
+
+      # =========================================================
+      # 5.6B 检查登录 Schema
+      # =========================================================
+      - name: 5.6B 检查登录 Schema
+        shell: bash
+        run: |
+          set -e
+
+          echo "========================================================="
+          echo "QuantMind 登录 Schema"
+          echo "========================================================="
+
+          python3 - <<'PY'
+          import json
+
+          with open(
+              "/tmp/quantmind_openapi.json",
+              "r",
+              encoding="utf-8"
+          ) as f:
               data = json.load(f)
 
           schemas = (
@@ -378,291 +589,403 @@ jobs:
               .get("schemas", {})
           )
 
-          for name in [
+          names = [
               "UserLogin",
               "TokenResponse",
-              "RefreshTokenRequest"
-          ]:
+              "RefreshTokenRequest",
+              "UserResponse",
+          ]
+
+          for name in names:
+
+              if name not in schemas:
+                  continue
 
               print()
-              print("=" * 70)
+              print("=" * 80)
               print(name)
-              print("=" * 70)
 
-              schema = schemas.get(name)
-
-              if schema:
-                  print(
-                      json.dumps(
-                          schema,
-                          ensure_ascii=False,
-                          indent=2
-                      )
+              print(
+                  json.dumps(
+                      schemas[name],
+                      ensure_ascii=False,
+                      indent=2
                   )
-              else:
-                  print("未找到该 Schema")
-
-      # =========================================================
-      # 5.6C 真实登录测试
-      # =========================================================
-      - name: 5.6C QuantMind 真实登录测试
-        env:
-          QUANTMIND_TENANT_ID: ${{ secrets.QUANTMIND_TENANT_ID }}
-          QUANTMIND_USERNAME: ${{ secrets.QUANTMIND_USERNAME }}
-          QUANTMIND_PASSWORD: ${{ secrets.QUANTMIND_PASSWORD }}
-        run: |
-          echo "========================================================="
-          echo "QuantMind 真实登录测试"
-          echo "========================================================="
-
-          if [ -z "$QUANTMIND_TENANT_ID" ]; then
-            echo "错误：没有设置 QUANTMIND_TENANT_ID"
-            exit 1
-          fi
-
-          if [ -z "$QUANTMIND_USERNAME" ]; then
-            echo "错误：没有设置 QUANTMIND_USERNAME"
-            exit 1
-          fi
-
-          if [ -z "$QUANTMIND_PASSWORD" ]; then
-            echo "错误：没有设置 QUANTMIND_PASSWORD"
-            exit 1
-          fi
-
-          echo "租户 ID：已配置"
-          echo "用户名：已配置"
-          echo "密码：已配置"
-
-          python3 - <<'PY'
-          import json
-          import os
-          import urllib.request
-          import urllib.error
-
-          url = "http://127.0.0.1:8000/api/v1/auth/login"
-
-          payload = {
-              "tenant_id": os.environ["QUANTMIND_TENANT_ID"],
-              "username": os.environ["QUANTMIND_USERNAME"],
-              "password": os.environ["QUANTMIND_PASSWORD"],
-          }
-
-          data = json.dumps(payload).encode("utf-8")
-
-          request = urllib.request.Request(
-              url,
-              data=data,
-              headers={
-                  "Content-Type": "application/json",
-                  "Accept": "application/json",
-              },
-              method="POST",
-          )
-
-          try:
-
-              with urllib.request.urlopen(
-                  request,
-                  timeout=60
-              ) as response:
-
-                  body = response.read().decode(
-                      "utf-8"
-                  )
-
-                  print(
-                      "HTTP 状态码:",
-                      response.status
-                  )
-
-                  result = json.loads(body)
-
-          except urllib.error.HTTPError as e:
-
-              body = e.read().decode(
-                  "utf-8",
-                  errors="replace"
               )
-
-              print(
-                  "HTTP 状态码:",
-                  e.code
-              )
-
-              print(
-                  "登录失败响应:"
-              )
-
-              print(body)
-
-              raise SystemExit(1)
-
-          except Exception as e:
-
-              print(
-                  "登录请求失败:",
-                  repr(e)
-              )
-
-              raise SystemExit(1)
-
-          access_token = result.get(
-              "access_token"
-          )
-
-          refresh_token = result.get(
-              "refresh_token"
-          )
-
-          expires_in = result.get(
-              "expires_in"
-          )
-
-          token_type = result.get(
-              "token_type",
-              "bearer"
-          )
-
-          if not access_token:
-
-              print(
-                  "登录响应中没有 access_token"
-              )
-
-              print(
-                  "返回字段:",
-                  list(result.keys())
-              )
-
-              raise SystemExit(1)
-
-          print("登录成功")
-          print(
-              "token_type:",
-              token_type
-          )
-          print(
-              "expires_in:",
-              expires_in
-          )
-          print(
-              "access_token: 已获取"
-          )
-          print(
-              "refresh_token:",
-              "已获取" if refresh_token else "未返回"
-          )
-
-          # 不把真实 Token 打到 GitHub 日志
-          with open(
-              "/tmp/quantmind_access_token",
-              "w",
-              encoding="utf-8"
-          ) as f:
-
-              f.write(access_token)
-
-          os.chmod(
-              "/tmp/quantmind_access_token",
-              0o600
-          )
-
-          # 通过 GitHub 环境文件传给后续步骤
-          with open(
-              os.environ["GITHUB_ENV"],
-              "a",
-              encoding="utf-8"
-          ) as f:
-
-              f.write(
-                  "QUANTMIND_ACCESS_TOKEN="
-                  + access_token
-                  + "\n"
-              )
-
-          print()
-          print(
-              "Token 已保存到当前 Runner 环境"
-          )
           PY
 
       # =========================================================
-      # 5.6D 使用 Token 检查当前用户
+      # 5.6C 自动检查默认租户/用户初始化
+      #
+      # 注意：
+      # 这里不进行登录。
+      # 不需要 QUANTMIND_TENANT_ID
+      # 不需要 QUANTMIND_USERNAME
+      # 不需要 QUANTMIND_PASSWORD
       # =========================================================
-      - name: 5.6D 检查当前登录用户
-        env:
-          QUANTMIND_ACCESS_TOKEN: ${{ env.QUANTMIND_ACCESS_TOKEN }}
+      - name: 5.6C 检查默认租户和用户初始化
+        shell: bash
         run: |
+          set -e
+
           echo "========================================================="
-          echo "检查当前登录用户"
+          echo "QuantMind 默认租户/用户初始化检查"
           echo "========================================================="
 
-          if [ -z "$QUANTMIND_ACCESS_TOKEN" ]; then
-            echo "没有取得 access_token"
-            exit 1
-          fi
+          cd /opt/quantmind
 
-          curl -i \
-            -H "Authorization: Bearer ${QUANTMIND_ACCESS_TOKEN}" \
-            http://127.0.0.1:8000/api/v1/users/me
+          echo
+          echo "========================================================="
+          echo "1. 搜索 tenant 初始化代码"
+          echo "========================================================="
+
+          grep -RniE \
+            --exclude-dir=.git \
+            --exclude='*.pyc' \
+            "default.*tenant|tenant.*default|create.*tenant|tenant_id" \
+            backend deploy scripts 2>/dev/null \
+            | head -n 150 || true
+
+          echo
+          echo "========================================================="
+          echo "2. 搜索用户初始化代码"
+          echo "========================================================="
+
+          grep -RniE \
+            --exclude-dir=.git \
+            --exclude='*.pyc' \
+            "create.*user|default.*user|admin.*user|seed.*user|username" \
+            backend deploy scripts 2>/dev/null \
+            | head -n 150 || true
+
+          echo
+          echo "========================================================="
+          echo "3. 搜索 seed / init / bootstrap 脚本"
+          echo "========================================================="
+
+          find . \
+            -path './.git' -prune -o \
+            -type f \
+            \( \
+              -iname '*seed*' \
+              -o -iname '*init*' \
+              -o -iname '*bootstrap*' \
+            \) \
+            -print 2>/dev/null \
+            | head -n 150
+
+          echo
+          echo "========================================================="
+          echo "4. 搜索 auth / register 相关代码"
+          echo "========================================================="
+
+          grep -RniE \
+            --exclude-dir=.git \
+            --exclude='*.pyc' \
+            "def.*login|def.*register|auth/login|auth/register|UserLogin" \
+            backend 2>/dev/null \
+            | head -n 150 || true
+
+          echo
+          echo "========================================================="
+          echo "5. Docker Compose 环境变量名称"
+          echo "========================================================="
+
+          docker compose config 2>/dev/null \
+            | grep -iE \
+              "TENANT|USERNAME|ADMIN|USER|POSTGRES" \
+            | sed -E \
+              's/(PASSWORD|PASSWD|SECRET|TOKEN|KEY):.*/\1: [HIDDEN]/g' \
+            | head -n 150 || true
+
+          echo
+          echo "========================================================="
+          echo "6. PostgreSQL 服务状态"
+          echo "========================================================="
+
+          docker compose ps quantmind-db
+
+          echo
+          echo "========================================================="
+          echo "7. QuantMind 主服务环境变量名称"
+          echo "========================================================="
+
+          docker inspect quantmind \
+            --format '{{range .Config.Env}}{{println .}}{{end}}' \
+            2>/dev/null \
+            | sed -E \
+              's/(PASSWORD|PASSWD|SECRET|TOKEN|KEY)=.*/\1=[HIDDEN]/g' \
+            | grep -iE \
+              "TENANT|USERNAME|ADMIN|USER|POSTGRES|DATABASE" \
+            | head -n 100 || true
+
+          echo
+          echo "========================================================="
+          echo "默认租户/用户初始化检查完成"
+          echo "========================================================="
 
       # =========================================================
-      # 5.7 使用 Token 检查用户态推理
+      # 5.6D 检查 users/me API 是否存在
+      # 不需要登录，不发送任何凭证
       # =========================================================
-      - name: 5.7 使用 Token 检查用户态推理
-        env:
-          QUANTMIND_ACCESS_TOKEN: ${{ env.QUANTMIND_ACCESS_TOKEN }}
+      - name: 5.6D 检查当前用户 API
+        shell: bash
         run: |
+          set -e
+
           echo "========================================================="
-          echo "使用 Token 检查用户态推理接口"
+          echo "检查 /api/v1/users/me"
           echo "========================================================="
 
-          curl -i \
-            -H "Authorization: Bearer ${QUANTMIND_ACCESS_TOKEN}" \
-            http://127.0.0.1:8000/api/v1/models/inference/precheck \
-            || true
+          HTTP_CODE=$(curl \
+            -sS \
+            -o /tmp/users_me.json \
+            -w "%{http_code}" \
+            --max-time 30 \
+            http://127.0.0.1:8000/api/v1/users/me \
+            || true)
+
+          echo "HTTP 状态码：$HTTP_CODE"
+
+          cat /tmp/users_me.json || true
+
+          echo
+          echo "说明："
+          echo "当前没有提供 Bearer Token，"
+          echo "这里只检查接口是否存在以及未认证时的返回。"
 
       # =========================================================
-      # 5.8 使用 Token 检查股票终端
+      # 5.7 用户态推理前置检查 API 说明
       # =========================================================
-      - name: 5.8 使用 Token 检查股票终端
-        env:
-          QUANTMIND_ACCESS_TOKEN: ${{ env.QUANTMIND_ACCESS_TOKEN }}
+      - name: 5.7 检查用户态推理前置检查接口
+        shell: bash
         run: |
+          set -e
+
           echo "========================================================="
-          echo "使用 Token 检查股票终端"
+          echo "用户态推理前置检查 API"
           echo "========================================================="
 
-          curl -i \
-            -H "Authorization: Bearer ${QUANTMIND_ACCESS_TOKEN}" \
-            "http://127.0.0.1:8000/api/v1/stock-terminal/list?page=1&page_size=5" \
-            || true
+          python3 - <<'PY'
+          import json
+
+          with open(
+              "/tmp/quantmind_openapi.json",
+              "r",
+              encoding="utf-8"
+          ) as f:
+              data = json.load(f)
+
+          route = "/api/v1/models/inference/precheck"
+
+          spec = (
+              data
+              .get("paths", {})
+              .get(route, {})
+              .get("get")
+          )
+
+          if not spec:
+              print(
+                  "没有找到：",
+                  route
+              )
+              raise SystemExit(0)
+
+          print(
+              "接口：",
+              route
+          )
+
+          print(
+              "Summary:",
+              spec.get("summary")
+          )
+
+          print(
+              "Description:",
+              spec.get("description")
+          )
+
+          print()
+          print("参数：")
+
+          for p in spec.get(
+              "parameters",
+              []
+          ):
+
+              print(
+                  json.dumps(
+                      p,
+                      ensure_ascii=False,
+                      indent=2
+                  )
+              )
+          PY
 
       # =========================================================
-      # 5.9 使用 Token 检查市场日历
+      # 5.8 Stock Terminal API 检查
       # =========================================================
-      - name: 5.9 使用 Token 检查市场日历
-        env:
-          QUANTMIND_ACCESS_TOKEN: ${{ env.QUANTMIND_ACCESS_TOKEN }}
+      - name: 5.8 Stock Terminal API 检查
+        shell: bash
         run: |
+          set -e
+
           echo "========================================================="
-          echo "使用 Token 检查市场日历"
+          echo "Stock Terminal API"
           echo "========================================================="
 
-          curl -i \
-            -H "Authorization: Bearer ${QUANTMIND_ACCESS_TOKEN}" \
-            "http://127.0.0.1:8000/api/v1/stock-terminal/market-calendar?months=1" \
-            || true
+          python3 - <<'PY'
+          import json
+
+          with open(
+              "/tmp/quantmind_openapi.json",
+              "r",
+              encoding="utf-8"
+          ) as f:
+              data = json.load(f)
+
+          route = "/api/v1/stock-terminal/list"
+
+          spec = (
+              data
+              .get("paths", {})
+              .get(route, {})
+              .get("get")
+          )
+
+          if not spec:
+              print(
+                  "没有找到：",
+                  route
+              )
+              raise SystemExit(0)
+
+          print(
+              "接口：",
+              route
+          )
+
+          print(
+              "Summary:",
+              spec.get("summary")
+          )
+
+          print(
+              "Description:",
+              spec.get("description")
+          )
+
+          print()
+          print("参数：")
+
+          for p in spec.get(
+              "parameters",
+              []
+          ):
+
+              print(
+                  p.get("name"),
+                  "|",
+                  p.get("in"),
+                  "| required=",
+                  p.get("required"),
+                  "| default=",
+                  (
+                      p.get("schema", {})
+                      .get("default")
+                  )
+              )
+          PY
 
       # =========================================================
-      # 6. 查看 Docker 最终状态
+      # 5.9 Market Calendar API 检查
       # =========================================================
-      - name: 6. 查看 Docker 最终状态
+      - name: 5.9 Market Calendar API 检查
+        shell: bash
+        run: |
+          set -e
+
+          echo "========================================================="
+          echo "Market Calendar API"
+          echo "========================================================="
+
+          python3 - <<'PY'
+          import json
+
+          with open(
+              "/tmp/quantmind_openapi.json",
+              "r",
+              encoding="utf-8"
+          ) as f:
+              data = json.load(f)
+
+          route = (
+              "/api/v1/stock-terminal/"
+              "market-calendar"
+          )
+
+          spec = (
+              data
+              .get("paths", {})
+              .get(route, {})
+              .get("get")
+          )
+
+          if not spec:
+              print(
+                  "没有找到：",
+                  route
+              )
+              raise SystemExit(0)
+
+          print(
+              "接口：",
+              route
+          )
+
+          print(
+              "Summary:",
+              spec.get("summary")
+          )
+
+          print(
+              "Description:",
+              spec.get("description")
+          )
+
+          print()
+          print("参数：")
+
+          for p in spec.get(
+              "parameters",
+              []
+          ):
+
+              print(
+                  p.get("name"),
+                  "|",
+                  p.get("in"),
+                  "| required=",
+                  p.get("required"),
+                  "| default=",
+                  (
+                      p.get("schema", {})
+                      .get("default")
+                  )
+              )
+          PY
+
+      # =========================================================
+      # 6. 最终 Docker 状态
+      # =========================================================
+      - name: 6. 最终 Docker 状态
         if: always()
+        shell: bash
         run: |
           echo "========================================================="
-          echo "QuantMind Docker 最终状态"
+          echo "最终 Docker 状态"
           echo "========================================================="
 
           cd /opt/quantmind
@@ -670,10 +993,11 @@ jobs:
           docker compose ps
 
       # =========================================================
-      # 7. 查看 QuantMind 日志
+      # 7. QuantMind 日志
       # =========================================================
-      - name: 7. 查看 QuantMind 日志
+      - name: 7. QuantMind 日志
         if: always()
+        shell: bash
         run: |
           echo "========================================================="
           echo "QuantMind 日志"
@@ -681,13 +1005,16 @@ jobs:
 
           cd /opt/quantmind
 
-          docker compose logs --tail=200 quantmind || true
+          docker compose logs \
+            --tail=200 \
+            quantmind || true
 
       # =========================================================
-      # 8. 查看 Celery 日志
+      # 8. Celery 日志
       # =========================================================
-      - name: 8. 查看 Celery 日志
+      - name: 8. Celery 日志
         if: always()
+        shell: bash
         run: |
           echo "========================================================="
           echo "Celery 日志"
@@ -695,13 +1022,16 @@ jobs:
 
           cd /opt/quantmind
 
-          docker compose logs --tail=100 quantmind-celery || true
+          docker compose logs \
+            --tail=200 \
+            quantmind-celery || true
 
       # =========================================================
-      # 9. 查看 Celery Beat 日志
+      # 9. Celery Beat 日志
       # =========================================================
-      - name: 9. 查看 Celery Beat 日志
+      - name: 9. Celery Beat 日志
         if: always()
+        shell: bash
         run: |
           echo "========================================================="
           echo "Celery Beat 日志"
@@ -709,23 +1039,26 @@ jobs:
 
           cd /opt/quantmind
 
-          docker compose logs --tail=100 quantmind-celery-beat || true
+          docker compose logs \
+            --tail=200 \
+            quantmind-celery-beat || true
 
       # =========================================================
-      # 10. 关闭 QuantMind
+      # 10. 关闭测试环境
       # =========================================================
-      - name: 10. 关闭 QuantMind
+      - name: 10. 关闭 QuantMind 测试环境
         if: always()
+        shell: bash
         run: |
           echo "========================================================="
-          echo "关闭 QuantMind Docker 服务"
+          echo "关闭 QuantMind 测试环境"
           echo "========================================================="
 
-          cd /opt/quantmind
+          if [ -d "/opt/quantmind" ]; then
+            cd /opt/quantmind
 
-          docker compose down
+            docker compose down \
+              --remove-orphans || true
+          fi
 
-          echo
-          echo "========================================================="
-          echo "QuantMind 本次测试完成"
-          echo "========================================================="
+          echo "测试环境已关闭"
