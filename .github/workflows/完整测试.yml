@@ -26,7 +26,9 @@ jobs:
           echo "========================================================="
 
           uname -a
+
           echo
+          echo "Linux 发行版"
           lsb_release -a || true
 
           echo
@@ -38,11 +40,17 @@ jobs:
           docker compose version
 
           echo
+          echo "========================================================="
           echo "磁盘空间"
+          echo "========================================================="
+
           df -h
 
           echo
+          echo "========================================================="
           echo "内存"
+          echo "========================================================="
+
           free -h
 
       # =========================================================
@@ -70,7 +78,7 @@ jobs:
           docker compose ps
 
       # =========================================================
-      # 5. 等待 QuantMind API 健康
+      # 5. 等待 QuantMind API
       # =========================================================
       - name: 5. 等待 QuantMind API
         run: |
@@ -88,8 +96,9 @@ jobs:
             then
 
               echo
+              echo "========================================================="
               echo "QuantMind API 已正常启动"
-              echo
+              echo "========================================================="
 
               cat /tmp/health.json || true
 
@@ -101,12 +110,17 @@ jobs:
           done
 
           echo
+          echo "========================================================="
           echo "QuantMind API 启动失败"
-          echo
+          echo "========================================================="
 
           cd /opt/quantmind
 
           docker compose ps
+
+          echo
+          echo "最近日志："
+
           docker compose logs --tail=200
 
           exit 1
@@ -126,6 +140,7 @@ jobs:
 
           echo
           echo "OpenAPI 文件大小："
+
           wc -c /tmp/openapi.json
 
           echo
@@ -143,7 +158,11 @@ jobs:
           python3 - <<'PY'
           import json
 
-          with open("/tmp/openapi.json", "r", encoding="utf-8") as f:
+          with open(
+              "/tmp/openapi.json",
+              "r",
+              encoding="utf-8"
+          ) as f:
               data = json.load(f)
 
           info = data.get("info", {})
@@ -157,7 +176,7 @@ jobs:
           PY
 
       # =========================================================
-      # 5.3 检查模型 / 推理相关 Schema
+      # 5.3 检查推理相关 Schema
       # =========================================================
       - name: 5.3 检查推理 Schema
         run: |
@@ -168,10 +187,20 @@ jobs:
           python3 - <<'PY'
           import json
 
-          with open("/tmp/openapi.json", "r", encoding="utf-8") as f:
+          with open(
+              "/tmp/openapi.json",
+              "r",
+              encoding="utf-8"
+          ) as f:
               data = json.load(f)
 
-          schemas = data.get("components", {}).get("schemas", {})
+          schemas = data.get(
+              "components",
+              {}
+          ).get(
+              "schemas",
+              {}
+          )
 
           keywords = [
               "Inference",
@@ -185,11 +214,19 @@ jobs:
           found = []
 
           for name in schemas:
-              if any(k.lower() in name.lower() for k in keywords):
+
+              if any(
+                  k.lower() in name.lower()
+                  for k in keywords
+              ):
                   found.append(name)
 
           print()
-          print("找到相关 Schema：", len(found))
+          print(
+              "找到相关 Schema：",
+              len(found)
+          )
+
           print()
 
           for name in sorted(found):
@@ -211,10 +248,20 @@ jobs:
           python3 - <<'PY'
           import json
 
-          with open("/tmp/openapi.json", "r", encoding="utf-8") as f:
+          with open(
+              "/tmp/openapi.json",
+              "r",
+              encoding="utf-8"
+          ) as f:
               data = json.load(f)
 
-          schemas = data.get("components", {}).get("schemas", {})
+          schemas = data.get(
+              "components",
+              {}
+          ).get(
+              "schemas",
+              {}
+          )
 
           for name in [
               "InferenceRunRequest",
@@ -229,7 +276,9 @@ jobs:
               schema = schemas.get(name)
 
               if schema is None:
+
                   print("未找到")
+
                   continue
 
               print(
@@ -258,7 +307,11 @@ jobs:
           python3 - <<'PY'
           import json
 
-          with open("/tmp/openapi.json", "r", encoding="utf-8") as f:
+          with open(
+              "/tmp/openapi.json",
+              "r",
+              encoding="utf-8"
+          ) as f:
               data = json.load(f)
 
           keywords = [
@@ -280,11 +333,17 @@ jobs:
 
           found = []
 
-          for path, methods in data.get("paths", {}).items():
+          for path, methods in data.get(
+              "paths",
+              {}
+          ).items():
 
               path_lower = path.lower()
 
-              if not any(k in path_lower for k in keywords):
+              if not any(
+                  k in path_lower
+                  for k in keywords
+              ):
                   continue
 
               for method, info in methods.items():
@@ -324,7 +383,10 @@ jobs:
                   f"Description: {info.get('description', '')}"
               )
 
-              params = info.get("parameters", [])
+              params = info.get(
+                  "parameters",
+                  []
+              )
 
               if params:
 
@@ -381,6 +443,28 @@ jobs:
           PY
 
       # =========================================================
+      # 5.6 查询当前默认模型
+      # =========================================================
+      - name: 5.6 查询当前默认模型
+        run: |
+          echo "========================================================="
+          echo "查询 QuantMind 当前默认模型"
+          echo "========================================================="
+
+          echo
+          echo "GET /api/v1/models/default"
+          echo
+
+          curl -s --fail \
+            http://127.0.0.1:8000/api/v1/models/default \
+            | python3 -m json.tool
+
+          echo
+          echo "========================================================="
+          echo "默认模型查询完成"
+          echo "========================================================="
+
+      # =========================================================
       # 6. 保存 OpenAPI 检查结果
       # =========================================================
       - name: 6. 保存 OpenAPI 检查结果
@@ -392,8 +476,10 @@ jobs:
 
           mkdir -p artifacts
 
-          cp /tmp/openapi.json \
-            artifacts/openapi.json
+          if [ -f /tmp/openapi.json ]; then
+            cp /tmp/openapi.json \
+              artifacts/openapi.json
+          fi
 
           echo "OpenAPI 文件已保存"
 
